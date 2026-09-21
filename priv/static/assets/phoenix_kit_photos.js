@@ -1,4 +1,4 @@
-var PhoenixKitMediaTimelineHooks = (() => {
+var PhoenixKitPhotosHooks = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
@@ -86,7 +86,7 @@ var PhoenixKitMediaTimelineHooks = (() => {
       this.sections = [];
       this.offsets = [0];
       this.windows = /* @__PURE__ */ new Map();
-      this.spacer = this.el.querySelector(".phoenix-kit-media-timeline__spacer");
+      this.spacer = this.el.querySelector(".phoenix-kit-photo-timeline__spacer");
       this.onScroll = throttleToFrame(() => this.handleScroll());
       this.el.addEventListener("scroll", this.onScroll, { passive: true });
       this.onResize = debounce(() => this.handleResize(), 120);
@@ -181,4 +181,4 @@ var PhoenixKitMediaTimelineHooks = (() => {
   }
   return __toCommonJS(index_exports);
 })();
-window.PhoenixKitMediaTimelineHooks=PhoenixKitMediaTimelineHooks;
+window.PhoenixKitPhotosHooks=PhoenixKitPhotosHooks;

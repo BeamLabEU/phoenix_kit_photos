@@ -31,7 +31,7 @@ export const PhotoTimeline = {
     this.offsets = [0]
     this.windows = new Map()
 
-    this.spacer = this.el.querySelector(".phoenix-kit-media-timeline__spacer")
+    this.spacer = this.el.querySelector(".phoenix-kit-photo-timeline__spacer")
 
     this.onScroll = throttleToFrame(() => this.handleScroll())
     this.el.addEventListener("scroll", this.onScroll, { passive: true })

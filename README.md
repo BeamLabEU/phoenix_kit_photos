@@ -1,12 +1,29 @@
-# PhoenixKit Media Timeline
+# PhoenixKit Photos
 
-A scrubbable photo/video timeline for [PhoenixKit](https://hex.pm/packages/phoenix_kit):
-a virtualized, date-bucketed media library in the spirit of Apple Photos and
-Google Photos.
+A photo and video library for [PhoenixKit](https://hex.pm/packages/phoenix_kit),
+in the spirit of Apple Photos and Google Photos.
 
 Not a gallery. The target is a person opening **their entire library spanning
 decades** — grabbing the scrubber, jumping to March 2016, and not killing the
 tab at 200,000 files.
+
+## Scope
+
+The timeline comes first, and it is the spine rather than one feature among
+many: nearly everything else is a scope or a view over the same date-ordered,
+virtualized engine.
+
+| Feature | What it is | Status |
+|---|---|---|
+| Timeline | the date-ordered, scrubbable grid | in progress |
+| Albums, Collections | a scope — `{:album, id}` | planned |
+| People, Pets | a scope over detected subjects | planned |
+| Map | a view over the same assets | planned |
+| Memories | queries over capture date | planned |
+
+If this were only the grid, it would belong in PhoenixKit core as a
+MediaBrowser view mode. It is a separate package because of everything after
+the first row.
 
 ## Status: skeleton
 
@@ -16,18 +33,20 @@ exist in PhoenixKit core.
 
 `PhoenixKit.Modules.Storage` extracts only `width`, `height`, `duration` at
 ingest — no EXIF `DateTimeOriginal`, no `taken_at` column. Until that lands,
-`PhoenixKitMediaTimeline.Timeline` returns `{:error, :capture_date_unavailable}`
+`PhoenixKitPhotos.Timeline` returns `{:error, :capture_date_unavailable}`
 rather than bucketing a library by upload date, which would look plausible and
 be wrong.
 
 See `dev_docs/plans/2026-09-20-phoenix-kit-media-timeline.md` for the design
-and `dev_docs/reviews/` for the review it incorporates.
+(written under the package's original name), `dev_docs/reviews/` for the review
+it incorporates, and `dev_docs/plans/2026-09-21-phoenix-kit-photos.md` for the
+rename and the broader scope.
 
 ## Installation
 
 ```elixir
 def deps do
-  [{:phoenix_kit_media_timeline, "~> 0.1"}]
+  [{:phoenix_kit_photos, "~> 0.1"}]
 end
 ```
 
@@ -38,7 +57,7 @@ attributes.
 During development, path-dep it instead:
 
 ```elixir
-{:phoenix_kit_media_timeline, path: "../phoenix_kit_media_timeline"}
+{:phoenix_kit_photos, path: "../phoenix_kit_photos"}
 ```
 
 ## Three widgets, never to be conflated
@@ -47,13 +66,13 @@ During development, path-dep it instead:
 |---|---|
 | `PhoenixKitWeb.Components.MediaBrowser` | File work: folders, ingest, search |
 | `PhoenixKitWeb.Components.MediaGallery` | Picking and ordering images for a form |
-| `PhoenixKitMediaTimeline.Components.PhotoTimeline` | A library ordered by capture date |
+| `PhoenixKitPhotos.Components.PhotoTimeline` | A library ordered by capture date |
 
 ## Usage
 
 ```elixir
 <.live_component
-  module={PhoenixKitMediaTimeline.Components.PhotoTimeline}
+  module={PhoenixKitPhotos.Components.PhotoTimeline}
   id="library"
   scope={{:user, user.uuid}}
   layout={:square}
@@ -84,7 +103,7 @@ tested (`cd assets && npm test`).
 
 ```bash
 mix deps.get
-mix assets.build    # rebuilds priv/static/assets/phoenix_kit_media_timeline.js
+mix assets.build    # rebuilds priv/static/assets/phoenix_kit_photos.js
 mix test
 cd assets && npm test
 ```

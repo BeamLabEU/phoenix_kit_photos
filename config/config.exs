@@ -21,16 +21,16 @@ config :esbuild,
       js/index.js
       --bundle
       --format=iife
-      --global-name=PhoenixKitMediaTimelineHooks
+      --global-name=PhoenixKitPhotosHooks
       --target=es2020
-      --outfile=../priv/static/assets/phoenix_kit_media_timeline.js
+      --outfile=../priv/static/assets/phoenix_kit_photos.js
     ) ++
         [
           # Assign onto the real `window` explicitly. `--global-name=window.X`
           # and `--global-name=globalThis.X` both make esbuild emit
           # `var window = window || {}`, which inside PhoenixKit's wrapper
           # shadows the real global with a local and loses every hook.
-          "--footer:js=window.PhoenixKitMediaTimelineHooks=PhoenixKitMediaTimelineHooks;"
+          "--footer:js=window.PhoenixKitPhotosHooks=PhoenixKitPhotosHooks;"
         ],
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}

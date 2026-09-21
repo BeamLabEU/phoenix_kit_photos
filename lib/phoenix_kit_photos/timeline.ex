@@ -1,4 +1,4 @@
-defmodule PhoenixKitMediaTimeline.Timeline do
+defmodule PhoenixKitPhotos.Timeline do
   @moduledoc """
   The server side of the timeline: a monthly index and per-day windows.
 

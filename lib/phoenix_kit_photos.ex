@@ -1,6 +1,12 @@
-defmodule PhoenixKitMediaTimeline do
+defmodule PhoenixKitPhotos do
   @moduledoc """
-  A scrubbable photo/video timeline for PhoenixKit.
+  A photo and video library for PhoenixKit, in the spirit of Apple Photos and
+  Google Photos.
+
+  The timeline is the first view and the spine of the product: albums, people,
+  map and memories are scopes and views over the same date-ordered, virtualized
+  engine. See `dev_docs/plans/2026-09-21-phoenix-kit-photos.md` for why this is
+  a separate package rather than a MediaBrowser view mode in core.
 
   This is the PhoenixKit module entry point: `PhoenixKit.ModuleDiscovery` finds
   it by scanning beam attributes of deps that depend on `:phoenix_kit`, so a
@@ -13,7 +19,7 @@ defmodule PhoenixKitMediaTimeline do
     * `PhoenixKitWeb.Components.MediaBrowser` — file work: folders, ingest, search.
     * `PhoenixKitWeb.Components.MediaGallery` — picking and ordering a set of
       images for a form.
-    * `PhoenixKitMediaTimeline.Components.PhotoTimeline` — a person's library
+    * `PhoenixKitPhotos.Components.PhotoTimeline` — a person's library
       ordered by capture date, virtualized and scrubbable.
 
   ## Status
@@ -22,7 +28,7 @@ defmodule PhoenixKitMediaTimeline do
   (`taken_at`, `taken_on`, `taken_at_offset`, `taken_at_source`) on Storage's
   `phoenix_kit_files` table, which live in PhoenixKit core rather than here —
   see `dev_docs/plans/2026-09-20-phoenix-kit-media-timeline.md` §5.1.1.
-  `PhoenixKitMediaTimeline.Timeline` reports that plainly rather than guessing
+  `PhoenixKitPhotos.Timeline` reports that plainly rather than guessing
   a date from `inserted_at`.
   """
 
@@ -30,13 +36,13 @@ defmodule PhoenixKitMediaTimeline do
 
   @version Mix.Project.config()[:version]
 
-  @setting_key "media_timeline_enabled"
+  @setting_key "photos_enabled"
 
   @impl PhoenixKit.Module
-  def module_key, do: "media_timeline"
+  def module_key, do: "photos"
 
   @impl PhoenixKit.Module
-  def module_name, do: "Media Timeline"
+  def module_name, do: "Photos"
 
   @impl PhoenixKit.Module
   def version, do: @version
@@ -74,7 +80,7 @@ defmodule PhoenixKitMediaTimeline do
   host bundle.
   """
   @impl PhoenixKit.Module
-  def css_sources, do: [:phoenix_kit_media_timeline, @source_root]
+  def css_sources, do: [:phoenix_kit_photos, @source_root]
 
   @doc """
   The prebuilt hook bundle, built by `mix assets.build` into this app's `priv/`.
@@ -87,9 +93,9 @@ defmodule PhoenixKitMediaTimeline do
   def js_sources do
     [
       %{
-        app: :phoenix_kit_media_timeline,
-        file: "static/assets/phoenix_kit_media_timeline.js",
-        global: "PhoenixKitMediaTimelineHooks"
+        app: :phoenix_kit_photos,
+        file: "static/assets/phoenix_kit_photos.js",
+        global: "PhoenixKitPhotosHooks"
       }
     ]
   end
@@ -124,15 +130,15 @@ defmodule PhoenixKitMediaTimeline do
   def user_dashboard_tabs do
     [
       %PhoenixKit.Dashboard.Tab{
-        id: :media_timeline,
+        id: :photos,
         label: "Photos",
         icon: "hero-photo",
         path: "/photos",
         priority: 200,
         level: :user,
-        permission: "media_timeline",
+        permission: "photos",
         match: :prefix,
-        live_view: {PhoenixKitMediaTimeline.Web.TimelineLive, :index}
+        live_view: {PhoenixKitPhotos.Web.TimelineLive, :index}
       }
     ]
   end
@@ -140,7 +146,7 @@ defmodule PhoenixKitMediaTimeline do
   @doc """
   Permissions, specified before the first route ships rather than after.
 
-  An owner sees their own library; `media_timeline.view_any` additionally
+  An owner sees their own library; `photos.view_any` additionally
   allows viewing another user's. Nobody else sees anything: a signed thumbnail
   URL is not authorization (`URLSigner` tokens are 4 hex characters and never
   expire), so the window API is what enforces scope.
@@ -148,10 +154,10 @@ defmodule PhoenixKitMediaTimeline do
   @impl PhoenixKit.Module
   def permission_metadata do
     %{
-      key: "media_timeline",
-      label: "Media Timeline",
+      key: "photos",
+      label: "Photos",
       icon: "hero-photo",
-      description: "Scrubbable photo and video library ordered by capture date",
+      description: "Photo and video library, ordered by capture date",
       sub_permissions: [
         %{
           key: "view_any",

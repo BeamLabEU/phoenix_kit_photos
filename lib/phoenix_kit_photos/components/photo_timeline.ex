@@ -1,4 +1,4 @@
-defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
+defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   @moduledoc """
   The timeline LiveComponent: index and current window on the server, geometry
   and recycling in the `PhotoTimeline` JS hook.
@@ -6,7 +6,7 @@ defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
   ## Usage
 
       <.live_component
-        module={PhoenixKitMediaTimeline.Components.PhotoTimeline}
+        module={PhoenixKitPhotos.Components.PhotoTimeline}
         id="library"
         scope={{:user, user.uuid}}
         layout={:square}
@@ -29,7 +29,7 @@ defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
 
   use Phoenix.LiveComponent
 
-  alias PhoenixKitMediaTimeline.Timeline
+  alias PhoenixKitPhotos.Timeline
 
   @impl true
   def mount(socket) do
@@ -87,7 +87,7 @@ defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id} class="phoenix-kit-media-timeline">
+    <div id={@id} class="phoenix-kit-photo-timeline">
       <%= if @error do %>
         <div class="alert alert-warning" role="status">
           {error_message(@error)}
@@ -99,9 +99,9 @@ defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
           phx-update="ignore"
           data-columns={@columns}
           data-layout={@layout}
-          class="phoenix-kit-media-timeline__viewport"
+          class="phoenix-kit-photo-timeline__viewport"
         >
-          <div class="phoenix-kit-media-timeline__spacer"></div>
+          <div class="phoenix-kit-photo-timeline__spacer"></div>
         </div>
       <% end %>
     </div>
@@ -109,9 +109,9 @@ defmodule PhoenixKitMediaTimeline.Components.PhotoTimeline do
   end
 
   defp error_message(:capture_date_unavailable) do
-    "Media Timeline needs capture-date columns on phoenix_kit_files (Stage 0). " <>
+    "Photos needs capture-date columns on phoenix_kit_files (Stage 0). " <>
       "Nothing is shown rather than bucketing a library by upload date."
   end
 
-  defp error_message(other), do: "Media Timeline is unavailable: #{inspect(other)}"
+  defp error_message(other), do: "Photos is unavailable: #{inspect(other)}"
 end

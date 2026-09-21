@@ -1,7 +1,7 @@
-defmodule PhoenixKitMediaTimeline.TimelineTest do
+defmodule PhoenixKitPhotos.TimelineTest do
   use ExUnit.Case, async: true
 
-  alias PhoenixKitMediaTimeline.Timeline
+  alias PhoenixKitPhotos.Timeline
 
   describe "base_filters/0" do
     test "excludes the rows that would pollute a naive query" do

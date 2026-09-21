@@ -10,6 +10,12 @@ all PhoenixKit facts verified against the 2.32.1 sources; review at
 (capture date model, window sizing, query filter, packaging deliverable,
 stage trim).
 
+> **Renamed 2026-09-21.** The package is now `phoenix_kit_photos`
+> (`PhoenixKitPhotos`, module key `photos`), rescoped as a Photos-class library
+> with the timeline as its first view. The name and scope in §5.1 are superseded
+> by [`2026-09-21-phoenix-kit-photos.md`](2026-09-21-phoenix-kit-photos.md),
+> which also maps every old name to its new one. The rest of this plan stands.
+
 ---
 
 ## 0. Naming, so this plan is not misread

@@ -1,19 +1,19 @@
-defmodule PhoenixKitMediaTimeline.MixProject do
+defmodule PhoenixKitPhotos.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/BeamLabEU/phoenix_kit_media_timeline"
+  @source_url "https://github.com/BeamLabEU/phoenix_kit_photos"
 
   def project do
     [
-      app: :phoenix_kit_media_timeline,
+      app: :phoenix_kit_photos,
       version: @version,
       elixir: "~> 1.15",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      name: "PhoenixKit Media Timeline",
+      name: "PhoenixKit Photos",
       description: description(),
       package: package(),
       docs: docs(),
@@ -54,9 +54,9 @@ defmodule PhoenixKitMediaTimeline.MixProject do
   # catalog shows the default puzzle piece.
   defp description do
     """
-    Scrubbable photo/video timeline for PhoenixKit: a virtualized, \
-    date-bucketed media library grid in the spirit of Apple Photos and \
-    Google Photos. hex_docs_icon_name: photo
+    Photo and video library for PhoenixKit in the spirit of Apple Photos and \
+    Google Photos, starting with a scrubbable, virtualized timeline. \
+    hex_docs_icon_name: photo
     """
   end
 

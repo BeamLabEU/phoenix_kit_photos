@@ -1,4 +1,4 @@
-defmodule PhoenixKitMediaTimeline.Web.TimelineLive do
+defmodule PhoenixKitPhotos.Web.TimelineLive do
   @moduledoc """
   The package's default timeline page.
 
@@ -10,7 +10,7 @@ defmodule PhoenixKitMediaTimeline.Web.TimelineLive do
   use PhoenixKitWeb, :live_view
 
   alias PhoenixKit.Users.Auth.Scope
-  alias PhoenixKitMediaTimeline.Components.PhotoTimeline
+  alias PhoenixKitPhotos.Components.PhotoTimeline
   alias PhoenixKitWeb.Components.LayoutWrapper
 
   @impl true
@@ -37,7 +37,7 @@ defmodule PhoenixKitMediaTimeline.Web.TimelineLive do
       <.live_component
         :if={@user_uuid}
         module={PhotoTimeline}
-        id="media-timeline"
+        id="photo-timeline"
         scope={{:user, @user_uuid}}
         layout={:square}
         columns={5}

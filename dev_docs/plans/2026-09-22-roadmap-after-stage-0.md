@@ -14,6 +14,22 @@ Builds on, and does not replace:
 - [`2026-09-21-phoenix-kit-photos.md`](2026-09-21-phoenix-kit-photos.md):
   the rename and the Photos-class scope.
 
+> **Update 2026-09-22: libraries.** Core will partition files into
+> **libraries** (system-wide and user-defined, such as Personal, Business or one
+> per project), each with members and its own storage profile. The design is in
+> core: `/www/phoenix_kit/dev_docs/plans/2026-09-22-storage-libraries.md`.
+> For this package:
+>
+> - The timeline scope is `{:library, uuid}`, not `{:user, uuid}`, everywhere
+>   below (§3 Step 1 and Step 3). A cross-library "everything I can see" view
+>   is `library_uuid = ANY(...)`. Permissions become library membership, not
+>   ownership.
+> - **Step 1 waits on core V201** (Phase 1 of that plan). V201 replaces V200's
+>   user-keyed capture-date index with `(library_uuid, taken_on, taken_at)`.
+>   Do not write the real queries against `user_uuid` in the meantime.
+> - Placement (profiles, V202) and user-owned storage (V203) do not block the
+>   timeline.
+
 ---
 
 ## 0. This is a library

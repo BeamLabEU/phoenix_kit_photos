@@ -27,8 +27,13 @@ Builds on, and does not replace:
 > - **Step 1 waits on core V201** (Phase 1 of that plan). V201 replaces V200's
 >   user-keyed capture-date index with `(library_uuid, taken_on, taken_at)`.
 >   Do not write the real queries against `user_uuid` in the meantime.
-> - Placement (profiles, V202) and user-owned storage (V203) do not block the
->   timeline.
+> - **Personal libraries wait on core V202** (private serving: expiring file
+>   URLs, no public redirects). Until then, build and measure against a system
+>   library. Personal photos must not ship before V202.
+> - Location-truth (V203), storage profiles (V204) and user-owned storage
+>   (V205) do not block the timeline.
+>
+> (Release numbers revised 2026-09-23 after the Grok review of the core plan.)
 
 ---
 

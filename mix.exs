@@ -22,7 +22,7 @@ defmodule PhoenixKitPhotos.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger]]
+    [extra_applications: [:logger, :phoenix_kit]]
   end
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
@@ -30,8 +30,10 @@ defmodule PhoenixKitPhotos.MixProject do
 
   defp deps do
     [
-      # PhoenixKit — Storage schemas, Module behaviour, settings, permissions
-      {:phoenix_kit, "~> 2.32"},
+      # PhoenixKit — Storage schemas, Module behaviour, settings, permissions.
+      # PHOENIX_KIT_PATH points at a sibling checkout for local core work.
+      # Unset, the published 2.41 floor is what Stage 1 queries against.
+      phoenix_kit_dep(),
 
       # Phoenix Framework
       {:phoenix, "~> 1.8"},
@@ -45,7 +47,10 @@ defmodule PhoenixKitPhotos.MixProject do
 
       # Development Tools
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+
+      # Test Tools
+      {:lazy_html, "~> 0.1", only: :test}
     ]
   end
 
@@ -74,6 +79,16 @@ defmodule PhoenixKitPhotos.MixProject do
 
   defp docs do
     [main: "readme", extras: ["README.md"], source_ref: "v#{@version}"]
+  end
+
+  defp phoenix_kit_dep do
+    case System.get_env("PHOENIX_KIT_PATH") do
+      path when is_binary(path) and path != "" ->
+        {:phoenix_kit, path: path, override: true}
+
+      _ ->
+        {:phoenix_kit, "~> 2.41"}
+    end
   end
 
   defp aliases do

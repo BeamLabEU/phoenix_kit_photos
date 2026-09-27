@@ -1,0 +1,77 @@
+## This file is a PO Template file.
+##
+## "msgid"s here are often extracted from source code.
+## Add new messages manually only if they're dynamic
+## messages that can't be statically extracted.
+##
+## Run "mix gettext.extract" to bring this file up to
+## date. Leave "msgstr"s empty as changing them here has no
+## effect: edit them in PO (.po) files instead.
+#
+msgid ""
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:296
+#, elixir-autogen, elixir-format
+msgid "April"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:300
+#, elixir-autogen, elixir-format
+msgid "August"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:304
+#, elixir-autogen, elixir-format
+msgid "December"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:294
+#, elixir-autogen, elixir-format
+msgid "February"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:293
+#, elixir-autogen, elixir-format
+msgid "January"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:299
+#, elixir-autogen, elixir-format
+msgid "July"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:298
+#, elixir-autogen, elixir-format
+msgid "June"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:295
+#, elixir-autogen, elixir-format
+msgid "March"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:297
+#, elixir-autogen, elixir-format
+msgid "May"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:303
+#, elixir-autogen, elixir-format
+msgid "November"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:302
+#, elixir-autogen, elixir-format
+msgid "October"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:301
+#, elixir-autogen, elixir-format
+msgid "September"
+msgstr ""
+
+#: lib/phoenix_kit_photos/timeline.ex:305
+#, elixir-autogen, elixir-format
+msgid "Unknown"
+msgstr ""

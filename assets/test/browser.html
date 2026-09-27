@@ -1,0 +1,43 @@
+<!doctype html><meta charset="utf-8"><title>Photos synthetic browser regression</title>
+<style>
+#timeline {height:650px;width:816px;overflow-y:auto;position:relative}
+.phoenix-kit-photo-timeline__layer {position:absolute;left:0;right:0;top:0}
+button {padding:0;border:0;overflow:hidden;background:#ddd}
+</style>
+<div id="timeline" data-columns="5" data-target="7" data-timeline-id="test">
+<div class="phoenix-kit-photo-timeline__spacer"></div><div class="phoenix-kit-photo-timeline__layer"></div>
+</div>
+<script type="module">
+import { PhotoTimeline } from "/js/photo_timeline.js"
+const image = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#728b9c"/></svg>')
+const windows = new Map()
+window.sections = []
+let remaining = 10000, photo = 0
+for (let month = 0; remaining > 0; month++) {
+  const count = Math.min(remaining, month === 0 ? 1200 : 100)
+  const days = []
+  for (let offset = 0; offset < count; offset += 500) {
+    const id = `month-${month}:${offset}`, size = Math.min(500, count - offset)
+    const items = Array.from({ length: size }, () => {
+      const id = photo++
+      const ratio = id % 20
+      const [w, h] = ratio < 9 ? [4000,3000] : ratio < 16 ? [6000,4000] : ratio < 19 ? [1080,1920] : [8000,2000]
+      return { id: `photo-${id}`, w, h, ar: w / h, thumb: image, preview: image }
+    })
+    days.push({ id, count: size }); windows.set(id, items)
+  }
+  sections.push({ id: `month-${month}`, label: `Month ${month}`, count, days_list: days })
+  remaining -= count
+}
+window.hook = Object.assign({}, PhotoTimeline, {
+  el: document.querySelector("#timeline"), handleEvent() {},
+  pushEventTo(target, event, payload) {
+    if (target !== 7) throw Error("wrong component target")
+    if (event === "timeline:need_window") queueMicrotask(() => {
+      hook.setWindow({ section: payload.window, revision: payload.revision, items: windows.get(payload.window) || [] })
+    })
+  }
+})
+hook.mounted()
+hook.setIndex({ library: "synthetic", revision: 1, sections })
+</script>

@@ -24,12 +24,9 @@ defmodule PhoenixKitPhotos do
 
   ## Status
 
-  Stage 0 is not complete. The timeline needs capture-date columns
-  (`taken_at`, `taken_on`, `taken_at_offset`, `taken_at_source`) on Storage's
-  `phoenix_kit_files` table, which live in PhoenixKit core rather than here —
-  see `dev_docs/plans/2026-09-20-phoenix-kit-media-timeline.md` §5.1.1.
-  `PhoenixKitPhotos.Timeline` reports that plainly rather than guessing
-  a date from `inserted_at`.
+  Stage 1 reads one storage library, ordered by capture date. The scope is
+  `{:library, uuid}`. Capture date and the library partition live in
+  PhoenixKit core (V200 and V202); this package does not migrate either.
   """
 
   use PhoenixKit.Module

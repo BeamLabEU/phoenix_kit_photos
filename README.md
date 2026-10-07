@@ -127,6 +127,19 @@ Tiles fit the container width and resizing preserves the same row.
 `assets/js/geometry.js` is pure math with no DOM and no framework, and is unit
 tested (`cd assets && npm test`).
 
+## Core media viewer: warming originals
+
+Core's media viewer is deliberately plain: it warms only each neighbour's `small` and
+`large`, once the current picture has settled. Whether a multi-MB **original** is worth
+fetching ahead of an arrow press is high-end viewing, so it is decided here
+(`assets/js/viewer_warm.js`). Core announces `pk:viewer-neighbours` and this bundle
+answers: only where `large` (1920 px) will not do, judged on the width the picture is
+actually *displayed* at (its aspect fitted in the viewer box, times the pixel ratio — a
+portrait photo in a wide window is narrow), one original (the neighbour in the direction
+last stepped, the next before any step), low priority, never on data-saver or a 2G/3G
+line. Choosing a better file by real display class (5K and up) and window size
+belongs in the same file.
+
 ## Development
 
 ```bash

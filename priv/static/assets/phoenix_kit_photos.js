@@ -23,6 +23,56 @@ var PhoenixKitPhotosHooks = (() => {
     PhotoTimeline: () => PhotoTimeline
   });
 
+  // js/viewer_warm.js
+  var LARGE_RUNG_PX = 1920;
+  var HEADROOM = 1.1;
+  function constrained(connection) {
+    if (!connection) return false;
+    return Boolean(connection.saveData) || /(^|-)[23]g$/.test(connection.effectiveType || "");
+  }
+  function parseAspect(aspect) {
+    if (typeof aspect === "number") return aspect > 0 ? aspect : null;
+    const m = /^\s*([\d.]+)\s*(?:\/\s*([\d.]+))?\s*$/.exec(aspect || "");
+    if (!m) return null;
+    const ratio = m[2] === void 0 ? Number(m[1]) : Number(m[1]) / Number(m[2]);
+    return Number.isFinite(ratio) && ratio > 0 ? ratio : null;
+  }
+  function displayedPx(aspect, box) {
+    if (!box) return 0;
+    const width = box.width || 0;
+    const height = box.height || 0;
+    const ratio = parseAspect(aspect);
+    const css = ratio && height > 0 ? Math.min(width, height * ratio) : width;
+    return css * (box.dpr || 1);
+  }
+  function originalsToWarm(detail, connection) {
+    if (!detail || constrained(connection)) return [];
+    const side = detail.direction === "prev" ? detail.prev : detail.next;
+    if (!side || typeof side.original !== "string" || side.original === "") return [];
+    if (!(displayedPx(side.aspect, detail.box) > LARGE_RUNG_PX * HEADROOM)) return [];
+    return [side.original];
+  }
+  function installViewerWarm(win, ImageCtor) {
+    if (!win || typeof win.addEventListener !== "function") return null;
+    const Img = ImageCtor || win.Image;
+    const listener = (e) => {
+      const connection = win.navigator && win.navigator.connection;
+      win.__pkWarmedUrls = win.__pkWarmedUrls || {};
+      for (const url of originalsToWarm(e && e.detail, connection)) {
+        if (win.__pkWarmedUrls[url]) continue;
+        win.__pkWarmedUrls[url] = true;
+        const im = new Img();
+        try {
+          im.fetchPriority = "low";
+        } catch (_e) {
+        }
+        im.src = url;
+      }
+    };
+    win.addEventListener("pk:viewer-neighbours", listener);
+    return listener;
+  }
+
   // js/geometry.js
   function squareSectionHeight({ count, columns, cell, gap, header }) {
     if (count <= 0) return header;
@@ -377,6 +427,9 @@ var PhoenixKitPhotosHooks = (() => {
     callback.cancel = () => clearTimeout(timer);
     return callback;
   }
+
+  // js/index.js
+  if (typeof window !== "undefined") installViewerWarm(window);
   return __toCommonJS(index_exports);
 })();
 window.PhoenixKitPhotosHooks=PhoenixKitPhotosHooks;

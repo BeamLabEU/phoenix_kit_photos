@@ -5,6 +5,7 @@
 import { installViewerWarm } from "./viewer_warm"
 
 export { PhotoTimeline } from "./photo_timeline"
+export { PhotoUploader } from "./photo_uploader"
 
 // Not a hook: a listener for core's media viewer (`pk:viewer-neighbours`).
 // It must exist on every page the viewer can open on, not on a mounted

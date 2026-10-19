@@ -20,3 +20,31 @@ defmodule PhoenixKitPhotos.TestLive do
     """
   end
 end
+
+defmodule PhoenixKitPhotos.UploadLive do
+  @moduledoc false
+  use Phoenix.LiveView
+
+  def mount(_params, %{"scope" => scope, "library" => library} = session, socket) do
+    {:ok,
+     assign(socket, scope: scope, library: library, on_stored: session["on_stored"], stored: [])}
+  end
+
+  def handle_info({:stored, id, outcome}, socket) do
+    {:noreply, assign(socket, :stored, [{id, outcome} | socket.assigns.stored])}
+  end
+
+  def handle_call(:stored, _from, socket), do: {:reply, socket.assigns.stored, socket}
+
+  def render(assigns) do
+    ~H"""
+    <.live_component
+      module={PhoenixKitPhotos.Components.PhotoUploader}
+      id="test-uploader"
+      library_uuid={@library}
+      auth={@scope}
+      on_stored={@on_stored}
+    />
+    """
+  end
+end

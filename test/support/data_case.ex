@@ -96,14 +96,14 @@ defmodule PhoenixKitPhotos.DataCase do
     |> TestRepo.insert!()
   end
 
-  def member_fixture(library, user) do
+  def member_fixture(library, user, role \\ "viewer") do
     alias PhoenixKit.Modules.Storage.LibraryMember
 
     %LibraryMember{}
     |> LibraryMember.changeset(%{
       library_uuid: library.uuid,
       user_uuid: user.uuid,
-      role: "viewer"
+      role: role
     })
     |> TestRepo.insert!()
   end

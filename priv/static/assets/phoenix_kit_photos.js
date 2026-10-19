@@ -20,7 +20,8 @@ var PhoenixKitPhotosHooks = (() => {
   // js/index.js
   var index_exports = {};
   __export(index_exports, {
-    PhotoTimeline: () => PhotoTimeline
+    PhotoTimeline: () => PhotoTimeline,
+    PhotoUploader: () => PhotoUploader
   });
 
   // js/viewer_warm.js
@@ -426,6 +427,208 @@ var PhoenixKitPhotosHooks = (() => {
     };
     callback.cancel = () => clearTimeout(timer);
     return callback;
+  }
+
+  // js/drop_files.js
+  function carriesFiles(dataTransfer) {
+    const types = dataTransfer && dataTransfer.types ? Array.from(dataTransfer.types) : [];
+    return types.includes("Files");
+  }
+  function extensionOf(name) {
+    const i = String(name || "").lastIndexOf(".");
+    return i > 0 ? name.slice(i).toLowerCase() : "";
+  }
+  function isHidden(name) {
+    const n = String(name || "");
+    return n.startsWith(".") || n === "Thumbs.db" || n === "desktop.ini";
+  }
+  function acceptable(name, accept) {
+    if (isHidden(name)) return false;
+    if (!accept || accept.length === 0) return true;
+    return accept.includes(extensionOf(name));
+  }
+  function chunk(list, size) {
+    const n = Math.max(1, size | 0);
+    const out = [];
+    for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+    return out;
+  }
+  var fileOf = (entry) => new Promise((resolve, reject) => entry.file(resolve, reject));
+  async function readAll(reader) {
+    const all = [];
+    for (; ; ) {
+      const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      if (!batch || batch.length === 0) return all;
+      all.push(...batch);
+    }
+  }
+  async function walk(entry, out, accept, state) {
+    if (state.count >= state.limit) {
+      state.truncated = true;
+      return;
+    }
+    if (entry.isFile) {
+      if (isHidden(entry.name)) return;
+      let file;
+      try {
+        file = await fileOf(entry);
+      } catch (_error) {
+        state.skipped++;
+        return;
+      }
+      if (acceptable(file.name, accept)) {
+        out.push(file);
+        state.count++;
+      } else {
+        state.skipped++;
+      }
+    } else if (entry.isDirectory) {
+      if (isHidden(entry.name)) return;
+      let children;
+      try {
+        children = await readAll(entry.createReader());
+      } catch (_error) {
+        state.unreadable++;
+        return;
+      }
+      for (const child of children) await walk(child, out, accept, state);
+    }
+  }
+  async function filesFromDrop(dataTransfer, { accept = null, limit = 2e4 } = {}) {
+    const items = dataTransfer && dataTransfer.items ? Array.from(dataTransfer.items) : [];
+    const entries = [];
+    const plain = [];
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const entry = typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null;
+      if (entry) entries.push(entry);
+      else {
+        const file = item.getAsFile && item.getAsFile();
+        if (file) plain.push(file);
+      }
+    }
+    if (items.length === 0 && dataTransfer && dataTransfer.files) plain.push(...Array.from(dataTransfer.files));
+    const state = { skipped: 0, unreadable: 0, count: 0, limit, truncated: false };
+    const files = [];
+    for (const file of plain) {
+      if (acceptable(file.name, accept)) {
+        files.push(file);
+        state.count++;
+      } else state.skipped++;
+    }
+    for (const entry of entries) await walk(entry, files, accept, state);
+    return { files, skipped: state.skipped, unreadable: state.unreadable, truncated: state.truncated };
+  }
+
+  // js/photo_uploader.js
+  var PhotoUploader = {
+    mounted() {
+      this.name = this.el.dataset.uploadName || "photos";
+      this.accept = parseList(this.el.dataset.accept);
+      this.batch = Math.max(1, parseInt(this.el.dataset.batch || "100", 10) || 100);
+      this.queue = [];
+      this.draining = false;
+      this.gone = false;
+      this.depth = 0;
+      this.dragging = false;
+      const onInput = (event) => event.target && event.target.closest && event.target.closest("input[type=file]");
+      this.onEnter = (event) => {
+        if (!carriesFiles(event.dataTransfer)) return;
+        this.depth += 1;
+        this.setDragging(true);
+      };
+      this.onOver = (event) => {
+        if (!carriesFiles(event.dataTransfer) || onInput(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      };
+      this.onLeave = (event) => {
+        if (!carriesFiles(event.dataTransfer)) return;
+        this.depth = Math.max(0, this.depth - 1);
+        if (this.depth === 0) this.setDragging(false);
+      };
+      this.onDrop = (event) => {
+        if (!carriesFiles(event.dataTransfer) || onInput(event)) return;
+        event.preventDefault();
+        this.depth = 0;
+        this.setDragging(false);
+        this.take(event.dataTransfer);
+      };
+      window.addEventListener("dragenter", this.onEnter);
+      window.addEventListener("dragover", this.onOver);
+      window.addEventListener("dragleave", this.onLeave);
+      window.addEventListener("drop", this.onDrop);
+    },
+    // LiveView patches the element back to what the server rendered, which has no
+    // `data-active`; the drag is still going on.
+    updated() {
+      this.paint();
+    },
+    destroyed() {
+      this.gone = true;
+      window.removeEventListener("dragenter", this.onEnter);
+      window.removeEventListener("dragover", this.onOver);
+      window.removeEventListener("dragleave", this.onLeave);
+      window.removeEventListener("drop", this.onDrop);
+    },
+    setDragging(on) {
+      this.dragging = on;
+      this.paint();
+    },
+    paint() {
+      const overlay = this.el.querySelector("[data-drop-overlay]");
+      if (!overlay) return;
+      if (this.dragging) overlay.setAttribute("data-active", "");
+      else overlay.removeAttribute("data-active");
+    },
+    // Called inside the drop event: `filesFromDrop` collects the entries before its
+    // first await, which is the only moment the browser lets it.
+    take(dataTransfer) {
+      filesFromDrop(dataTransfer, { accept: this.accept }).then(({ files, skipped, unreadable, truncated }) => {
+        this.pushEventTo(this.el, "dropped", { files: files.length, skipped, unreadable, truncated });
+        this.queue.push(...files);
+        this.drain();
+      });
+    },
+    // Sends the queue on, a batch at a time, whenever the server has nothing in flight.
+    async drain() {
+      if (this.draining) return;
+      this.draining = true;
+      try {
+        while (this.queue.length > 0 && !this.gone) {
+          const idle = await this.ready();
+          if (idle && !this.gone) {
+            const [next] = chunk(this.queue, this.batch);
+            this.queue = this.queue.slice(next.length);
+            this.uploadTo(this.el, this.name, next);
+            this.pushEventTo(this.el, "waiting", { count: this.queue.length });
+          }
+          await sleep(idle ? 300 : 500);
+        }
+      } finally {
+        this.draining = false;
+      }
+    },
+    // Whether the component has nothing uploading or waiting to be uploaded. No answer in
+    // five seconds (a lost connection) counts as busy.
+    ready() {
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(false), 5e3);
+        this.pushEventTo(this.el, "ready", {}, (reply) => {
+          clearTimeout(timer);
+          resolve(Boolean(reply && reply.idle));
+        });
+      });
+    }
+  };
+  var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  function parseList(json) {
+    try {
+      const list = JSON.parse(json || "[]");
+      return Array.isArray(list) ? list.map(String) : [];
+    } catch (_error) {
+      return [];
+    }
   }
 
   // js/index.js

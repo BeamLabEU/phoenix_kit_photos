@@ -60,3 +60,17 @@ test("resizing preserves the same row and all columns fit the container", () => 
   assert.equal(h.metrics.cell * 5 + h.metrics.gap * 4, 375)
   assert.equal((h.el.scrollTop - 40) / (h.metrics.cell + h.metrics.gap), 20)
 })
+
+test("the pager setting on the component picks the engine (or none)", () => {
+  const { h } = hook()
+  const on = setting => { h.el.closest = () => ({ dataset: { pager: setting } }); return h.pagerEngine() }
+  assert.equal(on("false"), null)
+  assert.equal(on("true"), "photoswipe")
+  assert.equal(on("snap"), "snap")
+  assert.equal(on("nope"), "photoswipe")
+  assert.equal(h.pagerEnabled(), true)
+  assert.equal(on("false") === null && h.pagerEnabled(), false)
+  h.el.closest = () => null
+  assert.equal(h.pagerEngine(), null)
+})
+

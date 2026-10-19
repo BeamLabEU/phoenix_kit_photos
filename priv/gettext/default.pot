@@ -226,3 +226,21 @@ msgid "%{count} folder could not be read. Use Choose files to pick its photos in
 msgid_plural "%{count} folders could not be read. Use Choose files to pick their photos instead."
 msgstr[0] ""
 msgstr[1] ""
+
+msgid "Swipe viewer"
+msgstr ""
+
+msgid "Classic viewer"
+msgstr ""
+
+msgid "Default (%{name})"
+msgstr ""
+
+msgid "Viewer"
+msgstr ""
+
+msgid "How this library's photos open"
+msgstr ""
+
+msgid "Could not save the viewer"
+msgstr ""

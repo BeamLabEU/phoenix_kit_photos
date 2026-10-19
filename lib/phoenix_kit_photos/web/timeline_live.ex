@@ -13,7 +13,9 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
 
   alias PhoenixKitPhotos.Components.PhotoTimeline
   alias PhoenixKitPhotos.Components.PhotoViewer
+  alias PhoenixKitPhotos.Components.ViewerPicker
   alias PhoenixKitPhotos.Timeline
+  alias PhoenixKitPhotos.Viewer
   alias PhoenixKitWeb.Components.LayoutWrapper
 
   @impl true
@@ -40,6 +42,7 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
        libraries: libraries,
        library_uuid: library_uuid,
        viewer_file: viewer_file,
+       viewer: Viewer.for_library(library_uuid),
        photos_path: URI.parse(uri).path
      )}
   end
@@ -53,6 +56,10 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
   def handle_info({:open_photo, uuid}, socket) do
     params = URI.encode_query(%{library: socket.assigns.library_uuid, at: uuid})
     {:noreply, push_patch(socket, to: socket.assigns.photos_path <> "?" <> params)}
+  end
+
+  def handle_info({:viewer_changed, library_uuid}, socket) do
+    {:noreply, assign(socket, :viewer, Viewer.for_library(library_uuid))}
   end
 
   def handle_info(:photos_viewer_closed, socket) do
@@ -74,13 +81,21 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
         {gettext("Sign in to see your photo library.")}
       </div>
 
-      <form id="photo-library-picker" :if={@library_uuid && @libraries != []} phx-change="library" class="mb-4 flex justify-end">
-        <select name="library" class="select select-bordered select-sm" aria-label={gettext("Library")}>
-          <option :for={library <- @libraries} value={library.uuid} selected={library.uuid == @library_uuid}>
-            {library.name}
-          </option>
-        </select>
-      </form>
+      <div :if={@library_uuid} class="mb-4 flex items-center justify-end gap-2">
+        <.live_component
+          module={ViewerPicker}
+          id="photo-viewer-picker"
+          library_uuid={@library_uuid}
+          auth={assigns[:phoenix_kit_current_scope]}
+        />
+        <form id="photo-library-picker" :if={@libraries != []} phx-change="library">
+          <select name="library" class="select select-bordered select-sm" aria-label={gettext("Library")}>
+            <option :for={library <- @libraries} value={library.uuid} selected={library.uuid == @library_uuid}>
+              {library.name}
+            </option>
+          </select>
+        </form>
+      </div>
 
       <.live_component
         :if={@library_uuid}
@@ -91,6 +106,7 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
         layout={:square}
         columns={5}
         on_open={:open_photo}
+        pager={Viewer.pager(@viewer)}
       />
       <.live_component :if={@viewer_file} module={PhotoViewer} id="photos-viewer"
         file={@viewer_file} current_user={@phoenix_kit_current_scope.user} />

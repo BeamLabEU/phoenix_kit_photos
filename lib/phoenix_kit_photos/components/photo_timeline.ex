@@ -22,6 +22,16 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   `layout` accepts `:square` only. Square heights are exact, which is why
   the grid does not need tombstone refinement. There is no `on_select`.
 
+  `pager` makes a click on a tile open the swipe viewer (in the `PhotoTimeline`
+  hook) instead of sending `on_open`. `false` (the default) is no swipe viewer;
+  `true` is the default engine; a string or atom (`"photoswipe"`, `"snap"`) names
+  the engine. The engines are interchangeable behind one contract (see
+  `assets/js/viewer/engine.js`); a name the page does not know falls back to the
+  default one, and a host can offer a choice by passing the person's. The viewer
+  asks this component for full-size slides (`timeline:slides`) as the person
+  swipes, and its Info button sends `on_open` for the file on screen, so the
+  host's own viewer (details, comments) is still one tap away.
+
   `on_open`, when set, is sent to the parent LiveView as
   `{on_open, file_uuid}` when a tile is opened. The parent must authorize
   that client-supplied UUID through `Timeline.viewer_file/3` before opening it.
@@ -64,6 +74,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:layout, layout)
       |> assign(:columns, Map.get(assigns, :columns, 5))
       |> assign(:on_open, Map.get(assigns, :on_open))
+      |> assign(:pager, pager_setting(Map.get(assigns, :pager, false)))
 
     socket =
       if socket.assigns[:loaded_for] == {scope, auth} && socket.assigns.index do
@@ -74,6 +85,20 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
     {:ok, socket}
   end
+
+  @doc false
+  # What the hook reads from `data-pager`: "false", "true" (the default engine) or an
+  # engine's name. Anything else is the default engine, so a bad value cannot
+  # turn the swipe viewer off or put markup in the page.
+  def pager_setting(value) when value in [false, nil], do: "false"
+  def pager_setting(true), do: "true"
+  def pager_setting(value) when is_atom(value), do: pager_setting(Atom.to_string(value))
+
+  def pager_setting(value) when is_binary(value) do
+    if Regex.match?(~r/\A[a-z0-9_-]{1,32}\z/, value), do: value, else: "true"
+  end
+
+  def pager_setting(_value), do: "true"
 
   defp validate_scope!({:library, uuid} = scope) when is_binary(uuid), do: scope
 
@@ -174,6 +199,38 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     end
   end
 
+  def handle_event(
+        "timeline:slides",
+        %{
+          "window" => day,
+          "from" => from,
+          "count" => count,
+          "want" => want,
+          "revision" => revision
+        },
+        socket
+      )
+      when is_integer(from) and is_integer(count) and is_integer(want) do
+    if revision == socket.assigns.revision do
+      payload =
+        case Timeline.slides(socket.assigns.scope, day, from, count, want, socket.assigns.auth) do
+          {:ok, items} -> %{items: items}
+          {:error, _reason} -> %{items: [], error: true}
+        end
+
+      {:noreply,
+       push_event(
+         socket,
+         event(socket, "slides"),
+         Map.merge(payload, %{window: day, from: from, count: count, revision: revision})
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:slides", _params, socket), do: {:noreply, socket}
+
   def handle_event("timeline:jump", %{"id" => id}, socket) do
     {:noreply, push_event(socket, event(socket, "jump"), %{id: id})}
   end
@@ -210,7 +267,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id} class="phoenix-kit-photo-timeline flex flex-col gap-3">
+    <div id={@id} class="phoenix-kit-photo-timeline flex flex-col gap-3" data-pager={to_string(@pager)}>
       <form id={"#{@id}-jump"} :if={@sections != []} phx-change="timeline:jump" phx-target={@myself} class="flex justify-end">
         <select name="id" class="select select-bordered select-sm" aria-label="Jump to month">
           <option :for={section <- @sections} value={section.id}>{section.label}</option>

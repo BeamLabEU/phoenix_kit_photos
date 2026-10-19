@@ -53,6 +53,7 @@ defmodule PhoenixKitPhotos.Timeline do
   alias PhoenixKit.Users.Auth.Scope
 
   @window_limit 500
+  @slide_limit 24
   @thumb_min_width 200
   @preview_min_width 800
 
@@ -91,6 +92,24 @@ defmodule PhoenixKitPhotos.Timeline do
         }
 
   @type window :: %{section: window_id(), items: [item()]}
+
+  @typedoc """
+  What the swipe viewer needs for one file: a picture (`src`), or a video
+  (`poster` and `sources`). `w` and `h` are the size of the picture the viewer
+  shows, never the stored size of a video (a phone clip is stored as landscape
+  and played as portrait).
+  """
+  @type slide :: %{
+          required(:id) => String.t(),
+          required(:kind) => :image | :video,
+          required(:w) => pos_integer(),
+          required(:h) => pos_integer(),
+          optional(:src) => String.t() | nil,
+          optional(:poster) => String.t() | nil,
+          optional(:sources) => [
+            %{url: String.t(), type: String.t(), role: :rendition | :original}
+          ]
+        }
 
   @type error :: :capture_date_unavailable | :not_found | :unauthorized
 
@@ -219,6 +238,51 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   def window(_scope, _day, _auth), do: {:error, :unauthorized}
+
+  @doc """
+  A slice of a window for the swipe viewer: `count` files (at most
+  `slide_limit/0`) from position `from` of the day or day-slice `day`, in the
+  order `window/3` gives them, each with full-size URLs for a screen `want`
+  pixels wide.
+
+  `from + count` may run past the end of a 500-item slice into the next one: the
+  position is the same in the day, so the caller's index stays right.
+  """
+  @spec slides(scope(), window_id(), integer(), integer(), integer(), Scope.t() | nil) ::
+          {:ok, [slide()]} | {:error, error()}
+  def slides({:library, library_uuid}, day, from, count, want, auth)
+      when is_binary(library_uuid) and is_integer(from) and is_integer(count) and is_integer(want) do
+    with :ok <- capture_dates(),
+         :ok <- known_library(library_uuid),
+         :ok <- reader(auth),
+         {:ok, date, offset} <- parse_window(day),
+         true <- from >= 0 and from < @window_limit do
+      want = want |> max(200) |> min(4096)
+
+      items =
+        library_uuid
+        |> visible(auth)
+        |> where([f], f.taken_on == ^date)
+        |> order_by([f], asc: f.taken_at, asc: f.uuid)
+        |> offset(^(offset + from))
+        |> limit(^(count |> max(1) |> min(@slide_limit)))
+        |> preload(instances: ^completed_instances())
+        |> repo().all()
+        |> Enum.filter(&Libraries.can?(auth, &1, :read))
+        |> Enum.map(&to_slide(&1, auth, want))
+
+      {:ok, items}
+    else
+      false -> {:error, :not_found}
+      {:error, _} = error -> error
+    end
+  end
+
+  def slides(_scope, _day, _from, _count, _want, _auth), do: {:error, :unauthorized}
+
+  @doc "Most files `slides/6` returns at once."
+  @spec slide_limit() :: pos_integer()
+  def slide_limit, do: @slide_limit
 
   @doc "Read-authorized data for PhoenixKit's existing canvas viewer."
   def viewer_file({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
@@ -466,6 +530,82 @@ defmodule PhoenixKitPhotos.Timeline do
       preview: preview,
       kind: if(file.file_type == "video", do: :video, else: :image)
     }
+  end
+
+  @web_images ~w(image/jpeg image/png image/webp image/gif image/avif)
+
+  defp to_slide(%StorageFile{file_type: "video"} = file, auth, want) do
+    {poster, poster_instance} =
+      case pick(auth, file, min_width: want, output: :image) do
+        {url, instance} -> {url, instance}
+        nil -> {nil, nil}
+      end
+
+    rendition =
+      case pick(auth, file, min_width: want, output: :video) do
+        {url, _instance} -> [%{url: url, type: "video/mp4", role: :rendition}]
+        nil -> []
+      end
+
+    {w, h} = dimensions(poster_instance, file)
+
+    %{
+      id: file.uuid,
+      kind: :video,
+      w: w,
+      h: h,
+      poster: poster,
+      sources: rendition ++ original_source(auth, file)
+    }
+  end
+
+  defp to_slide(%StorageFile{} = file, auth, want) do
+    {src, instance} =
+      case pick(auth, file, min_width: want, aspect: :preserve) do
+        {url, instance} -> {url, instance}
+        nil -> {original_image_url(auth, file), nil}
+      end
+
+    {w, h} = dimensions(instance, file)
+    %{id: file.uuid, kind: :image, w: w, h: h, src: src}
+  end
+
+  defp original_source(auth, file) do
+    case original_url(auth, file) do
+      nil -> []
+      url -> [%{url: url, type: file.mime_type || "video/mp4", role: :original}]
+    end
+  end
+
+  # A browser can show only some originals (not a HEIC), and the viewer's
+  # picture is a rendition whenever the set has one.
+  defp original_image_url(auth, file) do
+    if file.mime_type in @web_images, do: original_url(auth, file)
+  end
+
+  defp original_url(auth, %StorageFile{instances: instances} = file) do
+    instance = Enum.find(instances || [], &(&1.variant_name == "original"))
+    url_opts = if instance, do: [version: instance], else: []
+    Storage.authorized_url(auth, file, "original", url_opts)
+  end
+
+  defp dimensions(%{width: w, height: h}, _file)
+       when is_integer(w) and is_integer(h) and w > 0 and h > 0,
+       do: {w, h}
+
+  defp dimensions(_instance, file), do: {file.width, file.height}
+
+  # The URL and the stored instance of the size `variant_for/2` picks, or nil
+  # when the set has none (`"original"`) or the file has not made it yet: a
+  # slide offers only what can be fetched.
+  defp pick(auth, %StorageFile{instances: instances} = file, opts) do
+    with name when is_binary(name) and name != "original" <- Storage.variant_for(file, opts),
+         %{} = instance <- Enum.find(instances || [], &(&1.variant_name == name)),
+         url when is_binary(url) <- Storage.authorized_url(auth, file, name, version: instance) do
+      {url, instance}
+    else
+      _ -> nil
+    end
   end
 
   defp variant_url(auth, %StorageFile{instances: instances} = file, opts) do

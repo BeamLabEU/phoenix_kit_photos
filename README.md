@@ -127,6 +127,43 @@ Tiles fit the container width and resizing preserves the same row.
 `assets/js/geometry.js` is pure math with no DOM and no framework, and is unit
 tested (`cd assets && npm test`).
 
+## The viewer of a library
+
+Each library chooses how its photos open (`PhoenixKitPhotos.Viewer`):
+
+| Viewer | What it is |
+|---|---|
+| **Swipe viewer** (`"photoswipe"`, the default) | Swipe between photos and videos, pinch and double-tap zoom, drag down to close, the fly from and to the tile; [PhotoSwipe](https://photoswipe.com) 5 under it |
+| **Classic viewer** (`"classic"`) | PhoenixKit's own media viewer (`MediaCanvasViewer`): one file at a time, with its sidebar, comments and annotations |
+
+The choice is the library's own setting (`Libraries.put_setting(library, :viewer, name)`, in the
+library's `settings`), so it follows the library to every browser. A library that has not chosen
+follows `config :phoenix_kit_photos, default_viewer: "classic" | "photoswipe"` (`"photoswipe"` when
+unset). `Components.ViewerPicker` is the select for it: it shows nothing to someone who may not
+choose (a user library's owner and managers; for Media, the site's admins), and tells its page
+`{:viewer_changed, library_uuid}`. The page passes `Viewer.pager(Viewer.for_library(library))` as
+`PhotoTimeline`'s `pager`. In the swipe viewer, an **Info** button opens the classic viewer on the
+file on screen, so details, comments and annotations are one tap away.
+
+## The swipe viewer's engines
+
+`PhotoTimeline`'s `pager` is `false` (the host's own viewer, on `on_open`), `true` (the default
+engine) or an engine's name. The engines are interchangeable behind one contract
+(`assets/js/viewer/engine.js`), so a library can be swapped without touching the timeline:
+
+| Engine | What it is |
+|---|---|
+| `photoswipe` (default) | PhotoSwipe: gestures, zoom, the fly to and from the tile |
+| `snap` | The browser's own scroll-snap: native swipe feel; no zoom, a fade instead of the fly, no drag to close. Registered, but not one a library can choose: a baseline to compare with |
+
+The timeline owns the data (the index, which slides are loaded, what to ask for next, the grid and
+scrolling it to the file on screen); an engine owns gestures, transitions and its DOM. Videos are built
+by the shared `VideoController` (poster first, nothing fetched until played, the file chosen for the
+screen, HDR kept where it can be shown, the next file tried when one fails), so they behave alike in
+every engine. A name the page does not know falls back to the default engine. To add one: write a
+class with the contract's methods, register it in `viewer/engines.js`, add its name to
+`PhoenixKitPhotos.Viewer` to offer it, and rebuild the bundle.
+
 ## Core media viewer: warming originals
 
 Core's media viewer is deliberately plain: it warms only each neighbour's `small` and

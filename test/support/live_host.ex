@@ -48,3 +48,29 @@ defmodule PhoenixKitPhotos.UploadLive do
     """
   end
 end
+
+defmodule PhoenixKitPhotos.ViewerLive do
+  @moduledoc false
+  use Phoenix.LiveView
+
+  def mount(_params, %{"scope" => scope, "library" => library}, socket) do
+    {:ok, assign(socket, scope: scope, library: library, changed: [])}
+  end
+
+  def handle_info({:viewer_changed, uuid}, socket) do
+    {:noreply, assign(socket, :changed, [uuid | socket.assigns.changed])}
+  end
+
+  def handle_call(:changed, _from, socket), do: {:reply, socket.assigns.changed, socket}
+
+  def render(assigns) do
+    ~H"""
+    <.live_component
+      module={PhoenixKitPhotos.Components.ViewerPicker}
+      id="test-viewer"
+      library_uuid={@library}
+      auth={@scope}
+    />
+    """
+  end
+end

@@ -56,4 +56,90 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
     view |> element("#test-timeline-viewport") |> render_hook("timeline:jump", %{id: "2018-07"})
     assert_push_event(view, "timeline:test-timeline:jump", %{id: "2018-07"})
   end
+
+  test "slides come back to the component's own event, with the block they were asked for", %{
+    view: view,
+    user: user
+  } do
+    files =
+      for n <- 1..3,
+          do: file_fixture(user, %{taken_at: DateTime.add(~U[2018-07-14 08:00:00Z], n)})
+
+    view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})
+    assert_push_event(view, "timeline:test-timeline:index", %{revision: revision, total: 3})
+
+    view
+    |> element("#test-timeline-viewport")
+    |> render_hook("timeline:slides", %{
+      window: "2018-07-14",
+      from: 1,
+      count: 12,
+      want: 800,
+      revision: revision
+    })
+
+    assert_push_event(view, "timeline:test-timeline:slides", %{
+      window: "2018-07-14",
+      from: 1,
+      count: 12,
+      revision: ^revision,
+      items: [%{id: second}, %{id: third}]
+    })
+
+    assert [second, third] == files |> Enum.drop(1) |> Enum.map(& &1.uuid)
+  end
+
+  test "stale or malformed slide requests are ignored; a bad day is an error the hook can retry",
+       %{view: view, user: user} do
+    file_fixture(user, %{})
+    el = element(view, "#test-timeline-viewport")
+
+    render_hook(el, "timeline:slides", %{
+      window: "2018-07-14",
+      from: 0,
+      count: 12,
+      want: 800,
+      revision: -1
+    })
+
+    render_hook(el, "timeline:slides", %{
+      window: "2018-07-14",
+      from: "x",
+      count: 12,
+      want: 800,
+      revision: 1
+    })
+
+    refute_push_event(view, "timeline:test-timeline:slides", _)
+
+    render_hook(el, "timeline:ready", %{})
+    assert_push_event(view, "timeline:test-timeline:index", %{revision: revision, total: 1})
+
+    render_hook(el, "timeline:slides", %{
+      window: "nonsense",
+      from: 0,
+      count: 12,
+      want: 800,
+      revision: revision
+    })
+
+    assert_push_event(view, "timeline:test-timeline:slides", %{items: [], error: true, from: 0})
+  end
+
+  test "the swipe viewer is off unless the host asks for it", %{view: view} do
+    refute render(view) =~ ~s(data-pager="true")
+    assert render(view) =~ ~s(data-pager="false")
+  end
+
+  test "the viewer engine is named by the host, and a bad name cannot break the page" do
+    alias PhoenixKitPhotos.Components.PhotoTimeline
+    assert PhotoTimeline.pager_setting(false) == "false"
+    assert PhotoTimeline.pager_setting(nil) == "false"
+    assert PhotoTimeline.pager_setting(true) == "true"
+    assert PhotoTimeline.pager_setting(:snap) == "snap"
+    assert PhotoTimeline.pager_setting("photoswipe") == "photoswipe"
+    assert PhotoTimeline.pager_setting("Snap\" onclick=\"x") == "true"
+    assert PhotoTimeline.pager_setting(String.duplicate("a", 33)) == "true"
+    assert PhotoTimeline.pager_setting(42) == "true"
+  end
 end

@@ -294,6 +294,237 @@ defmodule PhoenixKitPhotos.TimelineTest do
     end
   end
 
+  describe "slides/6" do
+    alias PhoenixKit.Modules.Storage.{Dimension, FileInstance, VariantSet}
+
+    setup do
+      owner = user_fixture("owner-#{System.unique_integer([:positive])}@example.com")
+      library = library_fixture(owner)
+
+      %{
+        owner: owner,
+        library: library,
+        scope: scope_for(owner),
+        partition: {:library, library.uuid}
+      }
+    end
+
+    # A set with the sizes of a photo (`large`, 800 wide) and of a video (`720p`
+    # H.264 and the `video_thumbnail` poster).
+    defp slide_sizes(library) do
+      set = TestRepo.insert!(%VariantSet{name: "Slides #{library.uuid}"})
+
+      for {name, width, applies_to, format, aspect} <- [
+            {"thumbnail", 200, "both", "jpg", false},
+            {"large", 800, "image", "jpg", true},
+            {"720p", 1280, "video", "mp4", true},
+            {"video_thumbnail", 640, "video", "jpg", true}
+          ] do
+        TestRepo.insert!(%Dimension{
+          variant_set_uuid: set.uuid,
+          name: name,
+          width: width,
+          height: width,
+          enabled: true,
+          applies_to: applies_to,
+          format: format,
+          maintain_aspect_ratio: aspect
+        })
+      end
+
+      library |> Ecto.Changeset.change(variant_set_uuid: set.uuid) |> TestRepo.update!()
+    end
+
+    defp instance(file, name, mime, attrs \\ %{}) do
+      TestRepo.insert!(
+        struct(
+          FileInstance,
+          Map.merge(
+            %{
+              file_uuid: file.uuid,
+              variant_name: name,
+              file_name: "#{name}.bin",
+              mime_type: mime,
+              ext: "bin",
+              size: 10,
+              checksum: String.duplicate("b", 64),
+              processing_status: "completed"
+            },
+            attrs
+          )
+        )
+      )
+    end
+
+    defp variant_of(url),
+      do: url |> URI.parse() |> Map.fetch!(:path) |> String.split("/") |> Enum.at(3)
+
+    test "a photo is its largest-enough rendition, sized as the rendition is", ctx do
+      library = slide_sizes(ctx.library)
+      file = file_fixture(ctx.owner, %{library_uuid: library.uuid, width: 4000, height: 3000})
+      instance(file, "large", "image/jpeg", %{width: 800, height: 600})
+
+      assert {:ok, [slide]} = Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+      assert %{id: id, kind: :image, w: 800, h: 600, src: src} = slide
+      assert id == file.uuid
+      assert variant_of(src) == "large"
+    end
+
+    test "a video is its poster's size, with a rendition and then the original to play", ctx do
+      library = slide_sizes(ctx.library)
+
+      # Stored as landscape, played as portrait: the poster has the right shape.
+      file =
+        file_fixture(ctx.owner, %{
+          library_uuid: library.uuid,
+          file_type: "video",
+          mime_type: "video/quicktime",
+          original_file_name: "IMG_0001.MOV",
+          width: 1920,
+          height: 1080
+        })
+
+      instance(file, "video_thumbnail", "image/jpeg", %{width: 640, height: 1138})
+      instance(file, "720p", "video/mp4")
+      instance(file, "original", "video/quicktime")
+
+      assert {:ok, [slide]} = Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+      assert %{kind: :video, w: 640, h: 1138, poster: poster, sources: sources} = slide
+      assert variant_of(poster) == "video_thumbnail"
+
+      assert [
+               %{role: :rendition, type: "video/mp4", url: rendition},
+               %{role: :original, type: "video/quicktime", url: original}
+             ] = sources
+
+      assert variant_of(rendition) == "720p"
+      assert variant_of(original) == "original"
+    end
+
+    test "a video with no rendition still plays its original", ctx do
+      file =
+        file_fixture(ctx.owner, %{
+          library_uuid: ctx.library.uuid,
+          file_type: "video",
+          mime_type: "video/mp4"
+        })
+
+      assert {:ok, [%{kind: :video, poster: nil, sources: [%{role: :original}]}]} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+
+      assert file.uuid
+    end
+
+    test "an original is the picture only when a browser can show it", ctx do
+      file_fixture(ctx.owner, %{
+        library_uuid: ctx.library.uuid,
+        taken_at: ~U[2018-07-14 10:00:00Z]
+      })
+
+      file_fixture(ctx.owner, %{
+        library_uuid: ctx.library.uuid,
+        mime_type: "image/heic",
+        taken_at: ~U[2018-07-14 11:00:00Z]
+      })
+
+      assert {:ok, [jpeg, heic]} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+
+      assert variant_of(jpeg.src) == "original"
+      assert heic.src == nil
+    end
+
+    test "slices follow the window's order and may run past its end", ctx do
+      files =
+        for n <- 1..5 do
+          file_fixture(ctx.owner, %{
+            library_uuid: ctx.library.uuid,
+            taken_at: DateTime.add(~U[2018-07-14 08:00:00Z], n * 60)
+          })
+        end
+
+      ids = Enum.map(files, & &1.uuid)
+
+      assert {:ok, slides} = Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+      assert Enum.map(slides, & &1.id) == ids
+
+      assert {:ok, middle} = Timeline.slides(ctx.partition, "2018-07-14", 1, 2, 700, ctx.scope)
+      assert Enum.map(middle, & &1.id) == Enum.slice(ids, 1, 2)
+
+      assert {:ok, tail} = Timeline.slides(ctx.partition, "2018-07-14", 3, 12, 700, ctx.scope)
+      assert Enum.map(tail, & &1.id) == Enum.slice(ids, 3, 2)
+
+      assert {:ok, []} = Timeline.slides(ctx.partition, "2018-07-14", 10, 12, 700, ctx.scope)
+    end
+
+    test "a request cannot ask for more than the limit, nor for nothing", ctx do
+      for n <- 1..(Timeline.slide_limit() + 2) do
+        file_fixture(ctx.owner, %{
+          library_uuid: ctx.library.uuid,
+          taken_at: DateTime.add(~U[2018-07-14 08:00:00Z], n)
+        })
+      end
+
+      assert {:ok, slides} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 1_000, 700, ctx.scope)
+
+      assert length(slides) == Timeline.slide_limit()
+      assert {:ok, [_one]} = Timeline.slides(ctx.partition, "2018-07-14", 0, 0, 700, ctx.scope)
+    end
+
+    test "the second slice of a big day starts where the first ended", ctx do
+      first = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
+      assert {:ok, []} = Timeline.slides(ctx.partition, "2018-07-14:500", 0, 12, 700, ctx.scope)
+
+      assert {:ok, [%{id: id}]} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 1, 700, ctx.scope)
+
+      assert id == first.uuid
+    end
+
+    test "another user's file is not offered, nor is a trashed one", ctx do
+      other = user_fixture("other-#{System.unique_integer([:positive])}@example.com")
+      file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
+
+      assert {:ok, []} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, scope_for(other))
+
+      assert {:error, :unauthorized} =
+               Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, nil)
+
+      file |> Ecto.Changeset.change(trashed_at: DateTime.utc_now(:second)) |> TestRepo.update!()
+      assert {:ok, []} = Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, ctx.scope)
+    end
+
+    test "what a client may send is checked", ctx do
+      for {day, from} <- [
+            {"nonsense", 0},
+            {"2018-07-14", -1},
+            {"2018-07-14", 500},
+            {"2018-07-14:1", 0}
+          ] do
+        assert {:error, :not_found} =
+                 Timeline.slides(ctx.partition, day, from, 12, 700, ctx.scope)
+      end
+
+      assert {:error, :not_found} =
+               Timeline.slides(
+                 {:library, Ecto.UUID.generate()},
+                 "2018-07-14",
+                 0,
+                 12,
+                 700,
+                 ctx.scope
+               )
+
+      assert {:error, :unauthorized} =
+               Timeline.slides(ctx.partition, "2018-07-14", "0", 12, 700, ctx.scope)
+
+      assert {:error, :unauthorized} =
+               Timeline.slides(:everything, "2018-07-14", 0, 12, 700, ctx.scope)
+    end
+  end
+
   describe "group_days/1" do
     test "labels the month from taken_on" do
       [section] =

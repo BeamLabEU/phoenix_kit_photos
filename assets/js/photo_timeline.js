@@ -5,6 +5,10 @@ import {
   visibleSections,
   anchorAt
 } from "./geometry.js"
+import { SlideStore, wantWidth } from "./slides.js"
+import { engineFor, loadEngine } from "./viewer/engine.js"
+import "./viewer/engines.js"
+import { VideoController } from "./viewer/video.js"
 
 // Defaults; the server may override them through the index payload.
 const DEFAULTS = { cell: 160, gap: 4, header: 40 }
@@ -33,6 +37,10 @@ export const PhotoTimeline = {
     this.library = null
     this.revision = null
     this.needed = new Set()
+    this.slides = new SlideStore([])
+    this.sectionStarts = []
+    this.pager = null
+    this.pendingOpen = null
 
     this.spacer = this.el.querySelector(".phoenix-kit-photo-timeline__spacer")
     this.layer = this.el.querySelector(".phoenix-kit-photo-timeline__layer")
@@ -49,6 +57,7 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:index`, (payload) => this.setIndex(payload))
     this.handleEvent(`${prefix}:window`, (payload) => this.setWindow(payload))
     this.handleEvent(`${prefix}:jump`, ({ id }) => this.jumpTo(id))
+    this.handleEvent(`${prefix}:slides`, (payload) => this.setSlides(payload))
     this.send("timeline:ready", {})
   },
 
@@ -66,6 +75,8 @@ export const PhotoTimeline = {
     this.resizeObserver.disconnect()
     this.onResize.cancel()
     this.onScroll.cancel()
+    clearTimeout(this.openTimer)
+    if (this.pager && this.pager.destroy) this.pager.destroy()
     this.pool.clear()
   },
 
@@ -78,6 +89,7 @@ export const PhotoTimeline = {
     this.windows.clear()
 
     this.sections = payload.sections || []
+    this.resetSlides()
     if (payload.metrics) this.metrics = { ...this.metrics, ...payload.metrics }
     this.relayout(anchor)
 
@@ -193,6 +205,156 @@ export const PhotoTimeline = {
     }
   },
 
+  // --- the swipe viewer ------------------------------------------------
+
+  /** The engine the host asked for (`pager` on the component), or null: the host's own viewer. */
+  pagerEngine() {
+    const root = this.el.closest(".phoenix-kit-photo-timeline")
+    return root ? engineFor(root.dataset.pager) : null
+  },
+
+  pagerEnabled() {
+    return this.pagerEngine() !== null
+  },
+
+  /** Every position the index lists, from the first section's first file, and where each section starts. */
+  resetSlides() {
+    this.slides = new SlideStore(this.sections)
+    this.sectionStarts = []
+    let start = 0
+    for (const section of this.sections) {
+      this.sectionStarts.push(start)
+      start += (section.days_list || []).reduce((sum, day) => sum + (day.count || 0), 0)
+    }
+    this.pendingOpen = null
+    if (this.pager && this.pager.destroy) this.pager.destroy()
+  },
+
+  prefetchSlides(center, radius = 8) {
+    if (!this.pagerEnabled() || !Number.isFinite(center)) return
+    for (const block of this.slides.missing(center, radius)) {
+      this.slides.markAsked(block)
+      this.send("timeline:slides", {
+        window: block.window,
+        from: block.from,
+        count: block.count,
+        want: wantWidth(window),
+        revision: this.revision
+      })
+    }
+  },
+
+  setSlides({ window: day, from, items, error, revision }) {
+    if (revision !== this.revision) return
+    if (error) {
+      this.slides.forget(day, from)
+      return
+    }
+
+    const added = this.slides.put(day, from, items || [])
+    if (this.pager && this.pager.isOpen) this.pager.refresh(added)
+
+    if (this.pendingOpen !== null && this.slides.has(this.pendingOpen)) {
+      const index = this.pendingOpen
+      this.pendingOpen = null
+      clearTimeout(this.openTimer)
+      this.openPager(index)
+    }
+  },
+
+  /** A tile was clicked: the swipe viewer when the host asked for it, else the host's own. */
+  openTile(id, global) {
+    if (!this.pagerEnabled() || !Number.isFinite(global)) {
+      this.send("timeline:open", { id })
+      return
+    }
+
+    if (this.slides.has(global)) {
+      this.openPager(global)
+      return
+    }
+
+    // Wait for the first slide (the click usually follows a prefetch begun on pointerdown);
+    // if the server does not answer, fall back to the host's viewer.
+    this.pendingOpen = global
+    this.prefetchSlides(global)
+    clearTimeout(this.openTimer)
+    this.openTimer = setTimeout(() => {
+      if (this.pendingOpen === global) {
+        this.pendingOpen = null
+        this.send("timeline:open", { id })
+      }
+    }, 4000)
+  },
+
+  // The engine is loaded when first used; esbuild keeps it in the one bundle, and
+  // the import keeps this file loadable without a bundler (the unit tests).
+  async openPager(index) {
+    if (this.pager) return
+    const id = this.pagerEngine()
+    if (!id) return
+    this.prefetchSlides(index)
+
+    this.pager = true // taken while the engine loads, so a second click does not open another
+    let Engine
+    try {
+      Engine = await loadEngine(id)
+    } catch (error) {
+      this.pager = null
+      console.error("PhotoTimeline: the viewer engine did not load", id, error)
+      const slide = this.slides.get(index)
+      if (slide) this.send("timeline:open", { id: slide.id })
+      return
+    }
+
+    this.video = this.video || new VideoController()
+    this.pager = new Engine({
+      store: this.slides,
+      video: this.video,
+      thumbOf: (slideId) => this.thumbOf(slideId),
+      tileImage: (i) => this.tileImage(i),
+      onInfo: (slideId) => this.send("timeline:open", { id: slideId }),
+      onChange: (i) => {
+        this.prefetchSlides(i)
+        this.reveal(i)
+      },
+      onClose: () => {
+        this.pager = null
+      }
+    })
+    this.pager.open(index)
+  },
+
+  thumbOf(id) {
+    const node = this.pool.get(id)
+    const img = node && node.querySelector("img")
+    return img ? img.currentSrc || img.src : undefined
+  },
+
+  tileImage(index) {
+    const slide = this.slides.get(index)
+    const node = slide && this.pool.get(slide.id)
+    return node ? node.querySelector("img") : null
+  },
+
+  /** Scroll the grid so the tile of `index` is on screen, for the viewer to fly back to. */
+  reveal(index) {
+    let found = -1
+    for (let i = 0; i < this.sectionStarts.length; i++) {
+      if (this.sectionStarts[i] <= index) found = i
+      else break
+    }
+    if (found < 0) return
+    const { cell, gap, header } = this.metrics
+    const row = Math.floor((index - this.sectionStarts[found]) / this.columns)
+    const top = this.offsets[found] + header + row * (cell + gap)
+    const view = this.el.clientHeight
+    if (top < this.el.scrollTop || top + cell > this.el.scrollTop + view) {
+      this.el.scrollTop = Math.max(0, top - (view - cell) / 2)
+      this.handleScroll()
+    }
+  },
+
   visibleItemRange(section) {
     const sectionIndex = this.sections.indexOf(section)
     if (sectionIndex < 0 || !section || section.count <= 0) return { first: 0, last: -1 }
@@ -228,7 +390,11 @@ export const PhotoTimeline = {
         const item = itemAt(section, index, this.windows)
         if (!item) continue
         keep.add(item.id)
-        wanted.push({ item, ...this.tilePosition(sectionIndex, index) })
+        wanted.push({
+          item,
+          global: this.sectionStarts[sectionIndex] + index,
+          ...this.tilePosition(sectionIndex, index)
+        })
       }
     }
 
@@ -270,7 +436,7 @@ export const PhotoTimeline = {
     }
   },
 
-  placeTile({ item, x, y, size }) {
+  placeTile({ item, x, y, size, global }) {
     let node = this.pool.get(item.id)
     if (!node) {
       node = document.createElement("button")
@@ -278,9 +444,8 @@ export const PhotoTimeline = {
       node.dataset.fileId = item.id
       node.setAttribute("aria-label", item.kind === "video" ? "Open video" : "Open photo")
       node.className = "pointer-events-auto overflow-hidden bg-base-200 p-0"
-      node.addEventListener("click", () => {
-        this.send("timeline:open", { id: item.id })
-      })
+      node.addEventListener("pointerdown", () => this.prefetchSlides(Number(node.dataset.global)))
+      node.addEventListener("click", () => this.openTile(item.id, Number(node.dataset.global)))
       const img = document.createElement("img")
       img.alt = ""
       img.loading = "lazy"
@@ -294,6 +459,7 @@ export const PhotoTimeline = {
       this.pool.set(item.id, node)
     }
 
+    node.dataset.global = String(global)
     node.style.position = "absolute"
     node.style.left = `${x}px`
     node.style.top = `${y}px`

@@ -24,6 +24,7 @@ if config_env() == :dev do
       --format=iife
       --global-name=PhoenixKitPhotosHooks
       --target=es2020
+      --loader:.css=text
       --outfile=../priv/static/assets/phoenix_kit_photos.js
     ) ++
           [

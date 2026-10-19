@@ -136,8 +136,9 @@ Each library chooses how its photos open (`PhoenixKitPhotos.Viewer`):
 | **Swipe viewer** (`"photoswipe"`, the default) | Swipe between photos and videos, pinch and double-tap zoom, drag down to close, the fly from and to the tile; [PhotoSwipe](https://photoswipe.com) 5 under it |
 | **Classic viewer** (`"classic"`) | PhoenixKit's own media viewer (`MediaCanvasViewer`): one file at a time, with its sidebar, comments and annotations |
 
-The choice is the library's own setting (`Libraries.put_setting(library, :viewer, name)`, in the
-library's `settings`), so it follows the library to every browser. A library that has not chosen
+The choice is the library's own setting, this package's (`Libraries.put_module_setting(library, "photos",
+"viewer", name)`: core keeps it in the library's `settings` under the package's namespace and knows nothing
+of it), so it follows the library to every browser. A library that has not chosen
 follows `config :phoenix_kit_photos, default_viewer: "classic" | "photoswipe"` (`"photoswipe"` when
 unset). `Components.ViewerPicker` is the select for it: it shows nothing to someone who may not
 choose (a user library's owner and managers; for Media, the site's admins), and tells its page

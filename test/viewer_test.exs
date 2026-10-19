@@ -61,10 +61,21 @@ defmodule PhoenixKitPhotos.ViewerTest do
     test "a name stored that is not offered (the snap engine, a retired one) is the default", %{
       library: library
     } do
-      {:ok, library} = Libraries.put_setting(library, :viewer, "snap")
-      assert Libraries.setting(library, :viewer) == "snap"
+      {:ok, library} = Libraries.put_module_setting(library, "photos", "viewer", "snap")
+      assert Libraries.module_setting(library, "photos", "viewer") == "snap"
       assert Viewer.for_library(library) == "photoswipe"
       assert Viewer.chosen(library) == nil
+    end
+
+    test "the choice is kept in the library's own settings, under this package's namespace", %{
+      library: library,
+      scope: scope
+    } do
+      assert {:ok, library} = Viewer.put(scope, library, "classic")
+      assert library.settings == %{"modules" => %{"photos" => %{"viewer" => "classic"}}}
+
+      assert {:ok, library} = Viewer.put(scope, library, nil)
+      assert library.settings == %{}
     end
 
     test "Media is a library like another" do

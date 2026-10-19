@@ -10,8 +10,10 @@ defmodule PhoenixKitPhotos.Viewer do
     * `"classic"` — PhoenixKit's own media viewer (`MediaCanvasViewer`), one file at a time
       with its sidebar and comments.
 
-  A library chooses one (`Libraries.setting(library, :viewer)`, stored in the library's own
-  settings, so it follows the library and not the browser). A library that has not chosen
+  A library chooses one. The choice is this package's own setting for the library
+  (`Libraries.module_setting(library, "photos", "viewer")`, kept in the library's `settings`
+  under this package's namespace, so it follows the library and not the browser, and core knows
+  nothing of it). A library that has not chosen
   follows `default/0`: `config :phoenix_kit_photos, default_viewer: "classic"`, otherwise
   `"photoswipe"`. A name stored that this package does not offer (an engine it no longer
   has) is ignored: the library follows the default.
@@ -26,6 +28,10 @@ defmodule PhoenixKitPhotos.Viewer do
   alias PhoenixKit.Users.Auth.Scope
 
   @names ~w(photoswipe classic)
+
+  # Where the choice is kept: core's per-library slot for a module's own settings.
+  @namespace "photos"
+  @key "viewer"
 
   @doc "The viewers a library can choose between, as `{name, label}`."
   @spec options() :: [{String.t(), String.t()}]
@@ -47,17 +53,12 @@ defmodule PhoenixKitPhotos.Viewer do
   default when it has none or a name this package does not offer.
   """
   @spec for_library(Library.t() | String.t() | nil) :: String.t()
-  def for_library(library) do
-    case Libraries.setting(library, :viewer) do
-      name when name in @names -> name
-      _ -> default()
-    end
-  end
+  def for_library(library), do: chosen(library) || default()
 
   @doc "A library's own choice, or nil when it follows the default."
   @spec chosen(Library.t() | String.t() | nil) :: String.t() | nil
   def chosen(library) do
-    case Libraries.setting(library, :viewer) do
+    case Libraries.module_setting(library, @namespace, @key) do
       name when name in @names -> name
       _ -> nil
     end
@@ -99,7 +100,9 @@ defmodule PhoenixKitPhotos.Viewer do
           {:ok, Library.t()} | {:error, :not_allowed | :unknown_viewer | term()}
   def put(scope, %Library{} = library, name) when is_nil(name) or name in @names do
     if can_set?(scope, library) do
-      Libraries.put_setting(library, :viewer, name, actor_uuid: Scope.user_uuid(scope))
+      Libraries.put_module_setting(library, @namespace, @key, name,
+        actor_uuid: Scope.user_uuid(scope)
+      )
     else
       {:error, :not_allowed}
     end

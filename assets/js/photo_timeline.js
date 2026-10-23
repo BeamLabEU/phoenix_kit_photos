@@ -3,6 +3,7 @@ import {
   buildOffsets,
   totalHeight,
   visibleSections,
+  sectionAtOffset,
   anchorAt
 } from "./geometry.js"
 import { SlideStore, wantWidth } from "./slides.js"
@@ -27,9 +28,19 @@ const DEFAULTS = { cell: 160, gap: 4, header: 40 }
  * inside a prebuilt bundle. `PhotoTimeline`, never `Grid`.
  */
 export const PhotoTimeline = {
+  // Height of the header the grid scrolls under (see `readInset`).
+  inset: 0,
+
   mounted() {
     this.columns = Math.max(1, parseInt(this.el.dataset.columns || "5", 10) || 5)
+    // With a target tile size the number of columns follows the width of the screen.
+    this.targetCell = parseInt(this.el.dataset.cell || "0", 10) || 0
+    this.fill = this.el.dataset.fill === "true"
     this.metrics = { ...DEFAULTS }
+    const gap = parseInt(this.el.dataset.gap || "", 10)
+    if (Number.isFinite(gap) && gap >= 0) this.metrics.gap = gap
+    this.inset = 0
+    this.current = this.el.closest(".phoenix-kit-photo-timeline")?.querySelector("[data-current-section]")
     this.sections = []
     this.offsets = [0]
     this.windows = new Map()
@@ -90,7 +101,11 @@ export const PhotoTimeline = {
 
     this.sections = payload.sections || []
     this.resetSlides()
-    if (payload.metrics) this.metrics = { ...this.metrics, ...payload.metrics }
+    if (payload.metrics) {
+      const { gap, ...rest } = payload.metrics
+      this.metrics = { ...this.metrics, ...rest }
+      if (this.el.dataset.gap === undefined && gap !== undefined) this.metrics.gap = gap
+    }
     this.relayout(anchor)
 
     if (libraryChanged) {
@@ -120,27 +135,55 @@ export const PhotoTimeline = {
    * somewhere else in their history.
    */
   captureAnchor() {
-    const anchor = anchorAt(this.offsets, this.el.scrollTop)
+    // The top of what can be seen is below the inset: the grid scrolls under a header.
+    const anchor = anchorAt(this.offsets, this.el.scrollTop + this.inset)
     if (!anchor) return null
     return {
       id: this.sections[anchor.index]?.id,
       index: anchor.index,
       headerOffset: Math.min(anchor.delta, this.metrics.header),
-      row: Math.max(0, anchor.delta - this.metrics.header) / (this.metrics.cell + this.metrics.gap)
+      // The place in the section as a count of tiles, so it survives a change of columns.
+      item:
+        (Math.max(0, anchor.delta - this.metrics.header) / (this.metrics.cell + this.metrics.gap)) *
+        this.columns
     }
   },
 
+  /** The height, in px, of what the grid scrolls under: `--photo-timeline-inset-top` (any CSS length). */
+  readInset() {
+    if (typeof getComputedStyle !== "function") return 0
+    const value = getComputedStyle(this.el).getPropertyValue("--photo-timeline-inset-top").trim()
+    if (!value) return 0
+    // Resolve rem, calc() and env() the way the browser does: let it size a probe.
+    const probe = document.createElement("div")
+    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;height:${value}`
+    this.el.appendChild(probe)
+    const px = probe.offsetHeight
+    probe.remove()
+    return px
+  },
+
+  /** Columns for this width: fixed, or as many tiles of about the target size as fit. */
+  columnsFor(width) {
+    if (!this.targetCell || width <= 0) return this.columns
+    const { gap } = this.metrics
+    return Math.max(3, Math.round((width + gap) / (this.targetCell + gap)))
+  },
+
   relayout(anchor = this.captureAnchor()) {
+    this.inset = this.readInset()
     if (this.el.clientWidth > 0) {
+      this.columns = this.columnsFor(this.el.clientWidth)
       this.metrics.cell = Math.max(1, (this.el.clientWidth - (this.columns - 1) * this.metrics.gap) / this.columns)
     }
-    this.offsets = buildOffsets(this.sections, (s) => this.measure(s))
+    this.offsets = buildOffsets(this.sections, (s) => this.measure(s), this.inset)
     if (this.spacer) this.spacer.style.height = `${totalHeight(this.offsets)}px`
     if (anchor && this.sections.length) {
       const found = this.sections.findIndex(s => s.id === anchor.id)
       const index = found >= 0 ? found : Math.min(anchor.index, this.sections.length - 1)
-      const delta = found >= 0 ? anchor.headerOffset + anchor.row * (this.metrics.cell + this.metrics.gap) : 0
-      this.el.scrollTop = this.offsets[index] + delta
+      const row = found >= 0 ? Math.floor(anchor.item / this.columns) : 0
+      const delta = found >= 0 ? anchor.headerOffset + row * (this.metrics.cell + this.metrics.gap) : 0
+      this.el.scrollTop = Math.max(0, this.offsets[index] + delta - this.inset)
     }
   },
 
@@ -157,6 +200,15 @@ export const PhotoTimeline = {
       if (!this.needed.has(day)) this.windows.delete(day)
     }
     this.materialize(indices)
+    this.showCurrent()
+  },
+
+  /** Put the label of the month at the top of the screen into the host's pill, if it has one. */
+  showCurrent() {
+    if (!this.current || !this.sections.length) return
+    const index = sectionAtOffset(this.offsets, this.el.scrollTop + this.inset + 1)
+    const label = this.sections[index]?.label || ""
+    if (this.current.textContent !== label) this.current.textContent = label
   },
 
   /**
@@ -200,7 +252,7 @@ export const PhotoTimeline = {
   jumpTo(sectionId) {
     const index = this.sections.findIndex((s) => s.id === sectionId)
     if (index >= 0) {
-      this.el.scrollTop = this.offsets[index]
+      this.el.scrollTop = Math.max(0, this.offsets[index] - this.inset)
       this.handleScroll()
     }
   },
@@ -349,8 +401,9 @@ export const PhotoTimeline = {
     const row = Math.floor((index - this.sectionStarts[found]) / this.columns)
     const top = this.offsets[found] + header + row * (cell + gap)
     const view = this.el.clientHeight
-    if (top < this.el.scrollTop || top + cell > this.el.scrollTop + view) {
-      this.el.scrollTop = Math.max(0, top - (view - cell) / 2)
+    // The tile must clear the header the grid scrolls under.
+    if (top < this.el.scrollTop + this.inset || top + cell > this.el.scrollTop + view) {
+      this.el.scrollTop = Math.max(0, top - this.inset - (view - this.inset - cell) / 2)
       this.handleScroll()
     }
   },
@@ -413,7 +466,9 @@ export const PhotoTimeline = {
     let node = this.pool.get(id)
     if (!node) {
       node = document.createElement("div")
-      node.className = "pointer-events-none px-1 text-sm font-semibold"
+      node.className = this.fill
+        ? "pointer-events-none px-3 text-base font-semibold"
+        : "pointer-events-none px-1 text-sm font-semibold"
       this.layer.appendChild(node)
       this.pool.set(id, node)
     }

@@ -74,3 +74,45 @@ test("the pager setting on the component picks the engine (or none)", () => {
   assert.equal(h.pagerEngine(), null)
 })
 
+
+test("a header the grid scrolls under: the first row rests below it, a jump lands under it", () => {
+  const { h } = hook()
+  h.readInset = () => 56
+  h.el.clientWidth = 816
+  h.setIndex({ library: "a", revision: 1, sections: [section(10), { ...section(10), id: "2020-02" }] })
+  assert.equal(h.offsets[0], 56)
+  h.jumpTo("2020-02")
+  assert.equal(h.el.scrollTop + 56, h.offsets[1])
+  // a resize at the very top stays at the very top
+  h.jumpTo("2020-01")
+  h.el.clientWidth = 400
+  h.handleResize()
+  assert.equal(h.el.scrollTop, 0)
+})
+
+test("with a target tile size the columns follow the width and the same tile stays on screen", () => {
+  const { h } = hook()
+  h.targetCell = 160
+  h.el.clientWidth = 1324
+  h.setIndex({ library: "a", revision: 1, sections: [section(300)] })
+  assert.equal(h.columns, 8)
+  assert.equal(h.metrics.cell * 8 + h.metrics.gap * 7, 1324)
+  const tileAtTop = () => Math.floor((h.el.scrollTop - 40) / (h.metrics.cell + h.metrics.gap)) * h.columns
+  h.el.scrollTop = 40 + 10 * (h.metrics.cell + h.metrics.gap)
+  const before = tileAtTop()
+  h.el.clientWidth = 400
+  h.handleResize()
+  assert.equal(h.columns, 3)
+  // the same tile, to the row: it may sit anywhere in its new, shorter row
+  assert(tileAtTop() <= before && before - tileAtTop() < h.columns)
+})
+
+test("the pill shows the month at the top of the screen", () => {
+  const { h } = hook()
+  h.current = { textContent: "" }
+  h.el.clientWidth = 816
+  h.setIndex({ library: "a", revision: 1, sections: [{ ...section(10), label: "January 2020" }, { ...section(10), id: "2020-02", label: "February 2020" }] })
+  assert.equal(h.current.textContent, "January 2020")
+  h.jumpTo("2020-02")
+  assert.equal(h.current.textContent, "February 2020")
+})

@@ -23,10 +23,13 @@ export function squareSectionHeight({ count, columns, cell, gap, header }) {
  * scrollHeight of the library. That total is the whole point: the scrollbar
  * cannot be a map of time until the client knows the height of history it has
  * not fetched.
+ *
+ * `start` is a leading space before the first section: the height of a header
+ * the grid scrolls under, so the first row can rest below it.
  */
-export function buildOffsets(sections, measure) {
+export function buildOffsets(sections, measure, start = 0) {
   const offsets = new Array(sections.length + 1)
-  let acc = 0
+  let acc = start
   for (let i = 0; i < sections.length; i++) {
     offsets[i] = acc
     acc += measure(sections[i], i)

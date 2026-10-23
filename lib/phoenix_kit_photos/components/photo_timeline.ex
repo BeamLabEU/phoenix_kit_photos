@@ -19,6 +19,26 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   `PhoenixKit.Users.Auth.Scope`. The server checks that scope before it
   returns a file, and again when it mints a thumbnail URL.
 
+  ## Filling the screen
+
+  `fill` makes the timeline cover the whole window (`fixed inset-0`), the way a photo app
+  does, with the grid scrolling under the host's header. The host says how tall that header
+  is with the CSS length `--photo-timeline-inset-top` (any length: `3.5rem`,
+  `calc(3.5rem + env(safe-area-inset-top))`) set on the timeline or an ancestor; the first
+  row rests below it and a jump to a month lands under it. In this mode the "jump to month"
+  select becomes a small floating pill that always shows the month at the top of the screen
+  and opens the same list, and an empty library shows the `:empty` slot (or a plain line)
+  in the middle of the screen instead of an alert.
+
+  `cell` is a tile size in px to aim for: the number of columns then follows the width of
+  the screen, as many tiles of about that size as fit (at least three), and `columns` is only
+  the fallback. `gap` is the space between tiles in px (default 4).
+
+      <.live_component module={PhotoTimeline} id="library" scope={...} auth={scope}
+        fill cell={170} gap={2}>
+        <:empty>Drop photos here</:empty>
+      </.live_component>
+
   `layout` accepts `:square` only. Square heights are exact, which is why
   the grid does not need tombstone refinement. There is no `on_select`.
 
@@ -73,6 +93,10 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:auth, auth)
       |> assign(:layout, layout)
       |> assign(:columns, Map.get(assigns, :columns, 5))
+      |> assign(:fill, Map.get(assigns, :fill, false) == true)
+      |> assign(:cell, positive_integer(Map.get(assigns, :cell)))
+      |> assign(:gap, non_negative_integer(Map.get(assigns, :gap), 4))
+      |> assign(:empty_slot, Map.get(assigns, :empty, []))
       |> assign(:on_open, Map.get(assigns, :on_open))
       |> assign(:pager, pager_setting(Map.get(assigns, :pager, false)))
 
@@ -85,6 +109,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
     {:ok, socket}
   end
+
+  defp positive_integer(value) when is_integer(value) and value > 0, do: value
+  defp positive_integer(_value), do: nil
+
+  defp non_negative_integer(value, _default) when is_integer(value) and value >= 0, do: value
+  defp non_negative_integer(_value, default), do: default
 
   @doc false
   # What the hook reads from `data-pager`: "false", "true" (the default engine) or an
@@ -161,7 +191,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         library: library_uuid,
         total: index.total,
         sections: Enum.map(index.sections, &section_payload/1),
-        metrics: %{cell: 160, gap: 4, header: 40}
+        metrics: %{cell: 160, gap: socket.assigns.gap, header: 40}
       })
     else
       socket
@@ -267,19 +297,91 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id={@id} class="phoenix-kit-photo-timeline flex flex-col gap-3" data-pager={to_string(@pager)}>
-      <form id={"#{@id}-jump"} :if={@sections != []} phx-change="timeline:jump" phx-target={@myself} class="flex justify-end">
+    <div
+      id={@id}
+      class={[
+        "phoenix-kit-photo-timeline",
+        @fill && "fixed inset-0",
+        !@fill && "flex flex-col gap-3"
+      ]}
+      data-pager={to_string(@pager)}
+    >
+      <form
+        :if={@sections != [] && !@fill}
+        id={"#{@id}-jump"}
+        phx-change="timeline:jump"
+        phx-target={@myself}
+        class="flex justify-end"
+      >
         <select name="id" class="select select-bordered select-sm" aria-label="Jump to month">
           <option :for={section <- @sections} value={section.id}>{section.label}</option>
         </select>
       </form>
 
-      <div :if={@error} class="alert alert-warning" role="status">
+      <%!-- Filling the screen: the month at the top, as a pill under the header. The
+           invisible select over it is the list; the browser's own picker opens, which
+           is the right one on a phone. --%>
+      <form
+        :if={@sections != [] && @fill}
+        id={"#{@id}-jump"}
+        phx-change="timeline:jump"
+        phx-target={@myself}
+        class="absolute right-3 z-10"
+        style="top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"
+      >
+        <label class="relative flex cursor-pointer items-center gap-1 rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-3 pr-2 text-sm font-medium shadow-sm backdrop-blur-md">
+          <span id={"#{@id}-current"} data-current-section phx-update="ignore"></span>
+          <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
+          <select
+            name="id"
+            class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            aria-label="Jump to month"
+          >
+            <option :for={section <- @sections} value={section.id}>{section.label}</option>
+          </select>
+        </label>
+      </form>
+
+      <div :if={@error && !@fill} class="alert alert-warning" role="status">
         {error_message(@error)}
       </div>
 
-      <div :if={@state in [:empty, :processing, :backfill]} class="alert alert-info" role="status">
+      <div
+        :if={@state in [:processing, :backfill] && !@fill}
+        class="alert alert-info"
+        role="status"
+      >
         {state_message(@state)}
+      </div>
+
+      <div :if={@state == :empty && !@fill} class="alert alert-info" role="status">
+        {state_message(:empty)}
+      </div>
+
+      <%!-- Filling the screen there is no room for alerts above the grid: what there is to
+           say is said over it, in the middle. --%>
+      <div
+        :if={@fill && (@error || @state == :empty)}
+        class="pointer-events-none absolute inset-0 z-10 grid place-items-center px-6 text-center"
+        role="status"
+      >
+        <div :if={@error} class="max-w-sm text-warning">{error_message(@error)}</div>
+        <div :if={!@error and @empty_slot != []} class="pointer-events-auto max-w-sm">
+          {render_slot(@empty_slot)}
+        </div>
+        <div :if={!@error and @empty_slot == []} class="text-base-content/60">
+          {state_message(:empty)}
+        </div>
+      </div>
+
+      <div
+        :if={@fill && !@error && @state in [:processing, :backfill]}
+        class="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4"
+        role="status"
+      >
+        <span class="rounded-full border border-base-content/10 bg-base-100/80 px-4 py-2 text-sm shadow backdrop-blur-md">
+          {state_message(@state)}
+        </span>
       </div>
 
       <div
@@ -291,8 +393,15 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         phx-target={@myself}
         data-target={@myself}
         data-columns={@columns}
+        data-cell={@cell}
+        data-gap={@gap}
+        data-fill={to_string(@fill)}
         data-layout={@layout}
-        class="phoenix-kit-photo-timeline__viewport relative h-[70vh] overflow-y-auto"
+        class={[
+          "phoenix-kit-photo-timeline__viewport relative overflow-y-auto",
+          @fill && "h-full overscroll-contain",
+          !@fill && "h-[70vh]"
+        ]}
       >
         <div class="phoenix-kit-photo-timeline__spacer"></div>
         <div class="phoenix-kit-photo-timeline__layer pointer-events-none absolute inset-x-0 top-0"></div>

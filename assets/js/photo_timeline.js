@@ -14,6 +14,10 @@ import { VideoController } from "./viewer/video.js"
 // Defaults; the server may override them through the index payload.
 const DEFAULTS = { cell: 160, gap: 4, header: 40 }
 
+// Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
+const MIN_CELL = 56
+const ZOOM_KEY = "phoenix_kit_photos:cell"
+
 /**
  * The timeline hook.
  *
@@ -30,9 +34,14 @@ const DEFAULTS = { cell: 160, gap: 4, header: 40 }
 export const PhotoTimeline = {
   // Height of the header the grid scrolls under (see `readInset`).
   inset: 0,
+  // A pinch in progress, and the tile size a pinch chose (see "zoom" below).
+  pinch: null,
+  zoomCell: null,
 
   mounted() {
     this.columns = Math.max(1, parseInt(this.el.dataset.columns || "5", 10) || 5)
+    // What the host asked for; `columns` is what is on screen, which zooming changes.
+    this.baseColumns = this.columns
     // With a target tile size the number of columns follows the width of the screen.
     this.targetCell = parseInt(this.el.dataset.cell || "0", 10) || 0
     this.fill = this.el.dataset.fill === "true"
@@ -40,6 +49,9 @@ export const PhotoTimeline = {
     const gap = parseInt(this.el.dataset.gap || "", 10)
     if (Number.isFinite(gap) && gap >= 0) this.metrics.gap = gap
     this.inset = 0
+    // A tile size the person chose by pinching (or + and -); null follows the host's `cell`.
+    this.zoomCell = this.storedZoom()
+    this.pinch = null
     this.current = this.el.closest(".phoenix-kit-photo-timeline")?.querySelector("[data-current-section]")
     this.sections = []
     this.offsets = [0]
@@ -58,6 +70,8 @@ export const PhotoTimeline = {
 
     this.onScroll = throttleToFrame(() => this.handleScroll())
     this.el.addEventListener("scroll", this.onScroll, { passive: true })
+
+    this.bindZoom()
 
     this.onResize = debounce(() => this.handleResize(), 120)
     window.addEventListener("resize", this.onResize)
@@ -81,6 +95,7 @@ export const PhotoTimeline = {
   },
 
   destroyed() {
+    this.unbindZoom()
     this.el.removeEventListener("scroll", this.onScroll)
     window.removeEventListener("resize", this.onResize)
     this.resizeObserver.disconnect()
@@ -163,10 +178,14 @@ export const PhotoTimeline = {
     return px
   },
 
-  /** Columns for this width: fixed, or as many tiles of about the target size as fit. */
+  /**
+   * Columns for this width: fixed, or as many tiles of about the target size as fit. A size
+   * the person chose by zooming wins over the host's, and may go down to one column.
+   */
   columnsFor(width) {
-    if (!this.targetCell || width <= 0) return this.columns
     const { gap } = this.metrics
+    if (this.zoomCell && width > 0) return Math.max(1, Math.round((width + gap) / (this.zoomCell + gap)))
+    if (!this.targetCell || width <= 0) return this.baseColumns ?? this.columns
     return Math.max(3, Math.round((width + gap) / (this.targetCell + gap)))
   },
 
@@ -255,6 +274,217 @@ export const PhotoTimeline = {
       this.el.scrollTop = Math.max(0, this.offsets[index] - this.inset)
       this.handleScroll()
     }
+  },
+
+  // --- zoom: pinch, ctrl + wheel (a trackpad pinch), + and - --------------
+
+  storedZoom() {
+    try {
+      const value = Number(window.localStorage.getItem(ZOOM_KEY))
+      return Number.isFinite(value) && value >= MIN_CELL ? value : null
+    } catch (_error) {
+      return null
+    }
+  },
+
+  rememberZoom() {
+    try {
+      if (this.zoomCell) window.localStorage.setItem(ZOOM_KEY, String(Math.round(this.zoomCell)))
+      else window.localStorage.removeItem(ZOOM_KEY)
+    } catch (_error) {
+      // private mode and the like: the choice lasts until the page is left
+    }
+  },
+
+  bindZoom() {
+    this.zoomHandlers = []
+    const on = (target, type, fn, options) => {
+      target.addEventListener(type, fn, options)
+      this.zoomHandlers.push(() => target.removeEventListener(type, fn, options))
+    }
+
+    // Two fingers. `touch-action: pan-y` on the viewport keeps the browser from zooming the
+    // page itself; one finger still scrolls.
+    on(this.el, "touchstart", (e) => this.touchStart(e), { passive: true })
+    on(this.el, "touchmove", (e) => this.touchMove(e), { passive: false })
+    on(this.el, "touchend", (e) => this.touchEnd(e), { passive: true })
+    on(this.el, "touchcancel", () => this.endPinch(false), { passive: true })
+
+    // A trackpad pinch arrives as wheel events with ctrlKey set (Chrome, Edge, Firefox).
+    on(this.el, "wheel", (e) => this.wheel(e), { passive: false })
+
+    // Safari on a Mac sends gesture events instead.
+    on(this.el, "gesturestart", (e) => this.gesture(e, "start"))
+    on(this.el, "gesturechange", (e) => this.gesture(e, "change"))
+    on(this.el, "gestureend", (e) => this.gesture(e, "end"))
+
+    on(window, "keydown", (e) => this.zoomKey(e))
+  },
+
+  unbindZoom() {
+    for (const off of this.zoomHandlers || []) off()
+    this.zoomHandlers = []
+    clearTimeout(this.wheelTimer)
+  },
+
+  /** The tile under a point of the viewport (x, y from its top-left), as a section and a place in it. */
+  itemAtPoint(x, y) {
+    if (!this.sections.length) return null
+    const index = sectionAtOffset(this.offsets, this.el.scrollTop + y)
+    const section = this.sections[index]
+    if (!section || section.count <= 0) return null
+    const { cell, gap, header } = this.metrics
+    const stride = cell + gap
+    const row = Math.max(0, Math.floor((this.el.scrollTop + y - this.offsets[index] - header) / stride))
+    const col = Math.min(this.columns - 1, Math.max(0, Math.floor(x / stride)))
+    return { index, item: Math.min(section.count - 1, row * this.columns + col) }
+  },
+
+  /** The smallest and largest tile there can be at this width: MIN_CELL, and one column. */
+  cellLimits() {
+    return [MIN_CELL, Math.max(MIN_CELL, this.el.clientWidth)]
+  },
+
+  /**
+   * Make tiles `cell` px (about: the columns are a whole number), keeping the photo that
+   * is under (x, y) where it is on screen.
+   */
+  zoomTo(cell, x, y) {
+    const [low, high] = this.cellLimits()
+    const focus = this.itemAtPoint(x, y)
+    this.zoomCell = Math.min(high, Math.max(low, cell))
+    this.relayout(null)
+    if (focus) {
+      const row = Math.floor(focus.item / this.columns)
+      const { cell: size, gap, header } = this.metrics
+      const middle = this.offsets[focus.index] + header + row * (size + gap) + size / 2
+      this.el.scrollTop = Math.max(0, middle - y)
+    }
+    this.handleScroll()
+    this.rememberZoom()
+  },
+
+  /** One column more (`steps` > 0, smaller tiles) or fewer, around the middle of the screen. */
+  stepZoom(steps) {
+    const width = this.el.clientWidth
+    if (!(width > 0)) return
+    const columns = Math.max(1, this.columns + steps)
+    const { gap } = this.metrics
+    this.zoomTo((width - (columns - 1) * gap) / columns, width / 2, this.el.clientHeight / 2)
+  },
+
+  zoomKey(event) {
+    if (this.pager || event.metaKey || event.ctrlKey || event.altKey) return
+    const target = event.target
+    if (target && /^(input|select|textarea)$/i.test(target.tagName || "")) return
+    if (target && target.isContentEditable) return
+    if (event.key === "+" || event.key === "=") this.stepZoom(-1)
+    else if (event.key === "-" || event.key === "_") this.stepZoom(1)
+    else if (event.key === "0") this.resetZoom()
+    else return
+    event.preventDefault()
+  },
+
+  /** Back to the size the host asks for. */
+  resetZoom() {
+    this.zoomCell = null
+    this.rememberZoom()
+    this.relayout()
+    this.handleScroll()
+  },
+
+  /**
+   * While the fingers are down the grid is only scaled on the screen (a transform: cheap and
+   * smooth). When they lift, the scale becomes a tile size, and the grid is laid out again.
+   */
+  previewScale(scale, x, y) {
+    if (!this.layer) return
+    this.layer.style.transformOrigin = `${x}px ${this.el.scrollTop + y}px`
+    this.layer.style.transform = scale === 1 ? "" : `scale(${scale})`
+  },
+
+  /** A scale that would take the tiles beyond what they can be is held back, with some give. */
+  clampScale(scale) {
+    const [low, high] = this.cellLimits()
+    const cell = this.metrics.cell
+    return Math.min(high / cell, Math.max(low / cell, scale))
+  },
+
+  startPinch(x, y) {
+    if (!this.pinch) this.pinch = { scale: 1, x, y }
+    this.pinch.x = x
+    this.pinch.y = y
+  },
+
+  movePinch(scale, x, y) {
+    if (!this.pinch) this.startPinch(x, y)
+    this.pinch.scale = this.clampScale(scale)
+    this.pinch.x = x
+    this.pinch.y = y
+    this.previewScale(this.pinch.scale, x, y)
+  },
+
+  endPinch(commit = true) {
+    const pinch = this.pinch
+    this.pinch = null
+    if (!pinch) return
+    this.previewScale(1, pinch.x, pinch.y)
+    if (commit && Math.abs(pinch.scale - 1) > 0.02) {
+      this.zoomTo(this.metrics.cell * pinch.scale, pinch.x, pinch.y)
+    }
+  },
+
+  touchStart(event) {
+    if (event.touches.length === 2) {
+      const [a, b] = event.touches
+      this.touchBase = distance(a, b)
+      this.pinch = null
+    } else {
+      this.touchBase = null
+    }
+  },
+
+  touchMove(event) {
+    if (event.touches.length !== 2 || !this.touchBase) return
+    event.preventDefault()
+    const [a, b] = event.touches
+    const box = this.el.getBoundingClientRect()
+    this.movePinch(
+      distance(a, b) / this.touchBase,
+      (a.clientX + b.clientX) / 2 - box.left,
+      (a.clientY + b.clientY) / 2 - box.top
+    )
+  },
+
+  touchEnd(event) {
+    if (event.touches.length < 2 && this.pinch) {
+      this.touchBase = null
+      this.endPinch()
+    }
+  },
+
+  wheel(event) {
+    if (!event.ctrlKey) return
+    event.preventDefault()
+    const box = this.el.getBoundingClientRect()
+    const x = event.clientX - box.left
+    const y = event.clientY - box.top
+    const scale = (this.pinch ? this.pinch.scale : 1) * Math.exp(-event.deltaY * 0.01)
+    this.movePinch(scale, x, y)
+    clearTimeout(this.wheelTimer)
+    this.wheelTimer = setTimeout(() => this.endPinch(), 140)
+  },
+
+  gesture(event, phase) {
+    event.preventDefault()
+    // iOS sends gesture events as well as touches for the same pinch; the touches win.
+    if (this.touchBase) return
+    const box = this.el.getBoundingClientRect()
+    const x = (event.clientX ?? box.left + box.width / 2) - box.left
+    const y = (event.clientY ?? box.top + box.height / 2) - box.top
+    if (phase === "start") this.startPinch(x, y)
+    else if (phase === "change") this.movePinch(event.scale, x, y)
+    else this.endPinch()
   },
 
   // --- the swipe viewer ------------------------------------------------
@@ -531,6 +761,10 @@ export const PhotoTimeline = {
       delete img.dataset.src
     }
   }
+}
+
+function distance(a, b) {
+  return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
 }
 
 function dayIndexFor(days, itemIndex) {

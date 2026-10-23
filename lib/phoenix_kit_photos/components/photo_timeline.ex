@@ -39,6 +39,13 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         <:empty>Drop photos here</:empty>
       </.live_component>
 
+  The person can zoom: pinch on a phone, pinch on a trackpad (Chrome, Edge, Firefox send it as
+  ctrl + wheel; Safari as gesture events), or press `+`, `-` and `0` (back to the size the host
+  asks for). While the fingers are down the grid is only scaled; when they lift it is laid out
+  again with a whole number of columns, around the photo under the fingers. The size they chose
+  is a tile size, kept in the browser (`localStorage`, `phoenix_kit_photos:cell`), so it carries
+  over to another screen width and wins over `cell`. Tiles go down to 56 px and up to one column.
+
   `layout` accepts `:square` only. Square heights are exact, which is why
   the grid does not need tombstone refinement. There is no `on_select`.
 
@@ -398,7 +405,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         data-fill={to_string(@fill)}
         data-layout={@layout}
         class={[
-          "phoenix-kit-photo-timeline__viewport relative overflow-y-auto",
+          "phoenix-kit-photo-timeline__viewport relative touch-pan-y overflow-y-auto",
           @fill && "h-full overscroll-contain",
           !@fill && "h-[70vh]"
         ]}

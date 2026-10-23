@@ -116,3 +116,108 @@ test("the pill shows the month at the top of the screen", () => {
   h.jumpTo("2020-02")
   assert.equal(h.current.textContent, "February 2020")
 })
+
+// --- zoom -------------------------------------------------------------------
+
+function zoomHook() {
+  const { h, sent } = hook()
+  h.el.clientWidth = 1000
+  h.el.clientHeight = 500
+  h.baseColumns = 5
+  h.el.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 500 })
+  h.setIndex({ library: "a", revision: 1, sections: [section(400), { ...section(400), id: "2020-02" }] })
+  h.el.scrollTop = 3000
+  return { h, sent }
+}
+
+test("zooming changes the columns and keeps the photo under the fingers where it was", () => {
+  const { h } = zoomHook()
+  assert.equal(h.columns, 5)
+  const focus = h.itemAtPoint(500, 250)
+  h.zoomTo(100, 500, 250)
+  assert.equal(h.columns, 10)
+  assert.equal(h.metrics.cell * 10 + h.metrics.gap * 9, 1000)
+  const row = Math.floor(focus.item / h.columns)
+  const middle = h.offsets[focus.index] + h.metrics.header + row * (h.metrics.cell + h.metrics.gap) + h.metrics.cell / 2
+  assert(Math.abs(middle - h.el.scrollTop - 250) < 1)
+})
+
+test("a tile can be no smaller than the minimum and no bigger than the screen", () => {
+  const { h } = zoomHook()
+  h.zoomTo(1, 500, 250)
+  assert.equal(h.zoomCell, 56)
+  h.zoomTo(100000, 500, 250)
+  assert.equal(h.columns, 1)
+  assert.equal(h.metrics.cell, 1000)
+})
+
+test("a pinch is a preview until the fingers lift, then it becomes a tile size", () => {
+  const { h } = zoomHook()
+  const cell = h.metrics.cell
+  h.movePinch(0.5, 500, 250)
+  assert.equal(h.columns, 5, "nothing is laid out again while the fingers are down")
+  h.endPinch()
+  assert.equal(h.columns, 10)
+  assert(Math.abs(h.zoomCell - cell * 0.5) < 1)
+  assert.equal(h.pinch, null)
+})
+
+test("the scale of a pinch is held where the tiles cannot go further", () => {
+  const { h } = zoomHook()
+  assert(h.clampScale(0.001) >= 56 / h.metrics.cell - 1e-9)
+  assert(h.clampScale(1000) <= 1000 / h.metrics.cell + 1e-9)
+  assert.equal(h.clampScale(1), 1)
+})
+
+test("a trackpad pinch (ctrl + wheel) zooms, and a plain wheel is left to scroll", () => {
+  const { h } = zoomHook()
+  let prevented = 0
+  const wheel = (extra) => ({ deltaY: -60, clientX: 500, clientY: 250, preventDefault: () => prevented++, ...extra })
+  h.wheel(wheel({ ctrlKey: false }))
+  assert.equal(prevented, 0)
+  assert.equal(h.pinch, null)
+  h.wheel(wheel({ ctrlKey: true }))
+  clearTimeout(h.wheelTimer)
+  assert.equal(prevented, 1)
+  assert(h.pinch.scale > 1)
+  h.endPinch()
+  assert(h.columns < 5)
+})
+
+test("two fingers pinch; one finger does not; iOS gesture events defer to the touches", () => {
+  const { h } = zoomHook()
+  const finger = (x, y) => ({ clientX: x, clientY: y })
+  let prevented = 0
+  const touch = (touches) => ({ touches, preventDefault: () => prevented++ })
+
+  h.touchStart(touch([finger(500, 250)]))
+  h.touchMove(touch([finger(500, 250)]))
+  assert.equal(h.pinch, null)
+
+  h.touchStart(touch([finger(400, 250), finger(600, 250)]))
+  h.touchMove(touch([finger(300, 250), finger(700, 250)]))
+  assert.equal(prevented, 1)
+  assert(Math.abs(h.pinch.scale - 2) < 0.01)
+  h.gesture({ scale: 9, preventDefault() {} }, "change")
+  assert(Math.abs(h.pinch.scale - 2) < 0.01, "the gesture event is ignored during a touch pinch")
+  h.touchEnd(touch([finger(500, 250)]))
+  assert.equal(h.pinch, null)
+  assert(h.columns < 5, "pinching out (fingers apart) makes the tiles bigger: fewer columns")
+})
+
+test("+ and - step the columns, 0 goes back; typing in a field does not zoom", () => {
+  const { h } = zoomHook()
+  const key = (k, extra = {}) => { let stopped = false; h.zoomKey({ key: k, target: {}, preventDefault: () => (stopped = true), ...extra }); return stopped }
+  assert(key("-"))
+  assert.equal(h.columns, 6)
+  assert(key("+"))
+  assert.equal(h.columns, 5)
+  assert(key("+"))
+  assert.equal(h.columns, 4)
+  assert(key("0"))
+  assert.equal(h.zoomCell, null)
+  assert.equal(h.columns, 5)
+  assert(!key("-", { target: { tagName: "INPUT" } }))
+  assert(!key("-", { ctrlKey: true }))
+  assert.equal(h.columns, 5)
+})

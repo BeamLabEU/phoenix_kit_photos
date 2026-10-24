@@ -6,7 +6,9 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   each host LiveView, or pass a list of component IDs for multiple timelines.
   Components cannot receive PubSub messages themselves. This hook consumes
   storage lifecycle messages. Hosts with their own handlers can instead
-  forward `send_update(PhotoTimeline, id: id, refresh: true)` themselves.
+  forward `send_update(PhotoTimeline, id: id, refresh: true, file_uuids: ids)` themselves
+  (`file_uuids` is optional: with it, a timeline whose library the files are not in does nothing;
+  without it, it refreshes).
   """
 
   alias PhoenixKit.Modules.Storage
@@ -30,7 +32,11 @@ defmodule PhoenixKitPhotos.LiveUpdates do
       Phoenix.LiveView.attach_hook(socket, __MODULE__, :handle_info, fn
         {event, file_ids}, socket when event in @events ->
           for id <- List.wrap(ids) do
-            Phoenix.LiveView.send_update(PhotoTimeline, id: id, refresh: true)
+            Phoenix.LiveView.send_update(PhotoTimeline,
+              id: id,
+              refresh: true,
+              file_uuids: List.wrap(file_ids)
+            )
           end
 
           if event in [

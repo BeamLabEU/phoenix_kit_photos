@@ -8,6 +8,7 @@ function hook() {
     columns: 5, metrics: { cell: 160, gap: 4, header: 40 },
     sections: [], offsets: [0], windows: new Map(), pool: new Map(),
     library: null, revision: null, needed: new Set(),
+    known: new Set(), fresh: new Set(), refreshing: new Set(),
     pushEventTo: (...args) => sent.push(args), materialize() {},
   }) }
 }
@@ -19,17 +20,57 @@ test("window requests target the component and include large-day tails", () => {
   h.setIndex({ library: "a", revision: 1, sections: [section()] })
   assert(sent.some(([target, event, payload]) => target === 7 && event === "timeline:need_window" && payload.window === "2020-01-01:500" && payload.revision === 1))
 })
-test("same-library refresh invalidates cached windows and rejects stale responses", () => {
-  const { h } = hook()
+test("a same-library refresh keeps the tiles on screen, asks for them again, and rejects stale answers", () => {
+  const { h, sent } = hook()
   h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
   h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "old" }] })
-  h.setIndex({ library: "a", revision: 2, sections: [section(1)] })
-  assert.equal(h.windows.get("2020-01-01"), null)
+  sent.length = 0
+  h.setIndex({ library: "a", revision: 2, sections: [section(2)] })
+  assert.equal(h.windows.get("2020-01-01")[0].id, "old", "the old tiles stay until the answer comes")
+  assert(sent.some(([, event, payload]) => event === "timeline:need_window" && payload.window === "2020-01-01" && payload.revision === 2))
+  assert.equal(sent.filter(([, event, payload]) => event === "timeline:need_window" && payload.window === "2020-01-01").length, 1, "asked once, not twice")
   h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "stale" }] })
-  assert.equal(h.windows.get("2020-01-01"), null)
-  h.setWindow({ section: "2020-01-01", revision: 2, items: [{ id: "new" }] })
-  assert.equal(h.windows.get("2020-01-01")[0].id, "new")
+  assert.equal(h.windows.get("2020-01-01")[0].id, "old")
+  h.setWindow({ section: "2020-01-01", revision: 2, items: [{ id: "old" }, { id: "new" }] })
+  assert.deepEqual(h.windows.get("2020-01-01").map(i => i.id), ["old", "new"])
+  assert.deepEqual([...h.fresh], ["new"], "only the photo never seen before is new")
 })
+
+test("a request still in flight when the index changes is asked for again", () => {
+  const { h, sent } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  assert.equal(h.windows.get("2020-01-01"), null)
+  sent.length = 0
+  h.setIndex({ library: "a", revision: 2, sections: [section(1)] })
+  assert(sent.some(([, event, payload]) => event === "timeline:need_window" && payload.revision === 2))
+})
+
+test("while the viewer is open the refresh waits, then catches up when it closes", () => {
+  const { h } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  h.pager = { destroy() { throw new Error("the viewer must stay open") } }
+  h.setIndex({ library: "a", revision: 2, sections: [section(2)] })
+  assert.equal(h.revision, 1)
+  h.pager = null
+  h.applyDeferred()
+  assert.equal(h.revision, 2)
+  assert.equal(h.sections[0].count, 2)
+})
+
+test("at the end of the library a refresh follows the new photos; elsewhere it stays put", () => {
+  const { h } = hook()
+  h.el.clientWidth = 816
+  const months = (n) => Array.from({ length: n }, (_, i) => ({ ...section(40), id: `2020-0${i + 1}` }))
+  h.setIndex({ library: "a", revision: 1, sections: months(3) })
+  const end = () => h.offsets[h.offsets.length - 1] - h.el.clientHeight
+  assert.equal(h.el.scrollTop, end())
+  h.setIndex({ library: "a", revision: 2, sections: months(4) })
+  assert.equal(h.el.scrollTop, end(), "followed the growth")
+  h.el.scrollTop = 100
+  h.setIndex({ library: "a", revision: 3, sections: months(5) })
+  assert(Math.abs(h.el.scrollTop - 100) < 200, "did not jump to the end")
+})
+
 test("switching libraries cannot reuse previous windows", () => {
   const { h } = hook()
   h.setIndex({ library: "a", revision: 1, sections: [section(1)] })

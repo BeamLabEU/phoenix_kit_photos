@@ -65,6 +65,16 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   Hosts subscribe using `on_mount {PhoenixKitPhotos.LiveUpdates, "library"}`;
   use the actual component ID in place of "library".
+
+  ## When files arrive
+
+  Storage announces file events to everyone, so the component first asks whether the files are in
+  its library (`Timeline.touches?/2`) and ignores the event if not. An upload is several events a
+  file, so it gathers a burst (`config :phoenix_kit_photos, refresh_delay_ms: 350`) into one new
+  index. The browser then keeps every tile where it is, fetches the windows it holds again, and
+  swaps the answers in: a photo it has never seen pops in, the tiles after it glide aside, and
+  when the person is looking at the end of the library the view follows it down. Nothing is
+  cleared, so nothing flickers; an open swipe viewer is left alone until it is closed.
   """
 
   use Phoenix.LiveComponent
@@ -84,8 +94,34 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   @impl true
-  def update(%{refresh: true}, socket) do
-    {:ok, load_index(socket)}
+  # A storage event. Events are announced to everyone, so first: is it about this library at
+  # all? Then coalesce: an upload is several events a file (processed, each thumbnail), and
+  # one index per burst is plenty.
+  def update(%{refresh: true} = assigns, socket) do
+    cond do
+      !Map.has_key?(socket.assigns, :scope) ->
+        {:ok, socket}
+
+      Map.has_key?(assigns, :file_uuids) and
+          not Timeline.touches?(socket.assigns.scope, assigns.file_uuids) ->
+        {:ok, socket}
+
+      socket.assigns[:refresh_queued] ->
+        {:ok, socket}
+
+      true ->
+        Phoenix.LiveView.send_update_after(
+          __MODULE__,
+          [id: socket.assigns.id, refresh_now: true],
+          refresh_delay()
+        )
+
+        {:ok, assign(socket, :refresh_queued, true)}
+    end
+  end
+
+  def update(%{refresh_now: true}, socket) do
+    {:ok, socket |> assign(:refresh_queued, false) |> load_index()}
   end
 
   def update(assigns, socket) do
@@ -116,6 +152,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
     {:ok, socket}
   end
+
+  # How long a burst of storage events is gathered before the index is read again.
+  defp refresh_delay, do: Application.get_env(:phoenix_kit_photos, :refresh_delay_ms, 350)
 
   defp positive_integer(value) when is_integer(value) and value > 0, do: value
   defp positive_integer(_value), do: nil

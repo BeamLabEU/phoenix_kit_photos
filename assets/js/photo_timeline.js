@@ -56,6 +56,11 @@ export const PhotoTimeline = {
     this.sections = []
     this.offsets = [0]
     this.windows = new Map()
+    // Files this library has shown us, and which of them just arrived (see `noteArrivals`).
+    this.known = new Set()
+    this.fresh = new Set()
+    // Windows asked for again because storage changed, answered by `setWindow`.
+    this.refreshing = new Set()
     this.pool = new Map()
     this.library = null
     this.revision = null
@@ -108,11 +113,29 @@ export const PhotoTimeline = {
 
   setIndex(payload) {
     const libraryChanged = payload.library !== this.library
+    // The swipe viewer holds positions in the old index; let it finish, then catch up.
+    if (!libraryChanged && this.pager) {
+      this.deferred = payload
+      return
+    }
+
+    // Storage changed under a library already on screen: a refresh, not a new library. The
+    // tiles stay where they are while the windows are fetched again, and what is new arrives
+    // with an animation.
+    const refresh = !libraryChanged && this.revision !== null
     const anchor = libraryChanged ? null : this.captureAnchor()
+    const atEnd = refresh && this.atEnd()
+    const heightBefore = totalHeight(this.offsets)
+
     this.library = payload.library
     if (payload.revision === this.revision && !libraryChanged) return
     this.revision = payload.revision
-    this.windows.clear()
+    if (libraryChanged) {
+      this.windows.clear()
+      this.known.clear()
+    }
+    this.fresh.clear()
+    this.refreshing.clear()
 
     this.sections = payload.sections || []
     this.resetSlides()
@@ -126,9 +149,47 @@ export const PhotoTimeline = {
     if (libraryChanged) {
       const height = totalHeight(this.offsets)
       this.el.scrollTop = Math.max(0, height - this.el.clientHeight)
+    } else if (atEnd && totalHeight(this.offsets) > heightBefore) {
+      this.followEnd()
     }
 
+    if (refresh) this.revalidate()
+    this.markNew = refresh
     this.handleScroll()
+    this.markNew = false
+  },
+
+  /** Whether the person is looking at the end of the library, where new photos land. */
+  atEnd() {
+    const height = totalHeight(this.offsets)
+    return height > 0 && this.el.scrollTop + this.el.clientHeight >= height - 24
+  },
+
+  /** Keep the end in view as the library grows: glide there, or jump when motion is unwelcome. */
+  followEnd() {
+    const top = Math.max(0, totalHeight(this.offsets) - this.el.clientHeight)
+    if (this.el.scrollTo && !reducedMotion()) this.el.scrollTo({ top, behavior: "smooth" })
+    else this.el.scrollTop = top
+  },
+
+  /**
+   * Ask again for every window held, without letting go of what is shown: the old tiles stay
+   * until the new answer replaces them. Requests sent for the old revision would be dropped
+   * on arrival, so the ones still in flight are asked again too.
+   */
+  revalidate() {
+    for (const day of this.windows.keys()) {
+      this.refreshing.add(day)
+      this.send("timeline:need_window", { window: day, revision: this.revision })
+    }
+  },
+
+  /** Run a deferred refresh once the viewer is closed. */
+  applyDeferred() {
+    if (!this.deferred) return
+    const payload = this.deferred
+    this.deferred = null
+    this.setIndex(payload)
   },
 
   measure(section) {
@@ -258,13 +319,30 @@ export const PhotoTimeline = {
     this.needed.add(day)
     if (this.windows.has(day)) return
     this.windows.set(day, null)
+    if (this.markNew) this.refreshing.add(day)
     this.send("timeline:need_window", { window: day, revision: this.revision })
   },
 
   setWindow({ section, items, revision }) {
     if (revision !== this.revision || !this.windows.has(section)) return
+    const arrived = this.refreshing.delete(section)
     this.windows.set(section, items || [])
+    this.noteArrivals(items || [], arrived)
+    // Tiles that move because of what arrived glide to their places.
+    this.gliding = arrived
     this.handleScroll()
+    this.gliding = false
+  },
+
+  /**
+   * Remember the files of a window. When the window was fetched again because storage changed,
+   * the ones never seen before are the new photos: they will pop in.
+   */
+  noteArrivals(items, arrived) {
+    for (const item of items) {
+      if (arrived && !this.known.has(item.id)) this.fresh.add(item.id)
+      this.known.add(item.id)
+    }
   },
 
   /** Jump to a section id, e.g. "2018-07". */
@@ -584,6 +662,7 @@ export const PhotoTimeline = {
     } catch (error) {
       this.pager = null
       console.error("PhotoTimeline: the viewer engine did not load", id, error)
+      this.applyDeferred()
       const slide = this.slides.get(index)
       if (slide) this.send("timeline:open", { id: slide.id })
       return
@@ -602,6 +681,7 @@ export const PhotoTimeline = {
       },
       onClose: () => {
         this.pager = null
+        this.applyDeferred()
       }
     })
     this.pager.open(index)
@@ -703,9 +783,11 @@ export const PhotoTimeline = {
       this.pool.set(id, node)
     }
     node.textContent = section.label || section.id
+    const top = this.offsets[sectionIndex]
+    if (this.gliding) glide(node, 0, top)
     node.style.position = "absolute"
     node.style.left = "0"
-    node.style.top = `${this.offsets[sectionIndex]}px`
+    node.style.top = `${top}px`
     node.style.height = `${this.metrics.header}px`
     node.style.lineHeight = `${this.metrics.header}px`
   },
@@ -723,6 +805,7 @@ export const PhotoTimeline = {
 
   placeTile({ item, x, y, size, global }) {
     let node = this.pool.get(item.id)
+    const created = !node
     if (!node) {
       node = document.createElement("button")
       node.type = "button"
@@ -742,6 +825,9 @@ export const PhotoTimeline = {
       node.appendChild(img)
       this.layer.appendChild(node)
       this.pool.set(item.id, node)
+    } else if (this.gliding && parseFloat(node.style.width) === size) {
+      // Only a move: a change of size (zoom, resize) is laid out, not animated.
+      glide(node, x, y)
     }
 
     node.dataset.global = String(global)
@@ -760,7 +846,39 @@ export const PhotoTimeline = {
       img.removeAttribute("src")
       delete img.dataset.src
     }
+
+    if (created && this.fresh.delete(item.id)) popIn(node)
   }
+}
+
+/** Move a node from where it is to (x, y) smoothly, when it has moved. */
+function glide(node, x, y) {
+  if (reducedMotion() || !node.animate) return
+  const dx = (parseFloat(node.style.left) || 0) - x
+  const dy = (parseFloat(node.style.top) || 0) - y
+  if (!dx && !dy) return
+  node.animate(
+    [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }],
+    { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+  )
+}
+
+/** A new photo arrives: it grows and fades in, with a little overshoot. */
+function popIn(node) {
+  if (reducedMotion() || !node.animate) return
+  node.animate(
+    [
+      { opacity: 0, transform: "scale(0.8)" },
+      { opacity: 1, transform: "scale(1)" }
+    ],
+    { duration: 420, easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" }
+  )
+}
+
+function reducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia
+    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    : false
 }
 
 function distance(a, b) {

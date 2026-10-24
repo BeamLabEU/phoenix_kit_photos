@@ -27,6 +27,8 @@ config :phoenix_kit, PhoenixKitPhotos.TestRepo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 10
 
+config :phoenix_kit_photos, refresh_delay_ms: 5
+
 config :phoenix_kit, secret_key_base: String.duplicate("a", 64)
 config :phoenix_kit, url_prefix: ""
 

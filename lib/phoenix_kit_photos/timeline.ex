@@ -165,6 +165,36 @@ defmodule PhoenixKitPhotos.Timeline do
   def libraries(_scope), do: []
 
   @doc """
+  Whether a storage event about `file_uuids` can change what library `scope` shows.
+
+  Storage announces every file event to everyone, whichever library the file is in. This
+  answers from where the files are kept, trashed ones included (a trashed file leaves the
+  timeline but is still a row of its library). Files that no longer exist cannot be placed, so
+  they count: someone's gone for good, and the timeline asks.
+  """
+  @spec touches?(scope(), [String.t()]) :: boolean()
+  def touches?({:library, library_uuid}, file_uuids) when is_binary(library_uuid) do
+    case file_uuids |> List.wrap() |> Enum.filter(&is_binary/1) do
+      [] ->
+        false
+
+      ids ->
+        libraries =
+          StorageFile
+          |> where([f], f.uuid in ^ids)
+          |> select([f], f.library_uuid)
+          |> repo().all()
+
+        libraries == [] or library_uuid in libraries
+    end
+  rescue
+    # A value that is not a UUID, or a database that is busy: refresh rather than miss a photo.
+    _error -> true
+  end
+
+  def touches?(_scope, _file_uuids), do: true
+
+  @doc """
   The library the timeline opens when the caller does not name one.
 
   A user's default personal library when they have one, otherwise Media.

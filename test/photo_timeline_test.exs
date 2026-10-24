@@ -47,6 +47,36 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
     assert render(view) =~ "No photos yet."
   end
 
+  test "a file event about another library does not touch this timeline", %{
+    view: view,
+    user: user
+  } do
+    view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})
+    assert_push_event(view, "timeline:test-timeline:index", %{total: 0})
+
+    other = library_fixture(user)
+    elsewhere = file_fixture(user, %{library_uuid: other.uuid})
+    Storage.broadcast_file_processed(elsewhere.uuid)
+    refute_push_event(view, "timeline:test-timeline:index", _, 200)
+
+    # and one about a file in this library does
+    here = file_fixture(user, %{})
+    Storage.broadcast_file_processed(here.uuid)
+    assert_push_event(view, "timeline:test-timeline:index", %{total: 1})
+  end
+
+  test "a burst of events is one new index", %{view: view, user: user} do
+    view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})
+    assert_push_event(view, "timeline:test-timeline:index", %{total: 0, revision: first})
+    file = file_fixture(user, %{})
+
+    for _ <- 1..5, do: Storage.broadcast_file_thumbnail_updated(file.uuid)
+
+    assert_push_event(view, "timeline:test-timeline:index", %{total: 1, revision: second})
+    assert second == first + 1
+    refute_push_event(view, "timeline:test-timeline:index", _, 200)
+  end
+
   test "stale requests are ignored and jumping targets the timeline", %{view: view} do
     view
     |> element("#test-timeline-viewport")

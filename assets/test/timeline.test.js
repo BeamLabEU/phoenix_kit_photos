@@ -9,6 +9,7 @@ function hook() {
     sections: [], offsets: [0], windows: new Map(), pool: new Map(),
     library: null, revision: null, needed: new Set(),
     known: new Set(), fresh: new Set(), refreshing: new Set(),
+    fetchedAt: new Map(), lastReload: 0,
     pushEventTo: (...args) => sent.push(args), materialize() {},
   }) }
 }
@@ -261,4 +262,37 @@ test("+ and - step the columns, 0 goes back; typing in a field does not zoom", (
   assert(!key("-", { target: { tagName: "INPUT" } }))
   assert(!key("-", { ctrlKey: true }))
   assert.equal(h.columns, 5)
+})
+
+const needs = (sent) => sent.filter(([, event]) => event === "timeline:need_window").map(([, , payload]) => payload.window)
+
+test("a failing tile asks for the windows on screen again, once for a whole screen of failures", () => {
+  const { h, sent } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "a", thumb: "/old" }] })
+  sent.length = 0
+  for (let i = 0; i < 30; i++) h.imageFailed()
+  assert.deepEqual(needs(sent), ["2020-01-01"])
+  assert.equal(h.windows.get("2020-01-01")[0].thumb, "/old", "the old tiles stay until the answer comes")
+  h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "a", thumb: "/new" }] })
+  assert.equal(h.windows.get("2020-01-01")[0].thumb, "/new")
+})
+
+test("a window still in flight is not asked for twice", () => {
+  const { h, sent } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  sent.length = 0
+  h.reloadWindows()
+  assert.deepEqual(needs(sent), [])
+})
+
+test("a tab that wakes asks again only for windows older than the limit", () => {
+  const { h, sent } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+  h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "a" }] })
+  h.setWindow({ section: "2020-01-01:500", revision: 1, items: [{ id: "b" }] })
+  h.fetchedAt.set("2020-01-01", Date.now() - 2 * 60 * 60 * 1000)
+  sent.length = 0
+  h.reloadWindows({ olderThan: 60 * 60 * 1000 })
+  assert.deepEqual(needs(sent), ["2020-01-01"])
 })

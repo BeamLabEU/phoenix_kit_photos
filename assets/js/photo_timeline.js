@@ -14,6 +14,12 @@ import { VideoController } from "./viewer/video.js"
 // Defaults; the server may override them through the index payload.
 const DEFAULTS = { cell: 160, gap: 4, header: 40 }
 
+// Links to private files run out after a few hours (three at least, with the default window).
+// A window older than this is asked for again when the tab wakes; failing tiles ask at most
+// this often.
+const STALE_AFTER_MS = 60 * 60 * 1000
+const RELOAD_EVERY_MS = 10 * 1000
+
 // Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
 const MIN_CELL = 56
 const ZOOM_KEY = "phoenix_kit_photos:cell"
@@ -56,6 +62,9 @@ export const PhotoTimeline = {
     this.sections = []
     this.offsets = [0]
     this.windows = new Map()
+    // When each window arrived, and when a failing tile last made us ask for them again.
+    this.fetchedAt = new Map()
+    this.lastReload = 0
     // Files this library has shown us, and which of them just arrived (see `noteArrivals`).
     this.known = new Set()
     this.fresh = new Set()
@@ -78,6 +87,16 @@ export const PhotoTimeline = {
 
     this.bindZoom()
 
+    // The links in a window can run out (see `reloadWindows`). An image's `error` does not
+    // bubble, so listen on the way down.
+    this.onImageError = () => this.imageFailed()
+    this.layer.addEventListener("error", this.onImageError, true)
+    this.onWake = () => {
+      if (document.visibilityState === "visible") this.reloadWindows({ olderThan: STALE_AFTER_MS })
+    }
+    document.addEventListener("visibilitychange", this.onWake)
+    window.addEventListener("pageshow", this.onWake)
+
     this.onResize = debounce(() => this.handleResize(), 120)
     window.addEventListener("resize", this.onResize)
     this.resizeObserver = new ResizeObserver(this.onResize)
@@ -97,11 +116,15 @@ export const PhotoTimeline = {
 
   reconnected() {
     this.send("timeline:ready", {})
+    this.reloadWindows({ olderThan: STALE_AFTER_MS })
   },
 
   destroyed() {
     this.unbindZoom()
     this.el.removeEventListener("scroll", this.onScroll)
+    this.layer.removeEventListener("error", this.onImageError, true)
+    document.removeEventListener("visibilitychange", this.onWake)
+    window.removeEventListener("pageshow", this.onWake)
     window.removeEventListener("resize", this.onResize)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
@@ -277,7 +300,10 @@ export const PhotoTimeline = {
     this.needed = new Set()
     for (const i of indices) this.ensureVisibleDays(this.sections[i])
     for (const day of this.windows.keys()) {
-      if (!this.needed.has(day)) this.windows.delete(day)
+      if (!this.needed.has(day)) {
+        this.windows.delete(day)
+        this.fetchedAt.delete(day)
+      }
     }
     this.materialize(indices)
     this.showCurrent()
@@ -327,11 +353,42 @@ export const PhotoTimeline = {
     if (revision !== this.revision || !this.windows.has(section)) return
     const arrived = this.refreshing.delete(section)
     this.windows.set(section, items || [])
+    this.fetchedAt.set(section, Date.now())
     this.noteArrivals(items || [], arrived)
     // Tiles that move because of what arrived glide to their places.
     this.gliding = arrived
     this.handleScroll()
     this.gliding = false
+  },
+
+  /**
+   * Ask again for the windows on screen, and keep showing the old ones until the answers come.
+   *
+   * A private file's links stop working after a few hours, and a window holds its links for as
+   * long as its day is on screen, so a tab left open (or put to sleep and woken) is showing
+   * links the server now refuses. The new answer carries fresh links; `placeTile` loads the
+   * tiles whose link changed and leaves the rest alone. `olderThan` skips windows that came
+   * lately.
+   */
+  reloadWindows({ olderThan = 0 } = {}) {
+    const now = Date.now()
+    for (const [day, items] of this.windows) {
+      if (items === null) continue
+      if (now - (this.fetchedAt.get(day) || 0) < olderThan) continue
+      this.send("timeline:need_window", { window: day, revision: this.revision })
+    }
+  },
+
+  /**
+   * A tile's image failed. The likely reason is an expired link, so reload the windows. A burst
+   * of failures (a whole screen of tiles) asks once, and a picture that is truly gone cannot
+   * start a loop: its new link equals the old one, so it is not requested again.
+   */
+  imageFailed() {
+    const now = Date.now()
+    if (now - this.lastReload < RELOAD_EVERY_MS) return
+    this.lastReload = now
+    this.reloadWindows()
   },
 
   /**

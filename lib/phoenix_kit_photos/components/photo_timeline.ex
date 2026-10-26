@@ -450,7 +450,13 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         ]}
       >
         <div class="phoenix-kit-photo-timeline__spacer"></div>
-        <div class="phoenix-kit-photo-timeline__layer pointer-events-none absolute inset-x-0 top-0"></div>
+        <%!-- `[transform:translateZ(0)]` gives the layer of tiles a compositing layer
+             of its own. The viewport is a nested scroller, and WebKit (iPadOS 26,
+             checked 2026-10-26) paints an HDR photo in one as SDR unless the
+             picture or a box around it is composited on its own. The hook's pinch
+             zoom sets an inline transform while it runs and clears it after, so
+             this one is back in force at rest. --%>
+        <div class="phoenix-kit-photo-timeline__layer pointer-events-none absolute inset-x-0 top-0 [transform:translateZ(0)]"></div>
       </div>
     </div>
     """

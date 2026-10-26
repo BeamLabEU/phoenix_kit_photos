@@ -140,15 +140,16 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   @doc """
-  Libraries the scope may open in the timeline: the system library Media,
-  then the user libraries they own or belong to.
+  Libraries the scope may open in the timeline: the system library Media for
+  someone who can manage it (`media_visible?/1`), then the user libraries they
+  own or belong to.
 
   Media does not require user libraries to be enabled. A personal library
   does.
   """
   @spec libraries(Scope.t() | nil) :: [PhoenixKit.Modules.Storage.Library.t()]
   def libraries(%Scope{} = scope) do
-    media = Libraries.get_library(Libraries.media_uuid())
+    media = if media_visible?(scope), do: Libraries.get_library(Libraries.media_uuid())
 
     personal =
       case Scope.user_uuid(scope) do
@@ -163,6 +164,20 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   def libraries(_scope), do: []
+
+  @doc """
+  Whether the site's Media library is one of this scope's libraries.
+
+  It belongs to the site, not to a person: a system role or access to the media
+  module (the rule for adding to it, `Uploads.can_upload?/2`). To anyone else it
+  would be an empty library they cannot add to, since a user reads only their own
+  uploads there.
+  """
+  @spec media_visible?(Scope.t() | nil) :: boolean()
+  def media_visible?(%Scope{} = scope),
+    do: Scope.system_role?(scope) or Scope.has_module_access?(scope, "media")
+
+  def media_visible?(_scope), do: false
 
   @doc """
   Whether a storage event about `file_uuids` can change what library `scope` shows.
@@ -197,13 +212,14 @@ defmodule PhoenixKitPhotos.Timeline do
   @doc """
   The library the timeline opens when the caller does not name one.
 
-  A user's default personal library when they have one, otherwise Media.
+  A user's default personal library when they have one, otherwise Media when
+  they may see it (`media_visible?/1`), otherwise none.
   """
   @spec default_library_uuid(Scope.t() | nil) :: String.t() | nil
   def default_library_uuid(%Scope{} = scope) do
     case Scope.user_uuid(scope) && Libraries.default_user_library(Scope.user_uuid(scope)) do
       %{uuid: uuid} -> uuid
-      _ -> Libraries.media_uuid()
+      _ -> if media_visible?(scope), do: Libraries.media_uuid()
     end
   end
 

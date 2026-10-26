@@ -541,4 +541,38 @@ defmodule PhoenixKitPhotos.TimelineTest do
       assert_in_delta section.sum_aspect, 3.5, 0.001
     end
   end
+
+  describe "Media in the list of libraries" do
+    setup do
+      %{user: user_fixture("media-#{System.unique_integer([:positive])}@example.com")}
+    end
+
+    test "an ordinary user does not get it, and has no default library without their own", %{user: user} do
+      scope = scope_for(user)
+      refute Timeline.media_visible?(scope)
+      assert Timeline.libraries(scope) == []
+      assert Timeline.default_library_uuid(scope) == nil
+    end
+
+    test "an Owner or Admin does", %{user: user} do
+      for role <- ["Owner", "Admin"] do
+        scope = scope_for(user, [role])
+        assert Timeline.media_visible?(scope)
+        assert [%{uuid: uuid}] = Timeline.libraries(scope)
+        assert uuid == media_uuid()
+        assert Timeline.default_library_uuid(scope) == media_uuid()
+      end
+    end
+
+    test "so does someone with access to the media module", %{user: user} do
+      scope = %{scope_for(user) | cached_permissions: MapSet.new(["media"])}
+      assert Timeline.media_visible?(scope)
+      assert media_uuid() in Enum.map(Timeline.libraries(scope), & &1.uuid)
+    end
+
+    test "nobody signed in does not" do
+      refute Timeline.media_visible?(nil)
+      assert Timeline.libraries(nil) == []
+    end
+  end
 end

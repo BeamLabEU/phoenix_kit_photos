@@ -59,6 +59,21 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   swipes, and its Info button sends `on_open` for the file on screen, so the
   host's own viewer (details, comments) is still one tap away.
 
+  ## Addresses
+
+  With `photo_path` and `library_path` the swipe viewer keeps the page's address in step with
+  the photo on screen, so a photo can be shared, bookmarked, opened in a new tab and left with
+  the Back button. `photo_path` is the address of a photo with `:code` where its short code goes
+  (`"/anna/private/p/:code"`), `library_path` the address of the library
+  (`"/anna/private"`). Both are paths on the host's own site. The viewer opening adds a history
+  entry, turning to another photo replaces it, and closing the viewer goes back (or, when the
+  page was opened on a photo, to `library_path`). The changes go through LiveView
+  (`JS.patch`), so the parent's `handle_params/3` sees every address.
+
+  The other way round, the parent tells the browser which photo its address names, on load and
+  whenever the address changes (a Back to the library closes the viewer; a link to a photo opens
+  it): `push_view/5`. The browser leaves a viewer that already shows that photo alone.
+
   `on_open`, when set, is sent to the parent LiveView as
   `{on_open, file_uuid}` when a tile is opened. The parent must authorize
   that client-supplied UUID through `Timeline.viewer_file/3` before opening it.
@@ -142,6 +157,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:empty_slot, Map.get(assigns, :empty, []))
       |> assign(:on_open, Map.get(assigns, :on_open))
       |> assign(:pager, pager_setting(Map.get(assigns, :pager, false)))
+      |> assign(:photo_path, photo_path(Map.get(assigns, :photo_path)))
+      |> assign(:library_path, local_path(Map.get(assigns, :library_path)))
 
     socket =
       if socket.assigns[:loaded_for] == {scope, auth} && socket.assigns.index do
@@ -161,6 +178,53 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   defp non_negative_integer(value, _default) when is_integer(value) and value >= 0, do: value
   defp non_negative_integer(_value, default), do: default
+
+  @doc """
+  Tells the timeline's browser hook which photo the page's address names, from the parent
+  LiveView (usually in `handle_params/3`): `file_uuid` is that photo, or nil when the address
+  names none, which closes the swipe viewer if it is open. `id` is the component's id, `scope`
+  and `auth` are what it was given. A photo the viewer may not read is treated as none.
+
+  The hook opens the viewer on the photo (or leaves one that already shows it alone), and does
+  not change the address: it is already right.
+  """
+  @spec push_view(
+          Phoenix.LiveView.Socket.t(),
+          String.t(),
+          Timeline.scope(),
+          Scope.t() | nil,
+          String.t() | nil
+        ) ::
+          Phoenix.LiveView.Socket.t()
+  def push_view(socket, id, scope, auth, file_uuid) do
+    payload =
+      with uuid when is_binary(uuid) <- file_uuid,
+           {:ok, position} <- Timeline.position(scope, uuid, auth) do
+        %{id: uuid, global: position}
+      else
+        _ -> %{id: nil, global: nil}
+      end
+
+    Phoenix.LiveView.push_event(socket, "timeline:#{id}:view", payload)
+  end
+
+  @doc false
+  # A path on the host's own site: one slash, then something that is not a second slash (which
+  # would be another site) or a backslash, and no scheme. Nothing else reaches the page.
+  def local_path("/" <> rest = path) when is_binary(path) do
+    if String.starts_with?(rest, ["/", "\\"]) or String.contains?(path, ["\n", "\r", " "]),
+      do: nil,
+      else: path
+  end
+
+  def local_path(_path), do: nil
+
+  @doc false
+  # `photo_path` must say where the code goes.
+  def photo_path(path) do
+    path = local_path(path)
+    if is_binary(path) and String.contains?(path, ":code"), do: path
+  end
 
   @doc false
   # What the hook reads from `data-pager`: "false", "true" (the default engine) or an
@@ -351,6 +415,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         !@fill && "flex flex-col gap-3"
       ]}
       data-pager={to_string(@pager)}
+      data-photo-path={@photo_path}
+      data-library-path={@library_path}
     >
       <form
         :if={@sections != [] && !@fill}

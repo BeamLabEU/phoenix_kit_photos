@@ -20,6 +20,7 @@
 //
 //   open(index)         show the viewer on `index`
 //   close()             close it (animated if the engine animates)
+//   goTo(index)         (optional) turn to `index`, when the address names another photo
 //   destroy()           remove it at once, no callbacks needed
 //   refresh(indices)    slides at these indices arrived: draw them where a
 //                       placeholder was

@@ -20,6 +20,10 @@ const DEFAULTS = { cell: 160, gap: 4, header: 40 }
 const STALE_AFTER_MS = 60 * 60 * 1000
 const RELOAD_EVERY_MS = 10 * 1000
 
+// A viewer's own address change comes back from the server a moment later as a "view" of the
+// same photo; while the viewer is open that echo must not pull the person back to it.
+const ECHO_MS = 5 * 1000
+
 // Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
 const MIN_CELL = 56
 const ZOOM_KEY = "phoenix_kit_photos:cell"
@@ -43,6 +47,15 @@ export const PhotoTimeline = {
   // A pinch in progress, and the tile size a pinch chose (see "zoom" below).
   pinch: null,
   zoomCell: null,
+  // The address follows the swipe viewer (see "addresses" below): whether the address already
+  // names the open photo, whether the viewer opened by adding a history entry of its own,
+  // whether the server is closing it, the photos whose address was just set, and a "view" the
+  // server sent before the index it needs arrived.
+  addressOpen: false,
+  addressPushed: false,
+  addressClosing: false,
+  addressSent: null,
+  view: null,
 
   mounted() {
     this.columns = Math.max(1, parseInt(this.el.dataset.columns || "5", 10) || 5)
@@ -106,6 +119,7 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:index`, (payload) => this.setIndex(payload))
     this.handleEvent(`${prefix}:window`, (payload) => this.setWindow(payload))
     this.handleEvent(`${prefix}:jump`, ({ id }) => this.jumpTo(id))
+    this.handleEvent(`${prefix}:view`, (payload) => this.applyView(payload))
     this.handleEvent(`${prefix}:slides`, (payload) => this.setSlides(payload))
     this.send("timeline:ready", {})
   },
@@ -130,6 +144,8 @@ export const PhotoTimeline = {
     this.onResize.cancel()
     this.onScroll.cancel()
     clearTimeout(this.openTimer)
+    // The page is going: the viewer's closing must not touch the address.
+    this.addressClosing = true
     if (this.pager && this.pager.destroy) this.pager.destroy()
     this.pool.clear()
   },
@@ -180,6 +196,7 @@ export const PhotoTimeline = {
     this.markNew = refresh
     this.handleScroll()
     this.markNew = false
+    this.openFromAddress()
   },
 
   /** Whether the person is looking at the end of the library, where new photos land. */
@@ -644,7 +661,11 @@ export const PhotoTimeline = {
       start += (section.days_list || []).reduce((sum, day) => sum + (day.count || 0), 0)
     }
     this.pendingOpen = null
-    if (this.pager && this.pager.destroy) this.pager.destroy()
+    if (this.pager && this.pager.destroy) {
+      // Gone because the positions changed under it, not because the person closed it.
+      this.addressClosing = true
+      this.pager.destroy()
+    }
   },
 
   prefetchSlides(center, radius = 8) {
@@ -735,13 +756,129 @@ export const PhotoTimeline = {
       onChange: (i) => {
         this.prefetchSlides(i)
         this.reveal(i)
+        this.syncAddress(i)
       },
       onClose: () => {
         this.pager = null
         this.applyDeferred()
+        this.leaveAddress()
       }
     })
     this.pager.open(index)
+    this.syncAddress(index)
+  },
+
+  // --- addresses: the page's address follows the swipe viewer -------------
+  //
+  // With `data-photo-path` ("/anna/private/p/:code") and `data-library-path` on the root, opening
+  // the viewer adds a history entry for the photo, turning the page replaces it, and closing
+  // goes back. The changes are made through LiveView (`js().patch`), never `history.pushState`:
+  // LiveView takes an entry it did not make for a page to reload. The host's `handle_params`
+  // sees every address, and tells the hook, by "view", which photo the address names (on load,
+  // and after Back or Forward), so a link to a photo opens it and Back closes it.
+
+  /** The two addresses the host gave, or null: then nothing here does anything. */
+  addresses() {
+    const root = this.el.closest(".phoenix-kit-photo-timeline")
+    const photo = root && root.dataset.photoPath
+    const library = root && root.dataset.libraryPath
+    return photo && library && photo.includes(":code") ? { photo, library } : null
+  },
+
+  /** Whether the page is at the address of some photo. */
+  atPhotoAddress(paths) {
+    const [before, after] = paths.photo.split(":code")
+    const path = window.location.pathname
+    return path.startsWith(before) && path.endsWith(after) && path.length > before.length + after.length
+  },
+
+  /**
+   * The viewer shows slide `index`: put the photo's address in the bar. The first call after
+   * the viewer opened adds a history entry (unless the page was opened on this photo already),
+   * the rest replace it.
+   */
+  syncAddress(index) {
+    const paths = this.addresses()
+    const slide = this.slides.get(index)
+    if (!paths || !slide || !slide.code) return
+
+    const to = paths.photo.replace(":code", encodeURIComponent(slide.code))
+    this.noteSent(slide.id)
+    if (window.location.pathname === to) {
+      this.addressOpen = true
+      return
+    }
+
+    const push = !this.addressOpen
+    this.addressOpen = true
+    if (push) this.addressPushed = true
+    this.js().patch(to, { replace: !push })
+  },
+
+  /** Remember that the address of this photo was just set, for `applyView` to recognise the echo. */
+  noteSent(id) {
+    const now = Date.now()
+    const sent = (this.addressSent = this.addressSent || new Map())
+    for (const [other, at] of sent) if (now - at > ECHO_MS) sent.delete(other)
+    sent.set(id, now)
+  },
+
+  /**
+   * The viewer is gone. Unless the server closed it (Back), the address leaves the photo: back
+   * to the entry before it when the viewer added one, else the library's address in its place.
+   */
+  leaveAddress() {
+    const paths = this.addresses()
+    const server = this.addressClosing
+    const pushed = this.addressPushed
+    this.addressClosing = false
+    this.addressOpen = false
+    this.addressPushed = false
+    if (!paths || server || !this.atPhotoAddress(paths)) return
+
+    if (pushed) window.history.back()
+    else this.js().patch(paths.library, { replace: true })
+  },
+
+  /** The host says which photo its address names: `{ id, global }`, or `{ id: null }` for none. */
+  applyView(payload) {
+    if (!this.addresses()) return
+    const { id, global } = payload || {}
+
+    if (!id) {
+      this.view = null
+      if (this.pager && this.pager !== true) {
+        this.addressClosing = true
+        this.pager.close()
+      }
+      return
+    }
+
+    // Our own address change, coming back: the viewer is already there (or further on).
+    const at = this.addressSent && this.addressSent.get(id)
+    if (this.pager && at && Date.now() - at < ECHO_MS) return
+
+    this.view = { id, global }
+    this.openFromAddress()
+  },
+
+  /** Open or turn the viewer to the photo the address names, once there is an index to place it in. */
+  openFromAddress() {
+    const view = this.view
+    if (!view || !this.pagerEnabled() || !Number.isFinite(view.global) || !this.sections.length) return
+    if (this.pager === true) return
+    this.view = null
+
+    if (this.pager) {
+      const slide = this.slides.get(this.pager.index)
+      if (slide && slide.id === view.id) return
+      if (this.pager.goTo) this.pager.goTo(view.global)
+      return
+    }
+
+    // The address already names it: opening the viewer must not add another entry.
+    this.addressOpen = true
+    this.openPager(view.global)
   },
 
   thumbOf(id) {

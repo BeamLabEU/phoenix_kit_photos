@@ -9,14 +9,33 @@ defmodule PhoenixKitPhotos.TestLive do
   use Phoenix.LiveView
   on_mount {PhoenixKitPhotos.LiveUpdates, "test-timeline"}
 
-  def mount(_params, %{"scope" => scope, "library" => library}, socket) do
-    {:ok, assign(socket, scope: scope, library: library)}
+  def mount(_params, %{"scope" => scope, "library" => library} = session, socket) do
+    {:ok,
+     assign(socket,
+       scope: scope,
+       library: library,
+       photo_path: session["photo_path"],
+       library_path: session["library_path"]
+     )}
+  end
+
+  # What a host does in `handle_params/3`: say which photo its address names.
+  def handle_info({:view, uuid}, socket) do
+    {:noreply,
+     PhoenixKitPhotos.Components.PhotoTimeline.push_view(
+       socket,
+       "test-timeline",
+       socket.assigns.library,
+       socket.assigns.scope,
+       uuid
+     )}
   end
 
   def render(assigns) do
     ~H"""
     <.live_component module={PhoenixKitPhotos.Components.PhotoTimeline}
-      id="test-timeline" scope={@library} auth={@scope} />
+      id="test-timeline" scope={@library} auth={@scope}
+      photo_path={@photo_path} library_path={@library_path} />
     """
   end
 end

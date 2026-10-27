@@ -114,6 +114,11 @@ export class PhotoSwipeEngine {
     if (this.pswp) this.pswp.close()
   }
 
+  /** Turn to `index` without the slide animation of a swipe. */
+  goTo(index) {
+    if (this.pswp) this.pswp.goTo(index)
+  }
+
   /** Slides at `indices` have arrived: show them where a waiting slide was. */
   refresh(indices) {
     if (!this.pswp) return

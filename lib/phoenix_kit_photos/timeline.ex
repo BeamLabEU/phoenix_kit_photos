@@ -104,6 +104,9 @@ defmodule PhoenixKitPhotos.Timeline do
           required(:kind) => :image | :video,
           required(:w) => pos_integer(),
           required(:h) => pos_integer(),
+          # The file's short code (core's `Storage.ShortCode`), what a host puts in the
+          # address of the photo; nil for a file that has none yet.
+          optional(:code) => String.t() | nil,
           optional(:src) => String.t() | nil,
           optional(:poster) => String.t() | nil,
           optional(:sources) => [
@@ -325,6 +328,59 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   def slides(_scope, _day, _from, _count, _want, _auth), do: {:error, :unauthorized}
+
+  @doc """
+  Where a photo is in the timeline: how many photos of the library come before it, in
+  the order the timeline shows them (by day, then `taken_at`, then uuid). The browser
+  opens the swipe viewer at that position, so an address that names a photo can open on it.
+
+  `{:error, :not_found}` for a file that is not in the library or that `auth` may not read.
+  """
+  @spec position(scope(), String.t(), Scope.t() | nil) ::
+          {:ok, non_neg_integer()} | {:error, error()}
+  def position({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
+    with :ok <- capture_dates(),
+         :ok <- known_library(library_uuid),
+         :ok <- reader(auth),
+         {:ok, uuid} <- Ecto.UUID.cast(uuid),
+         %StorageFile{} = file <-
+           library_uuid |> visible(auth) |> where([f], f.uuid == ^uuid) |> repo().one(),
+         true <- Libraries.can?(auth, file, :read) do
+      before =
+        library_uuid
+        |> visible(auth)
+        |> where(^before_condition(file))
+        |> repo().aggregate(:count)
+
+      {:ok, before}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def position(_scope, _uuid, _auth), do: {:error, :unauthorized}
+
+  # The files that sort before `file`: an earlier day, or the same day and an earlier
+  # `taken_at`, or the same `taken_at` and an earlier uuid. A file without a time
+  # sorts after those that have one (Postgres puts NULLs last in ascending order).
+  defp before_condition(%StorageFile{taken_at: nil} = file) do
+    dynamic(
+      [f],
+      f.taken_on < ^file.taken_on or
+        (f.taken_on == ^file.taken_on and
+           (not is_nil(f.taken_at) or (is_nil(f.taken_at) and f.uuid < ^file.uuid)))
+    )
+  end
+
+  defp before_condition(%StorageFile{} = file) do
+    dynamic(
+      [f],
+      f.taken_on < ^file.taken_on or
+        (f.taken_on == ^file.taken_on and
+           (f.taken_at < ^file.taken_at or (f.taken_at == ^file.taken_at and f.uuid < ^file.uuid)))
+    )
+  end
 
   @doc "Most files `slides/6` returns at once."
   @spec slide_limit() :: pos_integer()
@@ -568,6 +624,7 @@ defmodule PhoenixKitPhotos.Timeline do
 
     %{
       id: file.uuid,
+      code: file.short_code,
       taken_at: file.taken_at,
       w: file.width,
       h: file.height,
@@ -597,6 +654,7 @@ defmodule PhoenixKitPhotos.Timeline do
 
     %{
       id: file.uuid,
+      code: file.short_code,
       kind: :video,
       w: w,
       h: h,
@@ -613,7 +671,7 @@ defmodule PhoenixKitPhotos.Timeline do
       end
 
     {w, h} = dimensions(instance, file)
-    %{id: file.uuid, kind: :image, w: w, h: h, src: src}
+    %{id: file.uuid, code: file.short_code, kind: :image, w: w, h: h, src: src}
   end
 
   defp original_source(auth, file) do

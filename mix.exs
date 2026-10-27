@@ -87,7 +87,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, "~> 2.41"}
+        {:phoenix_kit, ">= 2.41.0 and < 4.0.0"}
     end
   end
 

@@ -238,7 +238,7 @@ defmodule PhoenixKitPhotos.Timeline do
   def index({:library, library_uuid}, auth) when is_binary(library_uuid) do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
-         :ok <- reader(auth) do
+         :ok <- reader(auth, library_uuid) do
       days = library_uuid |> visible(auth) |> day_rows()
       sections = group_days(days)
       total = Enum.reduce(sections, 0, &(&1.count + &2))
@@ -268,7 +268,7 @@ defmodule PhoenixKitPhotos.Timeline do
   def window({:library, library_uuid}, day, auth) when is_binary(library_uuid) do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
-         :ok <- reader(auth),
+         :ok <- reader(auth, library_uuid),
          {:ok, date, offset} <- parse_window(day) do
       items =
         library_uuid
@@ -303,7 +303,7 @@ defmodule PhoenixKitPhotos.Timeline do
       when is_binary(library_uuid) and is_integer(from) and is_integer(count) and is_integer(want) do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
-         :ok <- reader(auth),
+         :ok <- reader(auth, library_uuid),
          {:ok, date, offset} <- parse_window(day),
          true <- from >= 0 and from < @window_limit do
       want = want |> max(200) |> min(4096)
@@ -341,7 +341,7 @@ defmodule PhoenixKitPhotos.Timeline do
   def position({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
-         :ok <- reader(auth),
+         :ok <- reader(auth, library_uuid),
          {:ok, uuid} <- Ecto.UUID.cast(uuid),
          %StorageFile{} = file <-
            library_uuid |> visible(auth) |> where([f], f.uuid == ^uuid) |> repo().one(),
@@ -389,7 +389,7 @@ defmodule PhoenixKitPhotos.Timeline do
   @doc "Read-authorized data for PhoenixKit's existing canvas viewer."
   def viewer_file({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
     with {:ok, uuid} <- Ecto.UUID.cast(uuid),
-         :ok <- reader(auth),
+         :ok <- reader(auth, library_uuid),
          %StorageFile{} = file <-
            library_uuid
            |> visible(auth)
@@ -578,6 +578,8 @@ defmodule PhoenixKitPhotos.Timeline do
     |> where([f], f.width > 0 and f.height > 0)
   end
 
+  defp restrict(query, library_uuid, %Scope{user: nil}), do: restrict(query, library_uuid, nil)
+
   defp restrict(query, library_uuid, %Scope{} = scope) do
     cond do
       Scope.system_role?(scope) ->
@@ -594,6 +596,12 @@ defmodule PhoenixKitPhotos.Timeline do
     end
   end
 
+  defp restrict(query, library_uuid, nil) do
+    if Libraries.audience_allows?(nil, Libraries.get_library(library_uuid)),
+      do: query,
+      else: where(query, [f], false)
+  end
+
   defp restrict(query, _library_uuid, _scope), do: where(query, [f], false)
 
   # A member of a user library may read every file in it. A system library
@@ -602,12 +610,7 @@ defmodule PhoenixKitPhotos.Timeline do
   defp readable_library?(scope, library_uuid) do
     case Libraries.get_library(library_uuid) do
       %{kind: "user", trashed_at: nil} = library ->
-        Libraries.role(library, Scope.user_uuid(scope)) in [
-          :owner,
-          :manager,
-          :contributor,
-          :viewer
-        ]
+        Libraries.can_read_library?(scope, library)
 
       _ ->
         false
@@ -741,11 +744,26 @@ defmodule PhoenixKitPhotos.Timeline do
     if Libraries.get_library(library_uuid), do: :ok, else: {:error, :not_found}
   end
 
-  defp reader(%Scope{} = scope) do
-    if Scope.user_uuid(scope) || Scope.system_role?(scope), do: :ok, else: {:error, :unauthorized}
-  end
+  defp reader(scope, library_uuid) do
+    case Libraries.get_library(library_uuid) do
+      %{kind: "user"} = library ->
+        # Preserve uploader-only reads after membership is removed. The query's
+        # restrict/3 still limits these callers to their own files; it never opens
+        # the whole private library or grants anonymous access.
+        own_uploads? =
+          Libraries.authenticated_reader?(scope) and
+            not Libraries.published?(library) and is_nil(library.trashed_at)
 
-  defp reader(_scope), do: {:error, :unauthorized}
+        if Libraries.can_read_library?(scope, library) or own_uploads?,
+          do: :ok,
+          else: {:error, :unauthorized}
+
+      _ ->
+        if match?(%Scope{}, scope) and (Scope.user_uuid(scope) || Scope.system_role?(scope)),
+          do: :ok,
+          else: {:error, :unauthorized}
+    end
+  end
 
   defp to_float(%Decimal{} = decimal), do: Decimal.to_float(decimal)
   defp to_float(number) when is_integer(number), do: number * 1.0

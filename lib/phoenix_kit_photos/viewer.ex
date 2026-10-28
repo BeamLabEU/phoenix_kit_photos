@@ -82,7 +82,9 @@ defmodule PhoenixKitPhotos.Viewer do
     case library do
       %Library{kind: "user"} ->
         user_uuid = Scope.user_uuid(scope)
-        is_binary(user_uuid) and Libraries.allows?(Libraries.role(library, user_uuid), :rename)
+
+        Scope.system_role?(scope) or
+          (is_binary(user_uuid) and Libraries.allows?(Libraries.role(library, user_uuid), :rename))
 
       %Library{kind: "system"} ->
         Scope.system_role?(scope)

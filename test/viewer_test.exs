@@ -158,6 +158,7 @@ defmodule PhoenixKitPhotos.ViewerTest do
     setup do
       start_supervised!({Phoenix.PubSub, name: PhoenixKitPhotos.TestPubSub})
       start_supervised!(PhoenixKitPhotos.TestEndpoint)
+      start_supervised!(PhoenixKit.PubSub.Manager)
       :ok
     end
 

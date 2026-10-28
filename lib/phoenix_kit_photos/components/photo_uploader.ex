@@ -102,7 +102,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     socket
     |> assign(:library, library)
     |> assign(:can_upload, Uploads.can_upload?(socket.assigns.auth, uuid))
-    |> assign(:public?, Libraries.public?(library))
+    |> assign(:public?, Libraries.published?(library))
+    |> assign(:anonymous?, Libraries.public?(library))
   end
 
   # Nothing is allowed to someone who may not add. Otherwise the upload is set up once;
@@ -318,7 +319,11 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
             </div>
 
             <p :if={@public?} class="rounded-lg bg-warning/15 p-2 text-xs text-warning-content" role="note">
-              {gettext("This library is public. Everything you add to it can be seen by anyone.")}
+              <%= if @anonymous? do %>
+                {gettext("This library is public. Everything you add to it can be seen by anyone.")}
+              <% else %>
+                {gettext("This library is shared with signed-in users. Every active account on this site can see what you add.")}
+              <% end %>
             </p>
 
             <label

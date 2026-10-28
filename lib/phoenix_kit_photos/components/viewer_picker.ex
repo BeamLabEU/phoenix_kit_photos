@@ -29,6 +29,7 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
 
     {:ok,
      socket
+     |> assign(:notify, Map.get(assigns, :notify, true))
      |> assign(:id, assigns.id)
      |> assign(:library_uuid, assigns.library_uuid)
      |> assign(:auth, assigns.auth)
@@ -44,7 +45,13 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
 
     case Viewer.put(socket.assigns.auth, socket.assigns.library, name) do
       {:ok, library} ->
-        send(self(), {:viewer_changed, socket.assigns.library_uuid})
+        if socket.assigns.notify, do: send(self(), {:viewer_changed, socket.assigns.library_uuid})
+
+        PhoenixKit.PubSub.Manager.broadcast(
+          "storage:library_settings",
+          {:library_settings_changed, socket.assigns.library_uuid}
+        )
+
         {:noreply, assign(socket, library: library, chosen: Viewer.chosen(library), error: nil)}
 
       {:error, _reason} ->
@@ -74,6 +81,9 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
             </option>
           </select>
         </form>
+        <span :if={!@notify} class="text-xs text-base-content/60">{gettext(
+          "Changes are saved automatically."
+        )}</span>
         <span :if={@error} class="text-error text-sm" role="alert">{@error}</span>
       </div>
     </div>

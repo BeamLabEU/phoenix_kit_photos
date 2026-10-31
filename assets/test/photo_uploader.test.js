@@ -75,6 +75,55 @@ test("setConcurrency clamps and remembers the choice", () => {
   assert.equal(hook.concurrency, 4)
 })
 
+test("denied storage falls back to the server default and still allows changes", () => {
+  const hook = makeHook({ dataset: { concurrency: "6" } })
+  Object.defineProperty(globalThis.window, "localStorage", {
+    get() { throw new Error("SecurityError: storage denied") }
+  })
+  assert.equal(hook.readConcurrency(), 6)
+  hook.setConcurrency("2")
+  assert.equal(hook.concurrency, 2)
+})
+
+test("each new public selection waits for another submit, including after cancellation", async () => {
+  const hook = makeHook({ dataset: { auto: "false" } })
+  for (const name of ["second.jpg", "after-cancel.jpg"]) {
+    hook.started = true // the previous selection was submitted or cancelled
+    const previousSends = hook.sent.length
+    let polls = 0
+    hook.ready = async () => {
+      polls += 1
+      if (polls === 2) {
+        assert.equal(hook.sent.length, previousSends, "nothing sent before the next submit")
+        hook.started = true // the next Upload click
+      }
+      return { idle: true, inFlight: 0 }
+    }
+
+    await hook.takeFiles([{ name }])
+    assert.equal(polls, 2)
+    assert.equal(hook.sent.length, previousSends + 1)
+  }
+})
+
+test("visibility changes update the browser gate without resetting an unchanged gate", () => {
+  const hook = makeHook({ dataset: { auto: "true" } })
+  hook.paint = () => {}
+  hook.el.dataset.auto = "false"
+  hook.updated()
+  assert.equal(hook.gated, true)
+  assert.equal(hook.started, false)
+
+  hook.started = true // submit, then an ordinary progress patch
+  hook.updated()
+  assert.equal(hook.started, true)
+
+  hook.el.dataset.auto = "true"
+  hook.updated()
+  assert.equal(hook.gated, false)
+  assert.equal(hook.started, true)
+})
+
 test("the drain keeps at most the chosen number in flight (sliding window)", async () => {
   const hook = makeHook()
   hook.concurrency = 3

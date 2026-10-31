@@ -102,6 +102,24 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
   end
 
   describe "a private library" do
+    test "a component update preserves an upload already in progress", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+      input = upload(view, "still-uploading.png")
+      render_upload(input, "still-uploading.png", 50)
+
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        library_uuid: ctx.library.uuid,
+        auth: scope_for(ctx.owner)
+      )
+
+      view |> element("#test-uploader") |> render_hook("ready", %{})
+      assert_reply(view, %{idle: false, in_flight: 1})
+      assert render_upload(input, "still-uploading.png", 50) =~ "1 added"
+      assert [%{original_file_name: "still-uploading.png"}] = Storage.list_files()
+    end
+
     test "a chosen file starts at once and is stored in the library", ctx do
       {view, _} = mount!(scope_for(ctx.owner), ctx.library)
       view |> element("button[aria-label='Add photos']") |> render_click()
@@ -262,6 +280,26 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
   end
 
   describe "a public library" do
+    test "visibility updates reconfigure the gate in both directions", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      assert render(view) =~ ~s(data-auto="true")
+
+      for {visibility, auto} <- [{"site", "false"}, {"private", "true"}] do
+        ctx.library
+        |> TestRepo.reload!()
+        |> Ecto.Changeset.change(visibility: visibility)
+        |> TestRepo.update!()
+
+        Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+          id: "test-uploader",
+          library_uuid: ctx.library.uuid,
+          auth: scope_for(ctx.owner)
+        )
+
+        assert render(view) =~ ~s(data-auto="#{auto}")
+      end
+    end
+
     test "warns, waits for Upload, then stores", ctx do
       library = make_public(ctx.library)
       {view, _} = mount!(scope_for(ctx.owner), library)

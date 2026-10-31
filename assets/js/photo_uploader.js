@@ -133,6 +133,11 @@ export const PhotoUploader = {
   // `data-active` (the drag is still going on) and the control's default selection.
   updated() {
     this.paint()
+    const gated = this.el.dataset.auto === "false"
+    if (gated !== this.gated) {
+      this.gated = gated
+      this.started = !gated
+    }
     const select = this.el.querySelector("[data-concurrency-select]")
     if (select) select.value = String(this.concurrency)
   },
@@ -153,7 +158,12 @@ export const PhotoUploader = {
   // The control's value: a saved choice, else the server's default, clamped to
   // [1, maxConcurrency]. Never above the batch, or LiveView would refuse the entries.
   readConcurrency() {
-    const saved = parseInt(window.localStorage.getItem(CONCURRENCY_KEY) || "", 10)
+    let saved = NaN
+    try {
+      saved = parseInt(window.localStorage.getItem(CONCURRENCY_KEY) || "", 10)
+    } catch (_error) {
+      // Storage may be denied by browser policy; use the server's default.
+    }
     const fallback = parseInt(this.el.dataset.concurrency || "", 10)
     const base = !isNaN(saved) ? saved : !isNaN(fallback) ? fallback : 4
     return clamp(base, 1, Math.min(this.maxConcurrency, this.batch))
@@ -193,6 +203,7 @@ export const PhotoUploader = {
   // Files from a drop or the picker: told to the component (it opens the panel and says
   // what was left out), queued, and drained through the concurrency window.
   takeFiles(files, counts = {}) {
+    if (this.gated && files.length > 0) this.started = false
     this.pushEventTo(this.el, "dropped", {
       files: files.length,
       skipped: counts.skipped || 0,

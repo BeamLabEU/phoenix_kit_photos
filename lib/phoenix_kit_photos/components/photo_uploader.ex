@@ -132,9 +132,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   defp configure_upload(socket) do
     gated? = socket.assigns.public?
+    auto? = not gated?
 
     case socket.assigns.upload_auto do
-      ^gated? ->
+      ^auto? ->
         socket
 
       nil ->

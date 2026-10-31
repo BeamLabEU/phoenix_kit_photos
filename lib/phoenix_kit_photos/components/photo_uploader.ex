@@ -21,8 +21,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
     * **Pick or drop.** The **+** button opens a panel with *Choose files*; dropping files
       or a whole folder anywhere on the page adds them (a folder's sidecars and system
-      litter are left out, and said so). A drop of thousands is fed to the upload in
-      batches by the `PhotoUploader` hook.
+      litter are left out, and said so). A drop of thousands is fed to the upload by the
+      `PhotoUploader` hook in a sliding window: at most as many files in flight as the
+      panel's "Uploads at once" control says (`Uploads.max_concurrent_uploads/0` unless
+      the person changed it), never more than one batch (`Uploads.max_entries/0`).
     * **Straight in.** In a private library files start uploading as soon as they are
       chosen. In a **public** library (`Libraries.public?/1`: anyone can see what is
       in it) they wait for *Upload*, with the warning in front of them.
@@ -53,6 +55,9 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   @upload :photos
   @max_results 50
+  # How many waiting file names the hook may send for the panel to list; the rest is
+  # only counted ("N more files are waiting"), so a drop of thousands stays cheap.
+  @max_queued_names 50
 
   @impl true
   def mount(socket) do
@@ -64,6 +69,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        unreadable: 0,
        truncated: false,
        waiting: 0,
+       queued: [],
+       started: false,
        library: nil,
        library_uuid: nil,
        can_upload: false,
@@ -93,7 +100,16 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # The library changed under the panel: what was said about the last one is not
   # about this one.
   defp forget(socket),
-    do: assign(socket, done: [], skipped: 0, unreadable: 0, truncated: false, waiting: 0)
+    do:
+      assign(socket,
+        done: [],
+        skipped: 0,
+        unreadable: 0,
+        truncated: false,
+        waiting: 0,
+        queued: [],
+        started: false
+      )
 
   defp assign_library(socket) do
     uuid = socket.assigns.library_uuid
@@ -106,39 +122,42 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     |> assign(:anonymous?, Libraries.public?(library))
   end
 
-  # Nothing is allowed to someone who may not add. Otherwise the upload is set up once;
-  # a library that is public (or not) differs in one thing, whether files start by
-  # themselves, so the upload is set up again when that changes.
+  # Nothing is allowed to someone who may not add. The upload always starts entries as
+  # they are handed to it (`auto_upload: true`), so the hook's concurrency window works
+  # the same in every library: in a public one the hook holds files in its queue until
+  # Upload is pressed (the consent the warning is about) and then feeds them through
+  # the window. `upload_auto` records only whether that gate exists, for the render
+  # and the hook's `data-auto`; the upload is set up again if it changes.
   defp configure_upload(%{assigns: %{can_upload: false}} = socket), do: socket
 
   defp configure_upload(socket) do
-    auto? = not socket.assigns.public?
+    gated? = socket.assigns.public?
 
     case socket.assigns.upload_auto do
-      ^auto? ->
+      ^gated? ->
         socket
 
       nil ->
-        allow(socket, auto?)
+        allow(socket, gated?)
 
       _other ->
         socket
         |> cancel_all()
         |> disallow_upload(@upload)
-        |> allow(auto?)
+        |> allow(gated?)
     end
   end
 
-  defp allow(socket, auto?) do
+  defp allow(socket, gated?) do
     socket
     |> allow_upload(@upload,
       accept: Uploads.accept(),
       max_entries: Uploads.max_entries(),
       max_file_size: Uploads.max_file_size(),
-      auto_upload: auto?,
+      auto_upload: true,
       progress: &__MODULE__.handle_progress/3
     )
-    |> assign(:upload_auto, auto?)
+    |> assign(:upload_auto, not gated?)
   end
 
   defp cancel_all(socket) do
@@ -148,9 +167,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   end
 
   @doc false
-  # One file finished arriving: store it and say what became of it.
+  # One file finished arriving: store it and say what became of it. A cancelled entry
+  # (its x, or Cancel all) is never stored.
   def handle_progress(@upload, entry, socket) do
-    if entry.done? do
+    if entry.done? and not entry.cancelled? do
       outcome =
         consume_uploaded_entry(socket, entry, fn %{path: path} ->
           {:ok, Uploads.store(path, entry, socket.assigns.auth, socket.assigns.library_uuid)}
@@ -203,36 +223,59 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     {:noreply, reject_invalid(socket)}
   end
 
-  # A private library uploads as files are chosen; a public one waits for this.
-  def handle_event("start", _params, socket), do: {:noreply, socket}
+  # Upload was pressed: in a public library the hook now starts feeding the queue
+  # through the window. (In a private one the button is not shown.) The flag only
+  # hides the button while a gated upload runs; new files set it back.
+  def handle_event("start", _params, socket), do: {:noreply, assign(socket, :started, true)}
 
   def handle_event("cancel", %{"ref" => ref}, socket) do
     {:noreply, cancel_upload(socket, @upload, ref)}
   end
 
-  def handle_event("dismiss", _params, socket) do
-    {:noreply, assign(socket, done: [], skipped: 0, unreadable: 0, truncated: false)}
+  # Cancel all: every entry in flight or waiting. The hook empties its own queue of
+  # not-yet-sent files when it sees this button clicked (`data-cancel-all`).
+  def handle_event("cancel_all", _params, socket) do
+    {:noreply, socket |> cancel_all() |> assign(waiting: 0, queued: [])}
   end
 
-  # From the hook: files were dropped (and how many were left out of a folder).
+  def handle_event("dismiss", _params, socket) do
+    {:noreply,
+     assign(socket, done: [], skipped: 0, unreadable: 0, truncated: false, waiting: 0, queued: [])}
+  end
+
+  # From the hook: files were picked or dropped (and how many were left out of a
+  # folder). In a public library these wait for Upload again, so the flag resets.
   def handle_event("dropped", params, socket) do
     {:noreply,
      assign(socket,
        open: true,
+       started: false,
        skipped: socket.assigns.skipped + count(params["skipped"]),
        unreadable: socket.assigns.unreadable + count(params["unreadable"]),
        truncated: params["truncated"] == true
      )}
   end
 
-  # The hook asks before it sends the next batch of a big drop: nothing may be left
-  # uploading, nor waiting for a click (a public library), nor not yet registered.
+  # The hook asks before it sends more of a big drop, and how much room it has: how
+  # many entries are still in flight (uploading, waiting for a click in a public
+  # library, or not yet registered). It keeps at most its concurrency control's number
+  # in flight, so `idle` is the window closed all the way.
   def handle_event("ready", _params, socket) do
-    {:reply, %{idle: socket.assigns.uploads[@upload].entries == []}, socket}
+    entries = socket.assigns.uploads[@upload].entries
+    {:reply, %{idle: entries == [], in_flight: length(entries)}, socket}
   end
 
+  # From the hook after it hands a batch to LiveView: how many files are still in its
+  # queue, and the first few names, so the panel can list the whole selection — not
+  # just the ones in flight (the concurrency window), which are the entries above.
   def handle_event("waiting", params, socket) do
-    {:noreply, assign(socket, :waiting, count(params["count"]))}
+    names =
+      params["names"]
+      |> List.wrap()
+      |> Enum.take(@max_queued_names)
+      |> Enum.map(&String.slice(to_string(&1), 0, 255))
+
+    {:noreply, assign(socket, waiting: count(params["count"]), queued: names)}
   end
 
   defp count(n) when is_integer(n) and n >= 0, do: n
@@ -265,6 +308,9 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       data-upload-name={@uploads.photos.name}
       data-accept={Jason.encode!(PhoenixKitPhotos.Uploads.accept())}
       data-batch={PhoenixKitPhotos.Uploads.max_entries()}
+      data-concurrency={PhoenixKitPhotos.Uploads.max_concurrent_uploads()}
+      data-concurrency-max={PhoenixKitPhotos.Uploads.max_concurrency_choice()}
+      data-auto={to_string(@upload_auto)}
     >
       <%!-- Shown while files are dragged over the page; it never takes a click. --%>
       <div
@@ -335,6 +381,25 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               <span class="text-xs text-base-content/60">{gettext("or drop photos, videos or folders anywhere on the page")}</span>
             </label>
 
+            <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept
+                 in the browser (localStorage), so no event goes to the server. --%>
+            <label class="flex items-center justify-between gap-2 text-xs text-base-content/60">
+              <span>{gettext("Uploads at once")}</span>
+              <select
+                data-concurrency-select
+                class="select select-xs select-bordered"
+                aria-label={gettext("Uploads at once")}
+              >
+                <option
+                  :for={n <- 1..Uploads.max_concurrency_choice()}
+                  value={n}
+                  selected={n == Uploads.max_concurrent_uploads()}
+                >
+                  {n}
+                </option>
+              </select>
+            </label>
+
             <p :for={error <- upload_errors(@uploads.photos)} class="text-sm text-error" role="alert">
               {Uploads.entry_error(error)}
             </p>
@@ -343,35 +408,53 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               <li :for={entry <- @entries} class="flex flex-col gap-1">
                 <div class="flex items-center gap-2 text-sm">
                   <span class="min-w-0 flex-1 truncate" title={entry.client_name}>{entry.client_name}</span>
-                  <span :if={@upload_auto || entry.progress > 0} class="shrink-0 text-xs text-base-content/60">{entry.progress}%</span>
-                  <span :if={!@upload_auto && entry.progress == 0 && upload_errors(@uploads.photos, entry) == []} class="shrink-0 text-xs text-base-content/60">{gettext("waiting")}</span>
+                  <span :if={entry.progress > 0} class="shrink-0 text-xs text-base-content/60">{entry.progress}%</span>
+                  <span :if={entry.progress == 0 && upload_errors(@uploads.photos, entry) == []} class="shrink-0 text-xs text-base-content/60">{gettext("waiting")}</span>
                   <button type="button" phx-click="cancel" phx-value-ref={entry.ref} phx-target={@myself} class="btn btn-ghost btn-xs btn-circle" aria-label={gettext("Cancel")}>
                     <.icon name="hero-x-mark" class="h-4 w-4" />
                   </button>
                 </div>
-                <progress :if={upload_errors(@uploads.photos, entry) == []} class="progress progress-primary h-1.5 w-full" value={entry.progress} max="100"></progress>
+                <progress :if={entry.progress > 0 && upload_errors(@uploads.photos, entry) == []} class="progress progress-primary h-1.5 w-full" value={entry.progress} max="100"></progress>
                 <p :for={error <- upload_errors(@uploads.photos, entry)} class="text-xs text-error" role="alert">
                   {Uploads.entry_error(error)}
                 </p>
               </li>
             </ul>
 
-            <p :if={@waiting > 0} class="text-xs text-base-content/60">
-              {ngettext("%{count} more file is waiting", "%{count} more files are waiting", @waiting)}
+            <ul :if={@queued != []} class="flex flex-col gap-0.5 text-xs text-base-content/60" aria-live="polite">
+              <li :for={name <- @queued} class="flex gap-2">
+                <span class="min-w-0 flex-1 truncate" title={name}>{name}</span>
+                <span class="shrink-0">{gettext("waiting")}</span>
+              </li>
+            </ul>
+
+            <p :if={@waiting > length(@queued)} class="text-xs text-base-content/60">
+              {ngettext("%{count} more file is waiting", "%{count} more files are waiting", @waiting - length(@queued))}
             </p>
 
-            <button
-              :if={!@upload_auto && @entries != []}
-              type="submit"
-              class="btn btn-primary btn-sm"
-            >
-              {ngettext("Upload %{count} file", "Upload %{count} files", length(@entries))}
-            </button>
+            <div :if={@entries != [] || @waiting > 0} class="flex items-center gap-2">
+              <button
+                :if={!@upload_auto && !@started}
+                type="submit"
+                class="btn btn-primary btn-sm"
+              >
+                {ngettext("Upload %{count} file", "Upload %{count} files", length(@entries) + @waiting)}
+              </button>
+              <button
+                type="button"
+                phx-click="cancel_all"
+                phx-target={@myself}
+                data-cancel-all
+                class="btn btn-ghost btn-sm"
+              >
+                {gettext("Cancel all")}
+              </button>
+            </div>
 
             <div :if={@done != [] || @skipped > 0 || @unreadable > 0} class="flex flex-col gap-1 border-t border-base-300 pt-2 text-sm" aria-live="polite">
               <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span :if={@added > 0} class="flex items-center gap-1 text-success"><.icon name="hero-check-circle" class="h-4 w-4" />{gettext("%{count} added", count: @added)}</span>
-                <span :if={@duplicates > 0} class="flex items-center gap-1 text-base-content/70"><.icon name="hero-document-duplicate" class="h-4 w-4" />{gettext("%{count} already there", count: @duplicates)}</span>
+                <span :if={@duplicates > 0} class="flex items-center gap-1 text-base-content/70"><.icon name="hero-document-duplicate" class="h-4 w-4" />{gettext("%{count} already in this library", count: @duplicates)}</span>
                 <span :if={@elsewhere > 0} class="flex items-center gap-1 text-warning"><.icon name="hero-arrow-uturn-right" class="h-4 w-4" />{gettext("%{count} in another library", count: @elsewhere)}</span>
                 <span :if={@failed > 0} class="flex items-center gap-1 text-error"><.icon name="hero-exclamation-triangle" class="h-4 w-4" />{gettext("%{count} failed", count: @failed)}</span>
               </p>
@@ -387,8 +470,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               </p>
               <p :if={@truncated} class="text-xs text-warning">{gettext("That folder is very large; only the first part was taken. Drop the rest again.")}</p>
 
-              <ul :if={@failed > 0 || @elsewhere > 0} class="flex flex-col gap-0.5 text-xs">
-                <li :for={item <- failures(@done)} class="flex gap-2">
+              <ul :if={@failed > 0 || @elsewhere > 0 || @duplicates > 0} class="flex flex-col gap-0.5 text-xs">
+                <li :for={item <- not_added(@done)} class="flex gap-2">
                   <span class="min-w-0 flex-1 truncate" title={item.name}>{item.name}</span>
                   <span class="shrink-0 text-base-content/60">{outcome_message(item.outcome)}</span>
                 </li>
@@ -410,9 +493,14 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   defp count_outcome(done, kind), do: Enum.count(done, &match?(%{outcome: {^kind, _}}, &1))
 
-  defp failures(done),
-    do: Enum.filter(done, &match?(%{outcome: {kind, _}} when kind in [:error, :elsewhere], &1))
+  defp not_added(done),
+    do:
+      Enum.filter(
+        done,
+        &match?(%{outcome: {kind, _}} when kind in [:error, :elsewhere, :duplicate], &1)
+      )
 
+  defp outcome_message({:duplicate, _file}), do: gettext("already in this library")
   defp outcome_message({:elsewhere, _file}), do: gettext("already in another of your libraries")
   defp outcome_message({:error, reason}), do: Uploads.error_message(reason)
 end

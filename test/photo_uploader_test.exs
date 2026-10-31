@@ -122,7 +122,7 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       view |> upload("a.png") |> render_upload("a.png")
       html = view |> upload("copy.png") |> render_upload("copy.png")
 
-      assert html =~ "1 already there"
+      assert html =~ "1 already in this library"
       assert length(Storage.list_files()) == 1
     end
 
@@ -163,27 +163,79 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       # And the hook, which asks before it sends the next batch, is told nothing is left
       # in flight.
       view |> element("#test-uploader") |> render_hook("ready", %{})
-      assert_reply(view, %{idle: true})
+      assert_reply(view, %{idle: true, in_flight: 0})
     end
 
-    test "ready is not idle while a file is uploading or waiting for a click", ctx do
+    test "ready says how many are in flight, so the hook can keep its window full", ctx do
       library = make_public(ctx.library)
       {view, _} = mount!(scope_for(ctx.owner), library)
       view |> element("button[aria-label='Add photos']") |> render_click()
 
       view |> element("#test-uploader") |> render_hook("ready", %{})
-      assert_reply(view, %{idle: true})
+      assert_reply(view, %{idle: true, in_flight: 0})
 
       # Chosen in a public library, it waits for Upload: the next batch must wait too.
       input = upload(view, "w.png")
       render_upload(input, "w.png", 0)
       view |> element("#test-uploader") |> render_hook("ready", %{})
-      assert_reply(view, %{idle: false})
+      assert_reply(view, %{idle: false, in_flight: 1})
 
       view |> form("#test-uploader-form") |> render_submit()
       render_upload(input, "w.png")
       view |> element("#test-uploader") |> render_hook("ready", %{})
-      assert_reply(view, %{idle: true})
+      assert_reply(view, %{idle: true, in_flight: 0})
+    end
+
+    test "cancel all drops every entry in flight or waiting, and stores nothing", ctx do
+      library = make_public(ctx.library)
+      {view, _} = mount!(scope_for(ctx.owner), library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+
+      input = upload(view, "w.png")
+      html = render_upload(input, "w.png", 0)
+      assert html =~ "w.png"
+      assert html =~ "Cancel all"
+
+      view |> element("button[data-cancel-all]") |> render_click()
+      html = render(view)
+      refute html =~ "w.png"
+      refute html =~ "Cancel all"
+
+      view |> element("#test-uploader") |> render_hook("ready", %{})
+      assert_reply(view, %{idle: true, in_flight: 0})
+      assert Storage.list_files() == []
+    end
+
+    test "cancel all works while a file is mid-upload, and stores nothing", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+
+      input = upload(view, "mid.png")
+      html = render_upload(input, "mid.png", 50)
+      assert html =~ "mid.png"
+      assert html =~ "Cancel all"
+
+      view |> element("button[data-cancel-all]") |> render_click()
+      html = render(view)
+      refute html =~ "mid.png"
+
+      view |> element("#test-uploader") |> render_hook("ready", %{})
+      assert_reply(view, %{idle: true, in_flight: 0})
+      assert Storage.list_files() == []
+    end
+
+    test "the panel offers the concurrency control with the server's default", ctx do
+      {_view, html} = mount!(scope_for(ctx.owner), ctx.library)
+      assert html =~ ~s(data-concurrency="4")
+      assert html =~ ~s(data-concurrency-max="8")
+
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      html = view |> element("button[aria-label='Add photos']") |> render_click()
+      assert html =~ "Uploads at once"
+      assert html =~ ~s(data-concurrency-select)
+      assert html =~ ~s(value="1")
+      assert html =~ ~s(value="8")
+      assert html =~ "selected"
     end
 
     test "a file over the site's limit says so", ctx do
@@ -219,12 +271,28 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
 
       input = upload(view, "p.png")
       html = render_upload(input, "p.png", 0)
-      # Chosen, but nothing went: it waits for the button.
+      # Chosen, but nothing went: it waits for the button, with no progress bar.
       assert html =~ "waiting"
+      refute html =~ "<progress"
       assert html =~ "Upload 1 file"
       assert Storage.list_files() == []
 
+      # The button counts what is queued in the hook too, not just registered entries.
+      html =
+        view
+        |> element("#test-uploader")
+        |> render_hook("waiting", %{"count" => 7, "names" => ["a.jpg", "b.jpg"]})
+
+      assert html =~ "Upload 8 files"
+      assert html =~ "a.jpg"
+      assert html =~ "5 more files are waiting"
+
       view |> form("#test-uploader-form") |> render_submit()
+      # Once Upload was pressed the button is gone while it runs; Cancel all stays.
+      html = render(view)
+      refute html =~ "Upload 1 file"
+      assert html =~ "Cancel all"
+
       assert render_upload(input, "p.png") =~ "1 added"
       assert [%{library_uuid: uuid}] = Storage.list_files()
       assert uuid == library.uuid
@@ -294,6 +362,29 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
 
       refute html =~ "left out"
       html = view |> element("#test-uploader") |> render_hook("waiting", %{"count" => "many"})
+      refute html =~ "more file"
+    end
+
+    test "waiting lists the queued file names, and counts the rest", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+
+      html =
+        view
+        |> element("#test-uploader")
+        |> render_hook("waiting", %{"count" => 120, "names" => ["a.jpg", "b.jpg"]})
+
+      # The whole selection is listed as waiting, not just what is in flight.
+      assert html =~ "a.jpg"
+      assert html =~ "b.jpg"
+      assert html =~ "118 more files are waiting"
+
+      html =
+        view
+        |> element("#test-uploader")
+        |> render_hook("waiting", %{"count" => 0, "names" => []})
+
+      refute html =~ "a.jpg"
       refute html =~ "more file"
     end
   end

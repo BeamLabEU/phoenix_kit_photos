@@ -48,6 +48,8 @@ defmodule PhoenixKitPhotos.Uploads do
 
   @default_max_mb 500
   @max_entries 100
+  @default_max_concurrent_uploads 4
+  @max_concurrency_choice 8
 
   @type outcome ::
           {:added, map()}
@@ -62,6 +64,22 @@ defmodule PhoenixKitPhotos.Uploads do
   @doc "The most files one batch may hold."
   @spec max_entries() :: pos_integer()
   def max_entries, do: @max_entries
+
+  @doc """
+  How many files the uploader's hook keeps in flight at once when it feeds a drop to
+  LiveView: the panel's concurrency control starts here. The browser's own connection
+  limit (about six over HTTP/1.1) still caps what really transfers at the same time.
+  """
+  @spec max_concurrent_uploads() :: pos_integer()
+  def max_concurrent_uploads do
+    @default_max_concurrent_uploads
+    |> max(1)
+    |> min(@max_concurrency_choice)
+  end
+
+  @doc "The most the panel's concurrency control offers."
+  @spec max_concurrency_choice() :: pos_integer()
+  def max_concurrency_choice, do: @max_concurrency_choice
 
   @doc "The largest file, in bytes: the site's `storage_max_upload_size_mb` setting."
   @spec max_file_size() :: pos_integer()

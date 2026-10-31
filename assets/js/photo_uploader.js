@@ -1,4 +1,4 @@
-import { carriesFiles, filesFromDrop, chunk } from "./drop_files.js"
+import { carriesFiles, filesFromDrop } from "./drop_files.js"
 
 /**
  * The uploader's hook: the whole window is a drop zone while the hook is mounted.
@@ -7,29 +7,89 @@ import { carriesFiles, filesFromDrop, chunk } from "./drop_files.js"
  * this hook owns the drag-and-drop part LiveView does not do. It shows the overlay while
  * files are dragged over the page, opens dropped FOLDERS (LiveView sees a folder as an
  * empty file), leaves out a folder's sidecars and the system's litter, and feeds the
- * files to the server in batches the upload can take, the next batch when the server
- * says nothing is left in flight, so dropping a library of thousands does not ask
- * LiveView to track thousands of entries at once. "Is anything in flight?" is asked of
- * the component (a `ready` event with a reply) every half second while files are
+ * files — dropped or chosen in the picker, which the hook takes over from LiveView —
+ * to the server in a sliding window: at most as many in flight as the panel's
+ * "Uploads at once" control says (the `data-concurrency-select` element, kept in
+ * localStorage), and never more than one batch (`data-batch`), so dropping a library of
+ * thousands does not ask LiveView to track thousands of entries at once. In a public
+ * library (`data-auto="false"`) nothing is sent until the Upload button's submit.
+ * "How much is
+ * in flight?" is asked of the component (a `ready` event with a reply) while files are
  * waiting; the server could not push the answer, because an event pushed from a
  * component's upload-progress callback never reaches the page.
  *
  * Nothing here knows about Elixir, Ecto or PhoenixKit: the contract is the element's
- * data attributes (`data-upload-name`, `data-accept`, `data-batch`) and the events
- * `dropped`, `waiting` and `ready` (replying `{idle: boolean}`).
+ * data attributes (`data-upload-name`, `data-accept`, `data-batch`,
+ * `data-concurrency`, `data-concurrency-max`, and `data-cancel-all` on the button that
+ * empties this queue too) and the events `dropped`, `waiting` (count plus the first
+ * queued names) and `ready` (replying `{idle: boolean, in_flight: number}`).
  *
  * The hook name must stay globally unique (see `PhotoTimeline`).
  */
+const CONCURRENCY_KEY = "phoenix_kit_photos:upload_concurrency"
+
+// How many queued file names are told to the server for the panel to list; the rest
+// is only counted, so a drop of thousands does not push thousands of names per batch.
+const MAX_QUEUED_NAMES = 50
+
 export const PhotoUploader = {
   mounted() {
     this.name = this.el.dataset.uploadName || "photos"
     this.accept = parseList(this.el.dataset.accept)
     this.batch = Math.max(1, parseInt(this.el.dataset.batch || "100", 10) || 100)
+    this.maxConcurrency = Math.max(1, parseInt(this.el.dataset.concurrencyMax || "8", 10) || 8)
+    this.concurrency = this.readConcurrency()
+    // A public library waits for Upload before anything is sent (`data-auto="false"`):
+    // files picked or dropped sit in the queue (listed as waiting) until the form's
+    // submit, then the window applies like everywhere else. The submit listener only
+    // observes — LiveView still gets the event.
+    this.gated = this.el.dataset.auto === "false"
+    this.started = !this.gated
+    this.onSubmit = () => {
+      this.started = true
+    }
+    this.el.addEventListener("submit", this.onSubmit)
     this.queue = []
     this.draining = false
     this.gone = false
     this.depth = 0
     this.dragging = false
+
+    // The panel's concurrency control: purely client-side, kept in localStorage.
+    this.onConcurrencyChange = event => {
+      const target = event.target
+      if (target && target.closest && target.closest("[data-concurrency-select]")) {
+        this.setConcurrency(target.value)
+      }
+    }
+    this.el.addEventListener("change", this.onConcurrencyChange)
+
+    // Files chosen in the picker go through the same window as drops, so the
+    // concurrency control covers them too. A picker fires `input` and then `change`
+    // on the file input, and LiveView listens for BOTH on `window`, registering and
+    // starting every picked file on the first one; both are stopped here, in the
+    // capture phase on this ancestor, which runs before any window listener. The
+    // `input` event LiveView itself dispatches after `uploadTo` finds no files (the
+    // input's value was reset), so it passes through untouched.
+    this.onInputChange = event => {
+      const input = event.target
+      if (!input || !input.matches || !input.matches("input[type=file]")) return
+      if (!input.files || input.files.length === 0) return
+      event.preventDefault()
+      event.stopPropagation()
+      const files = Array.from(input.files)
+      input.value = "" // so picking the same files again fires the events again
+      this.takeFiles(files)
+    }
+    this.el.addEventListener("input", this.onInputChange, true)
+    this.el.addEventListener("change", this.onInputChange, true)
+
+    // Cancel all also empties the hook's own queue of not-yet-sent files.
+    this.onClick = event => {
+      const target = event.target
+      if (target && target.closest && target.closest("[data-cancel-all]")) this.queue = []
+    }
+    this.el.addEventListener("click", this.onClick)
 
     // A drop on the file input itself is the browser's own business (it sets the
     // input's files and LiveView hears the change); doing it twice would add every
@@ -70,9 +130,11 @@ export const PhotoUploader = {
   },
 
   // LiveView patches the element back to what the server rendered, which has no
-  // `data-active`; the drag is still going on.
+  // `data-active` (the drag is still going on) and the control's default selection.
   updated() {
     this.paint()
+    const select = this.el.querySelector("[data-concurrency-select]")
+    if (select) select.value = String(this.concurrency)
   },
 
   destroyed() {
@@ -81,6 +143,31 @@ export const PhotoUploader = {
     window.removeEventListener("dragover", this.onOver)
     window.removeEventListener("dragleave", this.onLeave)
     window.removeEventListener("drop", this.onDrop)
+    this.el.removeEventListener("change", this.onConcurrencyChange)
+    this.el.removeEventListener("input", this.onInputChange, true)
+    this.el.removeEventListener("change", this.onInputChange, true)
+    this.el.removeEventListener("click", this.onClick)
+    this.el.removeEventListener("submit", this.onSubmit)
+  },
+
+  // The control's value: a saved choice, else the server's default, clamped to
+  // [1, maxConcurrency]. Never above the batch, or LiveView would refuse the entries.
+  readConcurrency() {
+    const saved = parseInt(window.localStorage.getItem(CONCURRENCY_KEY) || "", 10)
+    const fallback = parseInt(this.el.dataset.concurrency || "", 10)
+    const base = !isNaN(saved) ? saved : !isNaN(fallback) ? fallback : 4
+    return clamp(base, 1, Math.min(this.maxConcurrency, this.batch))
+  },
+
+  setConcurrency(value) {
+    this.concurrency = clamp(parseInt(value, 10) || 4, 1, Math.min(this.maxConcurrency, this.batch))
+    try {
+      window.localStorage.setItem(CONCURRENCY_KEY, String(this.concurrency))
+    } catch (_error) {
+      // Private mode and the like: the choice just does not survive a reload.
+    }
+    const select = this.el.querySelector("[data-concurrency-select]")
+    if (select) select.value = String(this.concurrency)
   },
 
   setDragging(on) {
@@ -99,51 +186,98 @@ export const PhotoUploader = {
   // first await, which is the only moment the browser lets it.
   take(dataTransfer) {
     filesFromDrop(dataTransfer, { accept: this.accept }).then(({ files, skipped, unreadable, truncated }) => {
-      this.pushEventTo(this.el, "dropped", { files: files.length, skipped, unreadable, truncated })
-      this.queue.push(...files)
-      this.drain()
+      this.takeFiles(files, { skipped, unreadable, truncated })
     })
   },
 
-  // Sends the queue on, a batch at a time, whenever the server has nothing in flight.
+  // Files from a drop or the picker: told to the component (it opens the panel and says
+  // what was left out), queued, and drained through the concurrency window.
+  takeFiles(files, counts = {}) {
+    this.pushEventTo(this.el, "dropped", {
+      files: files.length,
+      skipped: counts.skipped || 0,
+      unreadable: counts.unreadable || 0,
+      truncated: counts.truncated === true
+    })
+    this.queue.push(...files)
+    return this.drain()
+  },
+
+  // What the panel shows beyond the entries in flight: the count of files still queued,
+  // and the first few names, so the whole selection is listed.
+  waitingPayload() {
+    return {
+      count: this.queue.length,
+      names: this.queue.slice(0, MAX_QUEUED_NAMES).map(f => String(f.name).slice(0, 255))
+    }
+  },
+
+  // Sends the queue on, keeping at most `this.concurrency` files in flight: whenever the
+  // server says a slot freed up, that many more are handed to LiveView. In a public
+  // library nothing is sent until Upload was pressed. A server that answers without
+  // `in_flight` (an older one) falls back to the old batch behaviour.
   async drain() {
     if (this.draining) return
     this.draining = true
 
     try {
       while (this.queue.length > 0 && !this.gone) {
-        const idle = await this.ready()
+        const state = await this.ready()
+        const inFlight = state && Number.isInteger(state.inFlight) ? state.inFlight : null
 
-        if (idle && !this.gone) {
-          const [next] = chunk(this.queue, this.batch)
-          this.queue = this.queue.slice(next.length)
-          this.uploadTo(this.el, this.name, next)
-          this.pushEventTo(this.el, "waiting", { count: this.queue.length })
+        if (inFlight !== null && !this.gone) {
+          const limit = this.gated && !this.started ? 0 : this.concurrency
+          const room = Math.max(0, Math.min(limit - inFlight, this.batch - inFlight))
+
+          if (room > 0) {
+            const next = this.queue.slice(0, room)
+            this.queue = this.queue.slice(next.length)
+            this.uploadTo(this.el, this.name, next)
+          }
+
+          // Told every poll, not only when sending: in a public library nothing is
+          // sent until Upload, and the panel must still list what is queued.
+          this.pushEventTo(this.el, "waiting", this.waitingPayload())
+
+          // After sending, long enough for the server to have registered its entries
+          // before it is asked again; while the window is full, a steady poll.
+          await sleep(500)
+        } else {
+          // No `in_flight` in the answer (an older server): a whole batch, and only
+          // when the server says nothing is in flight.
+          if (state.idle && !this.gone) {
+            const next = this.queue.slice(0, this.batch)
+            this.queue = this.queue.slice(next.length)
+            this.uploadTo(this.el, this.name, next)
+          }
+
+          this.pushEventTo(this.el, "waiting", this.waitingPayload())
+          await sleep(state.idle ? 300 : 500)
         }
-
-        // After a batch, long enough for the server to have registered its entries
-        // before it is asked again; while it is busy, a steady poll.
-        await sleep(idle ? 300 : 500)
       }
     } finally {
       this.draining = false
     }
   },
 
-  // Whether the component has nothing uploading or waiting to be uploaded. No answer in
-  // five seconds (a lost connection) counts as busy.
+  // How many entries the component still has in flight (uploading, or waiting for a
+  // click in a public library). No answer in five seconds (a lost connection) counts as
+  // a full window, and `in_flight` comes back null so the drain falls back to batches.
   ready() {
     return new Promise(resolve => {
-      const timer = setTimeout(() => resolve(false), 5000)
+      const timer = setTimeout(() => resolve({ idle: false, inFlight: null }), 5000)
       this.pushEventTo(this.el, "ready", {}, reply => {
         clearTimeout(timer)
-        resolve(Boolean(reply && reply.idle))
+        const inFlight = reply && Number.isInteger(reply.in_flight) ? reply.in_flight : null
+        resolve({ idle: Boolean(reply && reply.idle), inFlight })
       })
     })
   }
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+const clamp = (n, low, high) => Math.min(Math.max(isNaN(n) ? low : n, low), high)
 
 function parseList(json) {
   try {

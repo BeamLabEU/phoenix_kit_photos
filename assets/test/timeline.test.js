@@ -67,7 +67,9 @@ test("at the end of the library a refresh follows the new photos; elsewhere it s
   assert.equal(h.el.scrollTop, end())
   h.setIndex({ library: "a", revision: 2, sections: months(4) })
   assert.equal(h.el.scrollTop, end(), "followed the growth")
+  h.beginPositionInput({ type: "wheel" })
   h.el.scrollTop = 100
+  h.handleScroll()
   h.setIndex({ library: "a", revision: 3, sections: months(5) })
   assert(Math.abs(h.el.scrollTop - 100) < 200, "did not jump to the end")
 })
@@ -295,4 +297,161 @@ test("a tab that wakes asks again only for windows older than the limit", () => 
   sent.length = 0
   h.reloadWindows({ olderThan: 60 * 60 * 1000 })
   assert.deepEqual(needs(sent), ["2020-01-01"])
+})
+
+test("a fresh mount restores each library's position after reload, including a changed width", () => {
+  const previous = globalThis.window
+  const values = new Map()
+  globalThis.window = { sessionStorage: {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value)
+  } }
+  try {
+    const payload = { library: "a", revision: 1, sections: [section(501)] }
+    const { h } = hook()
+    h.el.clientWidth = 816
+    h.setIndex(payload)
+    h.beginPositionInput({ type: "wheel" })
+    h.el.scrollTop = 40 + 20 * 164
+    h.handleScroll()
+    const anchor = h.captureAnchor()
+    const { h: restored } = hook()
+    restored.el.clientWidth = 375
+    restored.setIndex(payload)
+    assert.equal(restored.captureAnchor().id, anchor.id)
+    assert(Math.abs(restored.captureAnchor().item - anchor.item) < restored.columns)
+    restored.setIndex({ ...payload, library: "b" })
+    assert.equal(restored.el.scrollTop, restored.offsets.at(-1) - restored.el.clientHeight)
+    restored.setIndex(payload)
+    assert(Math.abs(restored.captureAnchor().item - anchor.item) < restored.columns)
+    values.set(restored.positionKey(), '{broken')
+    assert.equal(restored.storedPosition(), null)
+  } finally {
+    if (previous === undefined) delete globalThis.window
+    else globalThis.window = previous
+  }
+})
+
+test("repeated wake layouts retain the exact partial row with fractional cell sizes", () => {
+  const { h } = hook()
+  h.el.clientWidth = 997
+  h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+  const stride = h.metrics.cell + h.metrics.gap
+  for (const top of [40 + 23 * stride, 40 + 23.37 * stride]) {
+    h.el.scrollTop = top
+    for (let wake = 0; wake < 50; wake++) {
+      const anchor = JSON.parse(JSON.stringify(h.captureAnchor()))
+      h.relayout(anchor)
+      assert(Math.abs(h.el.scrollTop - top) < 0.001, `position drifted on wake ${wake}`)
+    }
+  }
+})
+
+test("a floating header is counted once across repeated wakes and inset changes", () => {
+  const { h } = hook()
+  let inset = 56
+  h.readInset = () => inset
+  h.el.clientWidth = 997
+  h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+  h.el.scrollTop = 3456.75
+  const initial = h.el.scrollTop
+  for (let wake = 0; wake < 50; wake++) {
+    h.handleResize()
+    assert.equal(h.el.scrollTop, initial)
+  }
+  const anchor = h.captureAnchor()
+  inset = 80
+  h.relayout(anchor)
+  assert.equal(h.el.scrollTop, initial, "leading space and visible header offset cancel exactly")
+  assert.equal(h.captureAnchor().item, anchor.item)
+})
+
+test("the bookmark follows scrolling and sits in a photo row gap below the header", () => {
+  const { h } = hook()
+  h.el.clientWidth = 997
+  h.readInset = () => 56
+  h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+  h.beginPositionInput({ type: "wheel" })
+  h.el.scrollTop = 3456.75
+  h.handleScroll()
+  const top = h.bookmarkTop()
+  const stride = h.metrics.cell + h.metrics.gap
+  const row = (top + h.metrics.gap / 2 - h.offsets[0] - h.metrics.header) / stride
+  assert(Math.abs(row - Math.round(row)) < 1e-9, "marker is centered in a row gap")
+  assert(top >= h.el.scrollTop + h.inset, "marker clears the floating header")
+  h.el.scrollTop -= stride * 2
+  h.handleScroll()
+  assert(Math.abs(h.bookmarkTop() - (top - stride * 2)) < 1e-9, "marker follows the current row")
+  assert.equal(h.bookmarkAnchor.delta, h.captureAnchor().delta)
+  h.setIndex({ library: "b", revision: 2, sections: [] })
+  assert.equal(h.bookmarkTop(), null)
+})
+
+test("background and reconnect scrolls cannot replace the saved place with the bottom", () => {
+  const previous = globalThis.window
+  const values = new Map()
+  globalThis.window = { sessionStorage: {
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value)
+  } }
+  try {
+    const payload = { library: "a", revision: 1, sections: [section(501)] }
+    const { h } = hook()
+    h.el.clientWidth = 997
+    h.setIndex(payload)
+    h.beginPositionInput({ type: "wheel" })
+    h.el.scrollTop = 2345.5
+    h.handleScroll()
+    const saved = values.get(h.positionKey())
+    h.freezePosition()
+    // Safari may move the scroller before visibilitychange or resize is delivered.
+    h.el.scrollTop = h.offsets.at(-1) - h.el.clientHeight
+    h.handleResize()
+    h.reconnected()
+    h.setIndex({ ...payload, revision: 2 })
+    assert.equal(h.el.scrollTop, 2345.5)
+    assert.equal(values.get(h.positionKey()), saved)
+    const { h: remounted } = hook()
+    remounted.el.clientWidth = 997
+    remounted.setIndex(payload)
+    remounted.el.scrollTop = remounted.offsets.at(-1) - remounted.el.clientHeight
+    remounted.handleScroll()
+    assert.equal(remounted.el.scrollTop, 2345.5, "remount also protects against late browser restoration")
+    remounted.beginPositionInput({ type: "wheel" })
+    remounted.el.scrollTop = 2600
+    remounted.handleScroll()
+    assert.equal(remounted.bookmarkAnchor.delta, remounted.captureAnchor().delta)
+    assert.notEqual(values.get(remounted.positionKey()), saved, "deliberate scrolling updates the bookmark")
+  } finally {
+    if (previous === undefined) delete globalThis.window
+    else globalThis.window = previous
+  }
+})
+
+test("incidental scrolling and clicking back into Safari cannot move the bookmark", () => {
+  const { h } = hook()
+  h.el.clientWidth = 997
+  h.el.getBoundingClientRect = () => ({ right: 997 })
+  h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+  h.beginPositionInput({ type: "wheel" })
+  h.el.scrollTop = 2345
+  h.handleScroll()
+  const bookmark = h.bookmarkAnchor
+  h.positionInput = false // the scroll gesture finished
+  h.el.scrollTop = h.offsets.at(-1) - h.el.clientHeight
+  h.handleScroll() // automatic browser movement, even without a visibility event
+  assert.deepEqual(h.bookmarkAnchor, bookmark)
+  h.freezePosition() // window blur, even though the page remains visible
+  h.beginPositionInput({ type: "pointerdown", clientX: 400 })
+  assert.equal(h.frozenAnchor, bookmark, "activating the window does not unlock restoration")
+  h.handleScroll() // focus
+  assert.equal(h.el.scrollTop, 2345)
+  h.beginPositionInput({ type: "keydown", key: "a" })
+  assert.equal(h.frozenAnchor, bookmark, "ordinary typing does not unlock scrolling")
+  h.beginPositionInput({ type: "wheel" })
+  h.el.scrollTop = 2500
+  h.handleScroll()
+  assert.equal(h.bookmarkAnchor.delta, h.captureAnchor().delta)
+  assert.notDeepEqual(h.bookmarkAnchor, bookmark)
+  clearTimeout(h.positionInputTimer)
 })

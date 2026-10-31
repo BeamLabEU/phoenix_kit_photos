@@ -59,6 +59,9 @@ export const PhotoTimeline = {
   view: null,
 
   mounted() {
+    // The virtual grid owns scroll restoration. Browser anchoring must not
+    // compensate again when recycled tiles or the spacer change.
+    this.el.style.overflowAnchor = "none"
     this.columns = Math.max(1, parseInt(this.el.dataset.columns || "5", 10) || 5)
     // What the host asked for; `columns` is what is on screen, which zooming changes.
     this.baseColumns = this.columns
@@ -92,9 +95,15 @@ export const PhotoTimeline = {
     this.sectionStarts = []
     this.pager = null
     this.pendingOpen = null
+    this.frozenAnchor = null
 
     this.spacer = this.el.querySelector(".phoenix-kit-photo-timeline__spacer")
     this.layer = this.el.querySelector(".phoenix-kit-photo-timeline__layer")
+
+    this.mountBookmark()
+    this.onPositionInput = event => this.beginPositionInput(event)
+    this.positionInputs = ["wheel", "touchmove", "pointerdown", "keydown"]
+    for (const event of this.positionInputs) this.el.addEventListener(event, this.onPositionInput, { passive: true })
 
     this.onScroll = throttleToFrame(() => this.handleScroll())
     this.el.addEventListener("scroll", this.onScroll, { passive: true })
@@ -105,11 +114,21 @@ export const PhotoTimeline = {
     // bubble, so listen on the way down.
     this.onImageError = () => this.imageFailed()
     this.layer.addEventListener("error", this.onImageError, true)
+    this.onPageHide = () => this.freezePosition()
+    window.addEventListener("pagehide", this.onPageHide)
     this.onWake = () => {
-      if (document.visibilityState === "visible") this.reloadWindows({ olderThan: STALE_AFTER_MS })
+      if (document.visibilityState === "hidden") this.freezePosition()
+      if (document.visibilityState === "visible") {
+        this.handleScroll()
+        this.reloadWindows({ olderThan: STALE_AFTER_MS })
+      }
     }
     document.addEventListener("visibilitychange", this.onWake)
     window.addEventListener("pageshow", this.onWake)
+    this.onWindowBlur = () => this.freezePosition()
+    this.onWindowFocus = () => { this.freezePosition(); this.handleScroll() }
+    window.addEventListener("blur", this.onWindowBlur)
+    window.addEventListener("focus", this.onWindowFocus)
 
     this.onResize = debounce(() => this.handleResize(), 120)
     window.addEventListener("resize", this.onResize)
@@ -129,17 +148,28 @@ export const PhotoTimeline = {
     this.pushEventTo(Number(this.el.dataset.target), event, payload)
   },
 
+  disconnected() {
+    this.freezePosition()
+  },
+
   reconnected() {
+    this.handleScroll()
     this.send("timeline:ready", {})
     this.reloadWindows({ olderThan: STALE_AFTER_MS })
   },
 
   destroyed() {
+    for (const event of this.positionInputs) this.el.removeEventListener(event, this.onPositionInput)
+    this.bookmarkMark?.remove()
+    window.removeEventListener("pagehide", this.onPageHide)
     this.unbindZoom()
     this.el.removeEventListener("scroll", this.onScroll)
     this.layer.removeEventListener("error", this.onImageError, true)
     document.removeEventListener("visibilitychange", this.onWake)
     window.removeEventListener("pageshow", this.onWake)
+    window.removeEventListener("blur", this.onWindowBlur)
+    window.removeEventListener("focus", this.onWindowFocus)
+    clearTimeout(this.positionInputTimer)
     window.removeEventListener("resize", this.onResize)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
@@ -163,10 +193,13 @@ export const PhotoTimeline = {
     // tiles stay where they are while the windows are fetched again, and what is new arrives
     // with an animation.
     const refresh = !libraryChanged && this.revision !== null
-    const anchor = libraryChanged ? null : this.captureAnchor()
-    const atEnd = refresh && this.atEnd()
+    const anchor = libraryChanged ? null :
+      this.positionInput ? this.captureAnchor() : this.bookmarkAnchor || this.captureAnchor()
+    const atEnd = refresh && this.atEnd() && (!this.bookmarkAnchor ||
+      Math.abs((this.offsets[this.bookmarkAnchor.index] || 0) + this.bookmarkAnchor.delta - this.inset - this.el.scrollTop) < 2)
     const heightBefore = totalHeight(this.offsets)
 
+    if (libraryChanged) this.rememberPosition()
     this.library = payload.library
     if (payload.revision === this.revision && !libraryChanged) return
     this.revision = payload.revision
@@ -184,20 +217,141 @@ export const PhotoTimeline = {
       this.metrics = { ...this.metrics, ...rest }
       if (this.el.dataset.gap === undefined && gap !== undefined) this.metrics.gap = gap
     }
-    this.relayout(anchor)
+    const saved = libraryChanged ? this.storedPosition() : null
+    this.recordPosition("index", { libraryChanged, saved: Boolean(saved) })
+    if (libraryChanged) this.frozenAnchor = saved?.anchor || null
+    this.relayout(this.frozenAnchor || saved?.anchor || anchor)
 
-    if (libraryChanged) {
+    if (libraryChanged && !saved) {
       const height = totalHeight(this.offsets)
       this.el.scrollTop = Math.max(0, height - this.el.clientHeight)
-    } else if (atEnd && totalHeight(this.offsets) > heightBefore) {
+    } else if (!this.frozenAnchor && atEnd && totalHeight(this.offsets) > heightBefore) {
       this.followEnd()
     }
 
+    if (libraryChanged) {
+      this.bookmarkAnchor = saved?.anchor || this.captureAnchor()
+      if (!saved) this.rememberPosition()
+    }
     if (refresh) this.revalidate()
     this.markNew = refresh
     this.handleScroll()
     this.markNew = false
     this.openFromAddress()
+  },
+
+  // A quiet row-boundary marker follows the position saved for this tab.
+  mountBookmark() {
+    this.bookmarkMark = document.createElement("div")
+    this.bookmarkMark.dataset.bookmarkMarker = ""
+    this.bookmarkMark.setAttribute("aria-hidden", "true")
+    this.bookmarkMark.style.cssText = "position:absolute;left:0;right:0;z-index:12;pointer-events:none;height:4px;background:#ffcc00;box-shadow:0 0 0 1px #18181b,0 0 8px #ffcc0080;transform:translateY(-50%)"
+    const tab = document.createElement("span")
+    tab.style.cssText = "position:absolute;left:8px;top:50%;width:14px;height:14px;background:#ffcc00;border:2px solid #18181b;border-radius:2px;transform:translateY(-50%) rotate(45deg);box-shadow:0 0 5px #0006"
+    this.bookmarkMark.append(tab)
+    this.el.append(this.bookmarkMark)
+  },
+
+  beginPositionInput(event) {
+    if (event.type === "keydown" && (!/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End| )$/.test(event.key) ||
+        /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || "") || event.target?.isContentEditable)) return
+    // Clicking the window to activate Safari is not a request to move the bookmark.
+    if (event.type === "pointerdown" && event.clientX < this.el.getBoundingClientRect().right - 16) return
+    this.frozenAnchor = null
+    this.positionInput = true
+    this.extendPositionInput()
+  },
+
+  extendPositionInput() {
+    clearTimeout(this.positionInputTimer)
+    this.positionInputTimer = setTimeout(() => { this.positionInput = false }, 250)
+  },
+
+  freezePosition() {
+    this.positionInput = false
+    clearTimeout(this.positionInputTimer)
+    // Use the last settled position, before any browser-generated wake scroll.
+    if (!this.frozenAnchor) this.frozenAnchor = this.bookmarkAnchor || this.captureAnchor()
+    this.recordPosition("freeze")
+  },
+
+  saveBookmark() {
+    if (this.frozenAnchor) {
+      this.bookmarkAnchor = this.frozenAnchor
+      this.renderBookmark()
+      return
+    }
+    if (!this.library || !this.sections.length || this.pager) return
+    // Geometry updates and browser scroll restoration must never become a new bookmark.
+    if (this.bookmarkAnchor && !this.positionInput) {
+      this.renderBookmark()
+      return
+    }
+    if (this.positionInput) this.extendPositionInput()
+    this.bookmarkAnchor = this.captureAnchor()
+    this.rememberPosition()
+    this.renderBookmark()
+  },
+
+  bookmarkTop() {
+    const a = this.bookmarkAnchor
+    if (!a) return null
+    const index = this.sections.findIndex(s => s.id === a.id)
+    if (index < 0) return null
+    // Mark the gap before the first complete visible row, below the app header.
+    const row = Math.min(Math.ceil(this.sections[index].count / this.columns) - 1,
+      Math.ceil(a.item / this.columns + (a.rowFraction || 0) - 1e-9))
+    return this.offsets[index] + this.metrics.header + Math.max(0, row) *
+      (this.metrics.cell + this.metrics.gap) - (row > 0 ? this.metrics.gap / 2 : 0)
+  },
+
+  renderBookmark() {
+    if (!this.bookmarkMark) return
+    const top = this.bookmarkTop()
+    this.bookmarkMark.style.display = top === null ? "none" : "block"
+    if (top !== null) this.bookmarkMark.style.top = `${top}px`
+  },
+
+  // A bounded local trace makes an intermittent wake failure inspectable without
+  // recording photos, file URLs, or account details.
+  recordPosition(event, details = {}) {
+    try {
+      const key = "phoenix_kit_photos:position_log"
+      const entries = JSON.parse(window.sessionStorage.getItem(key) || "[]")
+      entries.push({ event, at: Date.now(), top: this.el.scrollTop,
+        section: this.bookmarkAnchor?.id, item: this.bookmarkAnchor?.item,
+        frozen: Boolean(this.frozenAnchor), ...details })
+      window.sessionStorage.setItem(key, JSON.stringify(entries.slice(-40)))
+    } catch (_error) {
+      // Diagnostics must never interrupt the library.
+    }
+  },
+
+  positionKey() {
+    return `phoenix_kit_photos:position:${this.el.dataset.timelineId}:${this.library}`
+  },
+
+  storedPosition() {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(this.positionKey()))
+      const a = saved?.anchor
+      if (a && typeof a.id === "string" && Number.isInteger(a.index) && a.index >= 0 &&
+          Number.isFinite(a.item) && a.item >= 0 &&
+          Number.isFinite(a.headerOffset) && a.headerOffset >= 0) return saved
+    } catch (_error) {
+      // Storage may be unavailable, or a bookmark may be from an older version.
+    }
+    return null
+  },
+
+  rememberPosition() {
+    if (this.frozenAnchor) return
+    if (!this.library || !this.sections.length) return
+    try {
+      window.sessionStorage.setItem(this.positionKey(), JSON.stringify({ anchor: this.bookmarkAnchor || this.captureAnchor() }))
+    } catch (_error) {
+      // Keep browsing when storage is unavailable.
+    }
   },
 
   /** Whether the person is looking at the end of the library, where new photos land. */
@@ -255,14 +409,22 @@ export const PhotoTimeline = {
     // The top of what can be seen is below the inset: the grid scrolls under a header.
     const anchor = anchorAt(this.offsets, this.el.scrollTop + this.inset)
     if (!anchor) return null
+    const row = Math.max(0, anchor.delta - this.metrics.header) / (this.metrics.cell + this.metrics.gap)
+    // Keep the partial row separately: flooring a fractional tile count on every
+    // wake/resize can move the viewport backwards, especially with subpixel cells.
+    const wholeRow = Math.floor(row + 1e-9)
     return {
       id: this.sections[anchor.index]?.id,
       index: anchor.index,
+      delta: anchor.delta,
+      columns: this.columns,
+      cell: this.metrics.cell,
+      header: this.metrics.header,
+      gap: this.metrics.gap,
       headerOffset: Math.min(anchor.delta, this.metrics.header),
       // The place in the section as a count of tiles, so it survives a change of columns.
-      item:
-        (Math.max(0, anchor.delta - this.metrics.header) / (this.metrics.cell + this.metrics.gap)) *
-        this.columns
+      item: wholeRow * this.columns,
+      rowFraction: Math.max(0, row - wholeRow)
     }
   },
 
@@ -273,7 +435,7 @@ export const PhotoTimeline = {
     if (!value) return 0
     // Resolve rem, calc() and env() the way the browser does: let it size a probe.
     const probe = document.createElement("div")
-    probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;height:${value}`
+    probe.style.cssText = `position:fixed;top:0;left:0;visibility:hidden;pointer-events:none;height:${value}`
     this.el.appendChild(probe)
     const px = probe.offsetHeight
     probe.remove()
@@ -303,7 +465,12 @@ export const PhotoTimeline = {
       const found = this.sections.findIndex(s => s.id === anchor.id)
       const index = found >= 0 ? found : Math.min(anchor.index, this.sections.length - 1)
       const row = found >= 0 ? Math.floor(anchor.item / this.columns) : 0
-      const delta = found >= 0 ? anchor.headerOffset + row * (this.metrics.cell + this.metrics.gap) : 0
+      const fraction = Number.isFinite(anchor.rowFraction) ? Math.max(0, Math.min(1, anchor.rowFraction)) : 0
+      const unchanged = anchor.columns === this.columns && anchor.cell === this.metrics.cell &&
+        anchor.header === this.metrics.header && anchor.gap === this.metrics.gap
+      const delta = found < 0 ? 0 : unchanged && Number.isFinite(anchor.delta)
+        ? anchor.delta
+        : anchor.headerOffset + (row + fraction) * (this.metrics.cell + this.metrics.gap)
       this.el.scrollTop = Math.max(0, this.offsets[index] + delta - this.inset)
     }
   },
@@ -314,6 +481,11 @@ export const PhotoTimeline = {
   },
 
   handleScroll() {
+    if (this.frozenAnchor && this.sections.length) {
+      const before = this.el.scrollTop
+      this.relayout(this.frozenAnchor)
+      if (Math.abs(before - this.el.scrollTop) > 1) this.recordPosition("restore", { before })
+    }
     const indices = visibleSections(this.offsets, this.el.scrollTop, this.el.clientHeight)
     this.needed = new Set()
     for (const i of indices) this.ensureVisibleDays(this.sections[i])
@@ -325,6 +497,7 @@ export const PhotoTimeline = {
     }
     this.materialize(indices)
     this.showCurrent()
+    this.saveBookmark()
   },
 
   /** Put the label of the month at the top of the screen into the host's pill, if it has one. */
@@ -422,6 +595,9 @@ export const PhotoTimeline = {
 
   /** Jump to a section id, e.g. "2018-07". */
   jumpTo(sectionId) {
+    this.frozenAnchor = null
+    this.positionInput = true
+    this.extendPositionInput()
     const index = this.sections.findIndex((s) => s.id === sectionId)
     if (index >= 0) {
       this.el.scrollTop = Math.max(0, this.offsets[index] - this.inset)
@@ -503,6 +679,7 @@ export const PhotoTimeline = {
    * is under (x, y) where it is on screen.
    */
   zoomTo(cell, x, y) {
+    this.beginPositionInput({ type: "wheel" })
     const [low, high] = this.cellLimits()
     const focus = this.itemAtPoint(x, y)
     this.zoomCell = Math.min(high, Math.max(low, cell))
@@ -540,6 +717,7 @@ export const PhotoTimeline = {
 
   /** Back to the size the host asks for. */
   resetZoom() {
+    this.beginPositionInput({ type: "wheel" })
     this.zoomCell = null
     this.rememberZoom()
     this.relayout()

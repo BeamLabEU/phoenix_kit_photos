@@ -422,6 +422,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         :if={@sections != [] && !@fill}
         id={"#{@id}-jump"}
         phx-change="timeline:jump"
+        phx-auto-recover="ignore"
         phx-target={@myself}
         class="flex justify-end"
       >
@@ -437,6 +438,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         :if={@sections != [] && @fill}
         id={"#{@id}-jump"}
         phx-change="timeline:jump"
+        phx-auto-recover="ignore"
         phx-target={@myself}
         class="absolute right-3 z-10"
         style="top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"

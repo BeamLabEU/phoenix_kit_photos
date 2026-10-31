@@ -12,7 +12,7 @@ function hook({ pathname = "/anna/private", paths = true, slides = {}, pager = "
   }
   globalThis.window = {
     location: { pathname },
-    history: { back: () => calls.backs++ }
+    history: { state: { id: "current-view" }, back: () => calls.backs++ }
   }
 
   const h = Object.assign({}, PhotoTimeline, {
@@ -37,13 +37,35 @@ function hook({ pathname = "/anna/private", paths = true, slides = {}, pager = "
 const slides = { 0: { id: "u0", code: "aaaaaaaa" }, 1: { id: "u1", code: "bbbbbbbb" }, 2: { id: "u2" } }
 
 test("the viewer opening adds an address, turning the page replaces it", () => {
-  const { h, calls } = hook({ slides })
+  const { h, calls, setPath } = hook({ slides })
   h.syncAddress(0)
+  setPath("/anna/private/p/aaaaaaaa")
   h.syncAddress(1)
   assert.deepEqual(calls.patches, [
     ["/anna/private/p/aaaaaaaa", false],
     ["/anna/private/p/bbbbbbbb", true]
   ])
+})
+
+test("opening callbacks before the first patch completes preserve the selected library in history", () => {
+  const { h, calls, setPath } = hook({ slides })
+  // The viewer emits change during open(), then openPager syncs once more.
+  // LiveView commits only the newest pending patch when replies overlap.
+  h.syncAddress(0)
+  h.syncAddress(0)
+  h.syncAddress(1) // a quick turn can also precede the opening patch's reply
+  assert.deepEqual(calls.patches, [
+    ["/anna/private/p/aaaaaaaa", false],
+    ["/anna/private/p/aaaaaaaa", false],
+    ["/anna/private/p/bbbbbbbb", false]
+  ], "the surviving patch must push, preserving the library entry beneath the photo")
+
+  setPath("/anna/private/p/bbbbbbbb")
+  h.syncAddress(0)
+  assert.deepEqual(calls.patches.at(-1), ["/anna/private/p/aaaaaaaa", true])
+  setPath("/anna/private/p/aaaaaaaa")
+  h.leaveAddress()
+  assert.equal(calls.backs, 1)
 })
 
 test("a photo whose address is already the page's is not patched, and counts as open", () => {
@@ -90,6 +112,20 @@ test("closing leaves the address alone when the server closed the viewer, or the
   const elsewhere = hook({ slides, pathname: "/anna/other" })
   elsewhere.h.leaveAddress()
   assert.equal(elsewhere.calls.backs + elsewhere.calls.patches.length, 0)
+})
+
+test("closing after a tab reload patches the library instead of remounting the old LiveView", () => {
+  const { h, calls, setPath } = hook({ slides })
+  window.history.state = { id: "view-before-reload" }
+  h.syncAddress(0)
+  h.syncAddress(0) // opening's duplicate callback must keep the original history id
+  setPath("/anna/private/p/aaaaaaaa")
+  window.history.state = { id: "view-after-reload" }
+  h.syncAddress(1)
+  setPath("/anna/private/p/bbbbbbbb")
+  h.leaveAddress()
+  assert.equal(calls.backs, 0, "Back would remount the old view and reload thumbnails")
+  assert.deepEqual(calls.patches.at(-1), ["/anna/private", true])
 })
 
 test("an address that names no photo closes the viewer, and the close does not touch the address", () => {

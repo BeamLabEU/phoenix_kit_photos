@@ -53,6 +53,7 @@ export const PhotoTimeline = {
   // server sent before the index it needs arrived.
   addressOpen: false,
   addressPushed: false,
+  addressHistoryId: null,
   addressClosing: false,
   addressSent: null,
   view: null,
@@ -809,7 +810,12 @@ export const PhotoTimeline = {
       return
     }
 
-    const push = !this.addressOpen
+    // Opening can report the same slide twice before LiveView commits the first
+    // patch (the engine's change event, then openPager). A newer patch supersedes
+    // the older one, so keep pushing until the browser actually has a photo URL;
+    // replacing sooner would erase the library entry that Close goes back to.
+    const push = !this.atPhotoAddress(paths)
+    if (!this.addressOpen) this.addressHistoryId = window.history.state?.id || null
     this.addressOpen = true
     if (push) this.addressPushed = true
     this.js().patch(to, { replace: !push })
@@ -831,12 +837,16 @@ export const PhotoTimeline = {
     const paths = this.addresses()
     const server = this.addressClosing
     const pushed = this.addressPushed
+    const sameView = this.addressHistoryId !== null && this.addressHistoryId === window.history.state?.id
     this.addressClosing = false
     this.addressOpen = false
     this.addressPushed = false
+    this.addressHistoryId = null
     if (!paths || server || !this.atPhotoAddress(paths)) return
 
-    if (pushed) window.history.back()
+    // After a tab reload, the library entry can still name the old LiveView.
+    // Back would remount it and discard the grid. Patch the current view instead.
+    if (pushed && sameView) window.history.back()
     else this.js().patch(paths.library, { replace: true })
   },
 

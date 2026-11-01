@@ -455,3 +455,67 @@ test("incidental scrolling and clicking back into Safari cannot move the bookmar
   assert.notDeepEqual(h.bookmarkAnchor, bookmark)
   clearTimeout(h.positionInputTimer)
 })
+
+test("closing the browser loses tab storage but preserves the library bookmark", () => {
+  const previous = globalThis.window
+  const tab = new Map()
+  const durable = new Map()
+  const storage = values => ({ getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value) })
+  globalThis.window = { sessionStorage: storage(tab), localStorage: storage(durable) }
+  try {
+    const payload = { library: "a", revision: 1, sections: [section(501)] }
+    const { h } = hook()
+    h.el.clientWidth = 997
+    h.setIndex(payload)
+    h.beginPositionInput({ type: "wheel" })
+    h.el.scrollTop = 2345.5
+    h.handleScroll()
+    h.freezePosition()
+    tab.clear() // a newly opened browser session has no previous sessionStorage
+    const { h: reopened } = hook()
+    reopened.el.clientWidth = 997
+    reopened.setIndex(payload)
+    assert.equal(reopened.el.scrollTop, 2345.5)
+    assert.equal(reopened.bookmarkTop(), h.bookmarkTop())
+    clearTimeout(h.positionInputTimer)
+  } finally {
+    if (previous === undefined) delete globalThis.window
+    else globalThis.window = previous
+  }
+})
+
+test("an open tab keeps its own bookmark and unavailable storage does not block the other copy", () => {
+  const previous = globalThis.window
+  const tab = new Map()
+  const durable = new Map()
+  const storage = values => ({ getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value) })
+  globalThis.window = { sessionStorage: storage(tab), localStorage: storage(durable) }
+  try {
+    const { h } = hook()
+    h.setIndex({ library: "a", revision: 1, sections: [section(501)] })
+    const key = h.positionKey()
+    const original = h.storedPosition()
+    tab.set(key, JSON.stringify({ anchor: { ...original.anchor, item: 10 } }))
+    durable.set(key, JSON.stringify({ anchor: { ...original.anchor, item: 20 } }))
+    assert.equal(h.storedPosition().anchor.item, 10, "open tabs retain independent positions")
+    tab.set(key, '{broken')
+    assert.equal(h.storedPosition().anchor.item, 20)
+    globalThis.window.sessionStorage = {
+      getItem() { throw Error("unavailable") }, setItem() { throw Error("unavailable") }
+    }
+    assert.equal(h.storedPosition().anchor.item, 20)
+    h.rememberPosition()
+    assert.equal(JSON.parse(durable.get(key)).anchor.item, h.bookmarkAnchor.item)
+    globalThis.window.sessionStorage = storage(tab)
+    globalThis.window.localStorage = {
+      getItem() { throw Error("unavailable") }, setItem() { throw Error("unavailable") }
+    }
+    h.rememberPosition()
+    assert.equal(h.storedPosition().anchor.item, h.bookmarkAnchor.item)
+  } finally {
+    if (previous === undefined) delete globalThis.window
+    else globalThis.window = previous
+  }
+})

@@ -332,14 +332,18 @@ export const PhotoTimeline = {
   },
 
   storedPosition() {
-    try {
-      const saved = JSON.parse(window.sessionStorage.getItem(this.positionKey()))
-      const a = saved?.anchor
-      if (a && typeof a.id === "string" && Number.isInteger(a.index) && a.index >= 0 &&
-          Number.isFinite(a.item) && a.item >= 0 &&
-          Number.isFinite(a.headerOffset) && a.headerOffset >= 0) return saved
-    } catch (_error) {
-      // Storage may be unavailable, or a bookmark may be from an older version.
+    // Keep independent positions in open tabs; fall back to the last durable
+    // position when Safari reopens without the old tab's sessionStorage.
+    for (const name of ["sessionStorage", "localStorage"]) {
+      try {
+        const saved = JSON.parse(window[name].getItem(this.positionKey()))
+        const a = saved?.anchor
+        if (a && typeof a.id === "string" && Number.isInteger(a.index) && a.index >= 0 &&
+            Number.isFinite(a.item) && a.item >= 0 &&
+            Number.isFinite(a.headerOffset) && a.headerOffset >= 0) return saved
+      } catch (_error) {
+        // One storage type may be unavailable, or contain an older bookmark.
+      }
     }
     return null
   },
@@ -347,10 +351,13 @@ export const PhotoTimeline = {
   rememberPosition() {
     if (this.frozenAnchor) return
     if (!this.library || !this.sections.length) return
-    try {
-      window.sessionStorage.setItem(this.positionKey(), JSON.stringify({ anchor: this.bookmarkAnchor || this.captureAnchor() }))
-    } catch (_error) {
-      // Keep browsing when storage is unavailable.
+    const value = JSON.stringify({ anchor: this.bookmarkAnchor || this.captureAnchor() })
+    for (const name of ["sessionStorage", "localStorage"]) {
+      try {
+        window[name].setItem(this.positionKey(), value)
+      } catch (_error) {
+        // Keep browsing and still try the other storage type.
+      }
     }
   },
 

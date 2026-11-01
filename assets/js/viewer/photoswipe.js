@@ -51,7 +51,8 @@ export class PhotoSwipeEngine {
       loop: false,
       bgOpacity: 1,
       preload: [1, 2],
-      showHideAnimationType: "zoom",
+      // Grid thumbnails are cropped; the viewer uses the full frame from the start.
+      showHideAnimationType: "fade",
       clickToCloseNonZoomable: false,
       wheelToZoom: true,
       initialZoomLevel: "fit",
@@ -70,6 +71,7 @@ export class PhotoSwipeEngine {
     pswp.addFilter("numItems", () => this.store.total)
     pswp.addFilter("itemData", (_data, i) => this.itemData(i))
     pswp.addFilter("thumbEl", (_el, _data, i) => this.tileImage(i) || undefined)
+    pswp.addFilter("placeholderSrc", (_src, content) => content.data.msrc || false)
     pswp.addFilter("useContentPlaceholder", (use, content) => use || content.data.type === "video")
 
     pswp.on("uiRegister", () => {
@@ -161,8 +163,9 @@ export class PhotoSwipeEngine {
     return {
       id: slide.id,
       type: "image",
-      src: slide.src || msrc || "",
-      msrc,
+      src: slide.src || slide.preview || "",
+      // Never stretch the grid crop into the full-frame image's dimensions.
+      msrc: slide.preview || undefined,
       width: slide.w,
       height: slide.h,
       alt: "",

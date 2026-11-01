@@ -674,7 +674,16 @@ defmodule PhoenixKitPhotos.Timeline do
       end
 
     {w, h} = dimensions(instance, file)
-    %{id: file.uuid, code: file.short_code, kind: :image, w: w, h: h, src: src}
+
+    %{
+      id: file.uuid,
+      code: file.short_code,
+      kind: :image,
+      w: w,
+      h: h,
+      src: src,
+      preview: variant_url(auth, file, min_width: @thumb_min_width, aspect: :preserve)
+    }
   end
 
   defp original_source(auth, file) do

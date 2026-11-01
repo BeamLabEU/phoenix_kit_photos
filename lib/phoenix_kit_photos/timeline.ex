@@ -588,6 +588,9 @@ defmodule PhoenixKitPhotos.Timeline do
       readable_library?(scope, library_uuid) ->
         query
 
+      match?(%{kind: "user"}, Libraries.get_library(library_uuid)) ->
+        where(query, [f], false)
+
       uuid = Scope.user_uuid(scope) ->
         where(query, [f], f.user_uuid == ^uuid)
 
@@ -756,14 +759,7 @@ defmodule PhoenixKitPhotos.Timeline do
   defp reader(scope, library_uuid) do
     case Libraries.get_library(library_uuid) do
       %{kind: "user"} = library ->
-        # Preserve uploader-only reads after membership is removed. The query's
-        # restrict/3 still limits these callers to their own files; it never opens
-        # the whole private library or grants anonymous access.
-        own_uploads? =
-          Libraries.authenticated_reader?(scope) and
-            not Libraries.published?(library) and is_nil(library.trashed_at)
-
-        if Libraries.can_read_library?(scope, library) or own_uploads?,
+        if Libraries.can_read_library?(scope, library),
           do: :ok,
           else: {:error, :unauthorized}
 

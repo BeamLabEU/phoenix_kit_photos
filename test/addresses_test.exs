@@ -6,7 +6,6 @@ defmodule PhoenixKitPhotos.AddressesTest do
   use PhoenixKitPhotos.DataCase, async: false
   import Phoenix.LiveViewTest
 
-
   @endpoint PhoenixKitPhotos.TestEndpoint
 
   describe "Timeline.position/3" do
@@ -68,7 +67,7 @@ defmodule PhoenixKitPhotos.AddressesTest do
         scope_for(user_fixture("stranger-#{System.unique_integer([:positive])}@example.com"))
 
       assert {:error, :not_found} = Timeline.position(ctx.partition, elsewhere.uuid, ctx.scope)
-      assert {:error, :not_found} = Timeline.position(ctx.partition, mine.uuid, stranger)
+      assert {:error, :unauthorized} = Timeline.position(ctx.partition, mine.uuid, stranger)
 
       assert {:error, :not_found} =
                Timeline.position(ctx.partition, Ecto.UUID.generate(), ctx.scope)

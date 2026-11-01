@@ -160,7 +160,7 @@ defmodule PhoenixKitPhotos.TimelineTest do
       assert {:ok, %{total: 0, state: :processing}} = Timeline.index(library, scope)
     end
 
-    test "members read shared files, nonmembers only their own uploads", %{
+    test "members read shared files and nonmembers cannot read even their own uploads", %{
       owner: owner,
       other: other
     } do
@@ -169,8 +169,8 @@ defmodule PhoenixKitPhotos.TimelineTest do
       own = file_fixture(other, %{library_uuid: library.uuid})
       scope = scope_for(other)
       partition = {:library, library.uuid}
-      assert {:ok, %{items: [%{id: id}]}} = Timeline.window(partition, "2018-07-14", scope)
-      assert id == own.uuid
+      assert {:error, :unauthorized} = Timeline.window(partition, "2018-07-14", scope)
+      refute Libraries.can?(scope, own, :read)
       refute Libraries.can?(scope, file, :read)
       member_fixture(library, other)
       assert Libraries.role(library, other.uuid) == :viewer
@@ -486,7 +486,7 @@ defmodule PhoenixKitPhotos.TimelineTest do
       other = user_fixture("other-#{System.unique_integer([:positive])}@example.com")
       file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
 
-      assert {:ok, []} =
+      assert {:error, :unauthorized} =
                Timeline.slides(ctx.partition, "2018-07-14", 0, 12, 700, scope_for(other))
 
       assert {:error, :unauthorized} =
@@ -547,7 +547,9 @@ defmodule PhoenixKitPhotos.TimelineTest do
       %{user: user_fixture("media-#{System.unique_integer([:positive])}@example.com")}
     end
 
-    test "an ordinary user does not get it, and has no default library without their own", %{user: user} do
+    test "an ordinary user does not get it, and has no default library without their own", %{
+      user: user
+    } do
       scope = scope_for(user)
       refute Timeline.media_visible?(scope)
       assert Timeline.libraries(scope) == []

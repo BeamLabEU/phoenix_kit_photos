@@ -11,8 +11,9 @@ defmodule PhoenixKitPhotos.Uploads do
   (`Libraries.allows?(role, :upload)`, so a viewer may not and a trashed library has
   no one); to a **system library** such as Media, an Owner/Admin and a holder of the
   `media` permission. Anything else, and a visitor who is not signed in, may not.
-  The check is made again when a finished upload is stored (`store/4`), because what
-  the browser says is not what the server decides.
+  The check is made again before and after storage (`store/4`), because what
+  the browser says is not what the server decides. If access is lost during
+  storage, a newly created row is trashed; a pre-existing duplicate is retained.
 
   ## What it takes
 
@@ -138,9 +139,10 @@ defmodule PhoenixKitPhotos.Uploads do
         extension(name),
         name,
         mime_type: mime,
-        library_uuid: library_uuid
+        library_uuid: library_uuid,
+        return_creation_status: true
       )
-      |> outcome(library_uuid)
+      |> authorized_outcome(scope, library_uuid)
     end
   rescue
     error ->
@@ -157,6 +159,31 @@ defmodule PhoenixKitPhotos.Uploads do
 
   defp allowed(scope, library_uuid),
     do: if(can_upload?(scope, library_uuid), do: :ok, else: {:error, :not_allowed})
+
+  defp authorized_outcome({:error, _} = error, _scope, _library_uuid), do: error
+
+  defp authorized_outcome(result, scope, library_uuid) do
+    if can_upload?(scope, library_uuid) do
+      outcome(result, library_uuid)
+    else
+      compensate(result)
+      {:error, :not_allowed}
+    end
+  end
+
+  defp compensate({:ok, file, :created}) do
+    case Storage.trash_file(file) do
+      {:ok, _} ->
+        :ok
+
+      other ->
+        Logger.warning(
+          "[PhotoUploader] could not trash refused upload #{file.uuid}: #{inspect(other)}"
+        )
+    end
+  end
+
+  defp compensate(_result), do: :ok
 
   defp media_type(mime, name) do
     ext = name |> Path.extname() |> String.downcase()
@@ -196,6 +223,7 @@ defmodule PhoenixKitPhotos.Uploads do
   end
 
   defp outcome({:ok, file}, _library_uuid), do: {:added, file}
+  defp outcome({:ok, file, :created}, _library_uuid), do: {:added, file}
   defp outcome({:error, reason}, _library_uuid), do: {:error, reason}
 
   defp same_library?(file, library_uuid),

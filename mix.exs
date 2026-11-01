@@ -1,7 +1,7 @@
 defmodule PhoenixKitPhotos.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.2.1"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_photos"
 
   def project do
@@ -32,7 +32,7 @@ defmodule PhoenixKitPhotos.MixProject do
     [
       # PhoenixKit — Storage schemas, Module behaviour, settings, permissions.
       # PHOENIX_KIT_PATH points at a sibling checkout for local core work.
-      # Unset, core 3.1 supplies audience-aware library access.
+      # Unset, core 3.2.6 supplies membership revocation and upload creation status.
       phoenix_kit_dep(),
 
       # Phoenix Framework
@@ -87,7 +87,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, ">= 3.1.0 and < 4.0.0"}
+        {:phoenix_kit, ">= 3.2.6 and < 4.0.0"}
     end
   end
 

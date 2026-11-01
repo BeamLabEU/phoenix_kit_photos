@@ -39,7 +39,7 @@ defmodule PhoenixKitPhotos.PublicLibraryAccessTest do
 
   test "private and suspended libraries never admit unrelated readers", ctx do
     assert {:error, :unauthorized} = Timeline.index(ctx.partition, nil)
-    assert {:ok, %{total: 0}} = Timeline.index(ctx.partition, scope_for(ctx.reader))
+    assert {:error, :unauthorized} = Timeline.index(ctx.partition, scope_for(ctx.reader))
 
     ctx.library
     |> Ecto.Changeset.change(visibility: "site", settings: %{"suspended" => true})

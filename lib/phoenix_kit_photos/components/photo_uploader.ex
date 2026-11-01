@@ -128,7 +128,12 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # Upload is pressed (the consent the warning is about) and then feeds them through
   # the window. `upload_auto` records only whether that gate exists, for the render
   # and the hook's `data-auto`; the upload is set up again if it changes.
-  defp configure_upload(%{assigns: %{can_upload: false}} = socket), do: socket
+  defp configure_upload(%{assigns: %{can_upload: false}} = socket) do
+    # Cancellation finishes asynchronously; disallow_upload/2 would raise while
+    # the cancelled entries still exist. Keep the config for a later regrant.
+    socket = if socket.assigns.upload_auto == nil, do: socket, else: cancel_all(socket)
+    assign(socket, open: false, waiting: 0, queued: [], started: false)
+  end
 
   defp configure_upload(socket) do
     gated? = socket.assigns.public?

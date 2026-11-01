@@ -245,9 +245,9 @@ export const PhotoTimeline = {
     this.bookmarkMark = document.createElement("div")
     this.bookmarkMark.dataset.bookmarkMarker = ""
     this.bookmarkMark.setAttribute("aria-hidden", "true")
-    this.bookmarkMark.style.cssText = "position:absolute;left:0;right:0;z-index:12;pointer-events:none;height:4px;background:#ffcc00;box-shadow:0 0 0 1px #18181b,0 0 8px #ffcc0080;transform:translateY(-50%)"
+    this.bookmarkMark.style.cssText = "position:absolute;left:8px;z-index:12;pointer-events:none;width:0;height:0"
     const tab = document.createElement("span")
-    tab.style.cssText = "position:absolute;left:8px;top:50%;width:14px;height:14px;background:#ffcc00;border:2px solid #18181b;border-radius:2px;transform:translateY(-50%) rotate(45deg);box-shadow:0 0 5px #0006"
+    tab.style.cssText = "position:absolute;left:0;top:0;width:10px;height:10px;background:#fbbf24;border:1px solid #18181bcc;border-radius:1px;transform:translateY(-50%) rotate(45deg);box-shadow:0 1px 2px #0005;opacity:0.85"
     this.bookmarkMark.append(tab)
     this.el.append(this.bookmarkMark)
   },

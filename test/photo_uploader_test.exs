@@ -150,8 +150,8 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
 
       assert {:error, [[_ref, :not_accepted]]} =
                view
-               |> upload("script.svg", "<svg/>", "image/svg+xml")
-               |> render_upload("script.svg")
+               |> upload("page.html", "<script></script>", "text/html")
+               |> render_upload("page.html")
 
       assert {:error, [[_ref, :not_accepted]]} =
                view
@@ -166,14 +166,14 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       {view, _} = mount!(scope_for(ctx.owner), ctx.library)
       view |> element("button[aria-label='Add photos']") |> render_click()
 
-      input = upload(view, "script.svg", "<svg/>", "image/svg+xml")
-      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "script.svg")
+      input = upload(view, "page.html", "<script></script>", "text/html")
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "page.html")
 
       # The form's change event a browser sends as files are chosen (the test client's
       # upload helper goes straight to the preflight and skips it).
       html = view |> element("#test-uploader") |> render_hook("validate", %{})
       # Told once, in the summary, and gone from the queue (no progress bar, no cancel).
-      assert html =~ "script.svg"
+      assert html =~ "page.html"
       assert html =~ "not supported"
       assert html =~ "1 failed"
       refute html =~ ~s(phx-click="cancel")

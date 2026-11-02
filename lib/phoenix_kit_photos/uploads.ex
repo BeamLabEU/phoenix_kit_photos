@@ -17,12 +17,13 @@ defmodule PhoenixKitPhotos.Uploads do
 
   ## What it takes
 
-  Pictures and videos a phone or a camera makes (`accept/0`): JPEG, PNG, GIF, WebP,
-  HEIC/HEIF (an iPhone's), AVIF, TIFF, BMP; MP4, MOV (QuickTime), WebM, 3GP. (Every
-  extension has to have a known MIME type or LiveView refuses to set the upload up; `.m4v`
-  and `.mkv` have none in the MIME table, and phones record `.mov` and `.mp4`.) Not
-  SVG, which is an image but can carry a script, and not documents: this is a photo
-  library. The size limit is the site's `storage_max_upload_size_mb` setting
+  Pictures and videos (`accept/0`): JPEG, PNG, GIF, WebP, HEIC/HEIF (an iPhone's),
+  AVIF, TIFF, BMP, SVG; MP4, MOV (QuickTime), WebM, 3GP. (Every extension has to have a
+  known MIME type or LiveView refuses to set the upload up; `.m4v` and `.mkv` have none
+  in the MIME table, and phones record `.mov` and `.mp4`.) An SVG can carry a script,
+  so core never shows one as a page: it is kept as it is and downloads from its link,
+  and its sizes and previews are PNGs drawn from it by librsvg
+  (`PhoenixKit.Modules.Storage.SvgRaster`). Not documents: this is a photo library. The size limit is the site's `storage_max_upload_size_mb` setting
   (default 500), the same one the media browser follows.
 
   ## Storing
@@ -38,12 +39,13 @@ defmodule PhoenixKitPhotos.Uploads do
   require Logger
 
   alias PhoenixKit.Modules.Storage
-  alias PhoenixKit.Modules.Storage.{Libraries, Library}
+  alias PhoenixKit.Modules.Storage.{Libraries, Library, Sniff}
   alias PhoenixKit.Settings
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKit.Utils.FileHash
 
-  @image_extensions ~w(.jpg .jpeg .png .gif .webp .heic .heif .avif .tif .tiff .bmp)
+  @svg "image/svg+xml"
+  @image_extensions ~w(.jpg .jpeg .png .gif .webp .heic .heif .avif .tif .tiff .bmp .svg)
   @video_extensions ~w(.mp4 .mov .webm .3gp)
   @extensions @image_extensions ++ @video_extensions
 
@@ -129,7 +131,7 @@ defmodule PhoenixKitPhotos.Uploads do
     mime = mime_for(entry, name)
 
     with :ok <- allowed(scope, library_uuid),
-         {:ok, type} <- media_type(mime, name),
+         {:ok, type, mime} <- media_type(path, mime, name),
          {:ok, hash} <- hash(path) do
       path
       |> Storage.store_file_in_buckets(
@@ -185,19 +187,27 @@ defmodule PhoenixKitPhotos.Uploads do
 
   defp compensate(_result), do: :ok
 
-  defp media_type(mime, name) do
+  # An SVG is taken by its bytes, not by its name or the browser's word: a file called
+  # .svg that is not one, or an SVG claimed under another name, is refused. Its type
+  # is then always image/svg+xml, which is what keeps it from being shown as a page
+  # (see the moduledoc). Compressed SVG (.svgz) is not taken.
+  defp media_type(path, mime, name) do
     ext = name |> Path.extname() |> String.downcase()
 
     cond do
-      # An SVG is an image that can carry a script; a photo library has none.
-      mime == "image/svg+xml" or ext in [".svg", ".svgz"] -> {:error, :unsupported_type}
-      ext not in @extensions -> {:error, :unsupported_type}
-      true -> type_of(Storage.determine_file_type(mime, name))
+      ext == ".svg" -> if svg_bytes?(path), do: {:ok, "image", @svg}, else: unsupported()
+      mime == @svg -> unsupported()
+      ext not in @extensions -> unsupported()
+      true -> type_of(Storage.determine_file_type(mime, name), mime)
     end
   end
 
-  defp type_of(type) when type in ["image", "video"], do: {:ok, type}
-  defp type_of(_other), do: {:error, :unsupported_type}
+  defp svg_bytes?(path), do: match?({:ok, %{format: :svg}}, Sniff.sniff(path))
+
+  defp unsupported, do: {:error, :unsupported_type}
+
+  defp type_of(type, mime) when type in ["image", "video"], do: {:ok, type, mime}
+  defp type_of(_other, _mime), do: unsupported()
 
   defp hash(path) do
     case FileHash.sha256(path) do

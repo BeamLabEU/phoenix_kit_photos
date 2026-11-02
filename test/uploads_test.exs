@@ -63,14 +63,14 @@ defmodule PhoenixKitPhotos.UploadsTest do
   end
 
   describe "accept/0 and max_file_size/0" do
-    test "photos and videos a phone makes, and nothing that can carry a script" do
+    test "pictures and videos, and no page, document or program" do
       accept = Uploads.accept()
 
       for ext <-
-            ~w(.jpg .jpeg .png .gif .webp .heic .heif .avif .tif .tiff .bmp .mp4 .mov .webm .3gp),
+            ~w(.jpg .jpeg .png .gif .webp .heic .heif .avif .tif .tiff .bmp .svg .mp4 .mov .webm .3gp),
           do: assert(ext in accept)
 
-      for ext <- ~w(.svg .html .pdf .exe .js .zip .m4v .mkv), do: refute(ext in accept)
+      for ext <- ~w(.svgz .html .pdf .exe .js .zip .m4v .mkv), do: refute(ext in accept)
     end
 
     test "the size limit is the site's setting" do
@@ -174,12 +174,33 @@ defmodule PhoenixKitPhotos.UploadsTest do
       assert Storage.list_files() == []
     end
 
-    test "an SVG, a document or a program is not a photo", ctx do
+    test "an SVG is kept as one, whatever the browser called it", ctx do
+      scope = scope_for(ctx.owner)
+
+      svg =
+        ~s(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 3"><rect width="4" height="3"/></svg>)
+
+      assert {:added, file} =
+               Uploads.store(
+                 file!(ctx, svg),
+                 entry("logo.svg", "image/png"),
+                 scope,
+                 ctx.library.uuid
+               )
+
+      assert file.file_type == "image"
+      assert file.mime_type == "image/svg+xml"
+    end
+
+    test "something called an SVG that is not one, a document or a program is not a photo",
+         ctx do
       scope = scope_for(ctx.owner)
 
       for {name, type} <- [
             {"x.svg", "image/svg+xml"},
             {"x.svg", "image/png"},
+            {"x.png", "image/svg+xml"},
+            {"x.svgz", "image/svg+xml"},
             {"x.pdf", "application/pdf"},
             {"x.exe", "application/octet-stream"},
             {"x.html", "text/html"},

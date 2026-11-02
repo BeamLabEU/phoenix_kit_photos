@@ -71,6 +71,9 @@ defmodule PhoenixKitPhotos.UploadsTest do
           do: assert(ext in accept)
 
       for ext <- ~w(.svgz .html .pdf .exe .js .zip .m4v .mkv), do: refute(ext in accept)
+
+      # Camera raw, as the host has given MIME their types (config/test.exs).
+      for ext <- ~w(.dng .cr2 .cr3 .nef .arw .orf .rw2 .raf .pef .srw), do: assert(ext in accept)
     end
 
     test "the size limit is the site's setting" do
@@ -190,6 +193,30 @@ defmodule PhoenixKitPhotos.UploadsTest do
 
       assert file.file_type == "image"
       assert file.mime_type == "image/svg+xml"
+    end
+
+    test "a raw file is kept as its maker's type, when its bytes have a raw file's shape",
+         ctx do
+      scope = scope_for(ctx.owner)
+      tiff = <<"MM", 0, 42, 0, 0, 0, 8, 0, 0>>
+
+      assert {:added, file} =
+               Uploads.store(
+                 file!(ctx, tiff),
+                 entry("DSC_0001.NEF", "application/octet-stream"),
+                 scope,
+                 ctx.library.uuid
+               )
+
+      assert {file.file_type, file.mime_type} == {"image", "image/x-nikon-nef"}
+
+      assert {:error, :unsupported_type} =
+               Uploads.store(
+                 file!(ctx, "not a photo"),
+                 entry("x.cr2", "image/x-canon-cr2"),
+                 scope,
+                 ctx.library.uuid
+               )
     end
 
     test "something called an SVG that is not one, a document or a program is not a photo",

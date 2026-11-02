@@ -39,3 +39,19 @@ config :phoenix_kit_photos, PhoenixKitPhotos.TestEndpoint,
   live_view: [signing_salt: "photos-test"],
   pubsub_server: PhoenixKitPhotos.TestPubSub,
   server: false
+
+# Camera raw types, as a host gives them (`PhoenixKitPhotos.Uploads.raw_extensions/0`).
+config :mime, :types, %{
+  "image/x-adobe-dng" => ["dng"],
+  "image/x-canon-cr2" => ["cr2"],
+  "image/x-canon-cr3" => ["cr3"],
+  "image/x-nikon-nef" => ["nef"],
+  "image/x-nikon-nrw" => ["nrw"],
+  "image/x-sony-arw" => ["arw"],
+  "image/x-olympus-orf" => ["orf"],
+  "image/x-panasonic-rw2" => ["rw2"],
+  "image/x-fuji-raf" => ["raf"],
+  "image/x-pentax-pef" => ["pef"],
+  "image/x-samsung-srw" => ["srw"],
+  "image/x-hasselblad-3fr" => ["3fr"]
+}

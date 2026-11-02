@@ -18,7 +18,10 @@ defmodule PhoenixKitPhotos.Uploads do
   ## What it takes
 
   Pictures and videos (`accept/0`): JPEG, PNG, GIF, WebP, HEIC/HEIF (an iPhone's),
-  AVIF, TIFF, BMP, SVG; MP4, MOV (QuickTime), WebM, 3GP. (Every extension has to have a
+  AVIF, TIFF, BMP, SVG, camera raw (DNG, CR2, CR3, NEF, ARW, ORF, RW2, RAF, PEF…, when
+  the host has given MIME their types: `raw_extensions/0`); MP4, MOV (QuickTime), WebM,
+  3GP. A raw file is kept as it is; core develops its previews with libraw
+  (`PhoenixKit.Modules.Storage.CameraRaw`). (Every extension has to have a
   known MIME type or LiveView refuses to set the upload up; `.m4v` and `.mkv` have none
   in the MIME table, and phones record `.mov` and `.mp4`.) An SVG can carry a script,
   so core never shows one as a page: it is kept as it is and downloads from its link,
@@ -39,7 +42,7 @@ defmodule PhoenixKitPhotos.Uploads do
   require Logger
 
   alias PhoenixKit.Modules.Storage
-  alias PhoenixKit.Modules.Storage.{Libraries, Library, Sniff}
+  alias PhoenixKit.Modules.Storage.{CameraRaw, Libraries, Library, Sniff}
   alias PhoenixKit.Settings
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKit.Utils.FileHash
@@ -62,7 +65,25 @@ defmodule PhoenixKitPhotos.Uploads do
 
   @doc "The file extensions the uploader takes, for `allow_upload/3`'s `:accept`."
   @spec accept() :: [String.t()]
-  def accept, do: @extensions
+  def accept, do: @extensions ++ raw_extensions()
+
+  @doc """
+  The camera raw extensions the uploader takes: those of
+  `PhoenixKit.Modules.Storage.CameraRaw` whose type the host has given MIME, because
+  LiveView refuses to set an upload up for an extension MIME does not know. A host
+  turns them on with
+
+      config :mime, :types, PhoenixKit.Modules.Storage.CameraRaw.mime_types()
+
+  written out as a literal map (config cannot call the module), followed by
+  `mix deps.compile mime --force`.
+  """
+  @spec raw_extensions() :: [String.t()]
+  def raw_extensions do
+    for ext <- Enum.sort(CameraRaw.extensions()),
+        MIME.from_path("x." <> ext) == CameraRaw.mime_for_extension(ext),
+        do: "." <> ext
+  end
 
   @doc "The most files one batch may hold."
   @spec max_entries() :: pos_integer()
@@ -197,9 +218,18 @@ defmodule PhoenixKitPhotos.Uploads do
     cond do
       ext == ".svg" -> if svg_bytes?(path), do: {:ok, "image", @svg}, else: unsupported()
       mime == @svg -> unsupported()
+      ext in raw_extensions() -> raw(path, ext)
       ext not in @extensions -> unsupported()
       true -> type_of(Storage.determine_file_type(mime, name), mime)
     end
+  end
+
+  # A raw file is typed by its name (most are TIFF-shaped, so the bytes cannot say which
+  # maker's it is), once its bytes have a raw file's shape.
+  defp raw(path, ext) do
+    if CameraRaw.raw_shaped?(path),
+      do: {:ok, "image", CameraRaw.mime_for_extension(ext)},
+      else: unsupported()
   end
 
   defp svg_bytes?(path), do: match?({:ok, %{format: :svg}}, Sniff.sniff(path))

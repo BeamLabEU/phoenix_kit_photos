@@ -145,6 +145,7 @@ defmodule PhoenixKitPhotos.Uploads do
     * `{:elsewhere, file}` — the same bytes are already in another of this person's
       libraries, which this one cannot show
     * `{:error, reason}` — `:not_allowed`, `:unsupported_type`, or what storage said
+      (`:quota_exceeded` when the library's owner has no room left for it)
   """
   @spec store(Path.t(), map(), Scope.t() | nil, term()) :: outcome()
   def store(path, entry, scope, library_uuid) do
@@ -324,5 +325,9 @@ defmodule PhoenixKitPhotos.Uploads do
   def error_message(:not_allowed), do: gettext("You may not add to this library")
   def error_message(:unsupported_type), do: gettext("This kind of file is not supported")
   def error_message(:file_missing), do: gettext("The upload was lost on the way")
+
+  def error_message(:quota_exceeded),
+    do: gettext("There is no room left: this library's storage is full")
+
   def error_message(_other), do: gettext("The server could not save it")
 end

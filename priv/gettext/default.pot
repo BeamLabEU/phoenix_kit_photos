@@ -244,3 +244,8 @@ msgstr ""
 
 msgid "Could not save the viewer"
 msgstr ""
+
+#: lib/phoenix_kit_photos/uploads.ex:328
+#, elixir-autogen, elixir-format
+msgid "There is no room left: this library's storage is full"
+msgstr ""

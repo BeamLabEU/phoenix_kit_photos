@@ -290,13 +290,21 @@ defmodule PhoenixKitPhotos.UploadsTest do
       for reason <- [:too_large, :not_accepted, :too_many_files, :something_else],
           do: assert(is_binary(Uploads.entry_error(reason)) and Uploads.entry_error(reason) != "")
 
-      for reason <- [:not_allowed, :unsupported_type, :file_missing, :failed, {:odd, 1}],
+      for reason <- [
+            :not_allowed,
+            :unsupported_type,
+            :file_missing,
+            :quota_exceeded,
+            :failed,
+            {:odd, 1}
+          ],
           do:
             assert(
               is_binary(Uploads.error_message(reason)) and Uploads.error_message(reason) != ""
             )
 
       assert Uploads.entry_error(:too_large) =~ "500"
+      assert Uploads.error_message(:quota_exceeded) =~ "no room"
     end
   end
 end

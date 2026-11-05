@@ -32,8 +32,19 @@ defmodule PhoenixKitPhotos.PublicLibraryAccessTest do
     |> TestRepo.update!()
 
     assert {:error, :unauthorized} = Timeline.index(ctx.partition, nil)
-    assert {:ok, %{total: 1}} = Timeline.index(ctx.partition, scope_for(ctx.reader))
-    inactive = %{ctx.reader | is_active: false}
+
+    # Core admits an account-only audience once the reader's email is
+    # confirmed (`Libraries.authenticated_reader?/1`, unless the site turns
+    # confirmation off); the fixture's guest account is not.
+    assert {:error, :unauthorized} = Timeline.index(ctx.partition, scope_for(ctx.reader))
+
+    reader =
+      ctx.reader
+      |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+      |> TestRepo.update!()
+
+    assert {:ok, %{total: 1}} = Timeline.index(ctx.partition, scope_for(reader))
+    inactive = %{reader | is_active: false}
     assert {:error, :unauthorized} = Timeline.index(ctx.partition, scope_for(inactive))
   end
 

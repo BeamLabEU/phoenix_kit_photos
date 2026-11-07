@@ -28,13 +28,34 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
     assert post_ids(["../../etc/passwd"], nil).status == 404
   end
 
-  test "a file that cannot be read leaves an archive that still opens", ctx do
+  test "a file that cannot be read is named in the archive, which still opens", ctx do
     file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
     conn = post_ids([file.uuid], scope_for(ctx.owner))
     assert conn.status == 200
     assert ["application/zip"] = get_resp_header(conn, "content-type")
     assert [disposition] = get_resp_header(conn, "content-disposition")
     assert disposition =~ "attachment"
-    assert {:ok, []} = :zip.unzip(conn.resp_body, [:memory])
+    assert {:ok, [{~c"Not included.txt", note}]} = :zip.unzip(conn.resp_body, [:memory])
+    assert note =~ file.original_file_name
+  end
+
+  test "names that collide stay apart, including with a file really called that", ctx do
+    same = %{library_uuid: ctx.library.uuid, original_file_name: "IMG.jpg"}
+    a = file_fixture(ctx.owner, same)
+    b = file_fixture(ctx.owner, same)
+    c = file_fixture(ctx.owner, %{same | original_file_name: "IMG (2).jpg"})
+    conn = post_ids([a.uuid, b.uuid, c.uuid], scope_for(ctx.owner))
+    assert {:ok, [{_name, note}]} = :zip.unzip(conn.resp_body, [:memory])
+    names = note |> String.split("\r\n") |> tl()
+    assert length(names) == 3
+    assert names == Enum.uniq(names)
+  end
+
+  test "a visitor gets at most so many files of a public library at once", ctx do
+    ctx.library |> Ecto.Changeset.change(visibility: "site") |> TestRepo.update!()
+    file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
+    fillers = for _ <- 1..200, do: Ecto.UUID.generate()
+    assert post_ids(fillers ++ [file.uuid], nil).status == 404
+    assert post_ids([file.uuid], nil).status == 200
   end
 end

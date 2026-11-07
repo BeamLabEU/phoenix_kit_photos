@@ -549,11 +549,23 @@ test("a style that places whole photos makes do with the month's average until t
   clearTimeout(h.aspectsTimer)
 })
 
-test("ratios for an older index are not used", () => {
+test("ratios are kept whatever index they came with: the server sends a month only once", () => {
   const { h } = hook()
   h.setIndex({ library: "a", revision: 2, sections: [section(2)] })
   h.setAspects({ aspects: { "2020-01": btoa("xy") }, revision: 1 })
-  assert.equal(h.aspects?.get("2020-01"), undefined)
+  assert.equal(h.aspects.get("2020-01").length, 2)
+})
+
+test("ratios that came while the viewer was open are not lost to a later refresh", () => {
+  const { h } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(2)] })
+  h.pager = { destroy() {} }
+  h.setIndex({ library: "a", revision: 2, sections: [section(2)], aspects: { "2020-01": btoa("xy") } })
+  h.setIndex({ library: "a", revision: 3, sections: [section(2)] })
+  h.pager = null
+  h.applyDeferred()
+  assert.equal(h.revision, 3)
+  assert.equal(h.aspects.get("2020-01").length, 2)
 })
 
 test("the ratios of the last library are dropped with it", () => {
@@ -571,9 +583,12 @@ test("the style a person picked wins over the host's, and nonsense is the plain 
   const before = window.localStorage
   window.localStorage = { getItem: () => stored.value, setItem() {}, removeItem() {} }
   h.el.dataset.style = "mosaic"
+  h.el.dataset.styles = "grid film mosaic"
   assert.equal(h.startingStyle(), "mosaic")
   stored.value = "film"
   assert.equal(h.startingStyle(), "film")
+  stored.value = "feed"
+  assert.equal(h.startingStyle(), "mosaic", "a style the host does not offer")
   stored.value = "<script>"
   assert.equal(h.startingStyle(), "mosaic")
   h.el.dataset.style = "nope"
@@ -670,6 +685,25 @@ test("a refresh of the same library keeps what is chosen", () => {
   h.toggleSelected("a", 0)
   h.setIndex({ library: "a", revision: 2, sections: [section(4)] })
   assert.deepEqual(h.selectedIds(), ["a"])
+})
+
+test("a refresh lets go of the anchor: its position may now be another photo", () => {
+  const { h } = selecting()
+  h.toggleSelected("a", 0)
+  h.setIndex({ library: "a", revision: 2, sections: [section(4)] })
+  assert.equal(h.selectAnchor, null)
+  h.openTile = () => {}
+  h.tileClick(click({ shiftKey: true }), tile(2), "c")
+  assert.deepEqual(h.selectedIds().sort(), ["a", "c"], "toggles instead of taking a wrong run")
+})
+
+test("a selection stops at its limit, however it was built", () => {
+  const { h } = selecting()
+  h.selectionLimit = () => 2
+  h.addSelected(["a", "b", "c"])
+  assert.deepEqual(h.selectedIds(), ["a", "b"])
+  h.toggleSelected("c", 2)
+  assert.deepEqual(h.selectedIds(), ["a", "b"])
 })
 
 test("this moment is the photos taken close together around the last one touched", () => {

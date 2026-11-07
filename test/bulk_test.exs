@@ -1,6 +1,15 @@
 defmodule PhoenixKitPhotos.BulkTest do
   use PhoenixKitPhotos.DataCase, async: false
 
+  defmodule InUse do
+    def places(uuids, _ctx),
+      do: Enum.map(uuids, &%{file_uuid: &1, label: nil, detail: nil, href: nil})
+  end
+
+  defmodule Broken do
+    def places(_uuids, _ctx), do: raise("down")
+  end
+
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
   alias PhoenixKitPhotos.Bulk
 
@@ -10,7 +19,8 @@ defmodule PhoenixKitPhotos.BulkTest do
 
   setup do
     _ = @viewer
-    start_supervised!(PhoenixKit.PubSub.Manager)
+    # Left running by another test file, its name is already taken: that serves just as well.
+    _ = start_supervised(PhoenixKit.PubSub.Manager)
     owner = user_fixture("bulk-owner-#{System.unique_integer([:positive])}@example.com")
     stranger = user_fixture("bulk-stranger-#{System.unique_integer([:positive])}@example.com")
     library = library_fixture(owner)
@@ -105,6 +115,50 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert [%{reason: :already_there}] = plan.refused
     end
 
+    test "files that are not the timeline's are out of reach", ctx do
+      pdf = photo(ctx, %{file_type: "document", mime_type: "application/pdf", ext: "pdf"})
+      assert [%{reason: :not_found}] = Bulk.plan(:trash, [pdf.uuid], ctx.scope).refused
+    end
+
+    test "a library that belongs to a module is no target, whoever asks", ctx do
+      file = photo(ctx)
+
+      {:ok, managed} =
+        Libraries.create_system_library(
+          %{
+            name: "Module #{System.unique_integer([:positive])}",
+            slug: "module-#{System.unique_integer([:positive])}"
+          },
+          hidden: true,
+          media_listing: :uploaders,
+          managed: true
+        )
+
+      admin = %{scope_for(ctx.owner) | cached_roles: ["Owner"]}
+      plan = Bulk.plan(:copy, [file.uuid], admin, %{"library" => managed.uuid})
+      assert is_nil(plan.target)
+      assert [%{reason: :no_target}] = plan.refused
+    end
+
+    test "an edited image can be copied but not moved", ctx do
+      file = photo(ctx)
+      file |> Ecto.Changeset.change(edit_revision: 1) |> TestRepo.update!()
+      other = library_fixture(ctx.owner)
+      params = %{"library" => other.uuid}
+      assert [%{reason: :edited}] = Bulk.plan(:move, [file.uuid], ctx.scope, params).refused
+      assert [_] = Bulk.plan(:copy, [file.uuid], ctx.scope, params).files
+    end
+
+    test "the host's guard keeps what is in use, and failing means no", ctx do
+      file = photo(ctx)
+      Application.put_env(:phoenix_kit, :file_removal_guard, __MODULE__.InUse)
+      on_exit(fn -> Application.delete_env(:phoenix_kit, :file_removal_guard) end)
+      assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
+
+      Application.put_env(:phoenix_kit, :file_removal_guard, __MODULE__.Broken)
+      assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
+    end
+
     test "a move needs the right to change the original, a copy only to read it", ctx do
       file = photo(ctx)
       member_fixture(ctx.library, ctx.stranger, "viewer")
@@ -141,6 +195,17 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert metadata["gps"] == "kept"
     end
 
+    test "one file's failure does not stop the rest", ctx do
+      gone = photo(ctx)
+      kept = photo(ctx)
+      plan = Bulk.plan(:trash, [gone.uuid, kept.uuid], ctx.scope)
+      TestRepo.delete!(gone)
+      result = Bulk.run(plan)
+      assert result.done == [kept.uuid]
+      assert [%{id: id, reason: :failed}] = result.failed
+      assert id == gone.uuid
+    end
+
     test "says how far it has come", ctx do
       files = for _ <- 1..3, do: photo(ctx)
       me = self()
@@ -148,6 +213,65 @@ defmodule PhoenixKitPhotos.BulkTest do
       Bulk.run(plan, on_progress: fn done, total -> send(me, {:progress, done, total}) end)
       assert_received {:progress, 1, 3}
       assert_received {:progress, 3, 3}
+    end
+  end
+
+  describe "what a copy keeps" do
+    # `link_copy/3` needs a real donor (an original instance, in a bucket). These look at what
+    # `Bulk` does with the copy it gets, so they make one by hand.
+    test "a move keeps the date, the place, the tags and the text", ctx do
+      file =
+        photo(ctx, %{
+          taken_at_source: "manual",
+          latitude: 59.43,
+          longitude: 24.75,
+          metadata: %{"tags" => ["sea"], "burn_fingerprint" => "x"}
+        })
+
+      file =
+        file
+        |> Ecto.Changeset.change(data: %{"en" => %{"title" => "Harbour"}})
+        |> TestRepo.update!()
+
+      other = library_fixture(ctx.owner)
+
+      copy =
+        file_fixture(ctx.owner, %{
+          library_uuid: other.uuid,
+          taken_on: nil,
+          taken_at: nil,
+          taken_at_source: nil
+        })
+
+      assert {:ok, carried} = Bulk.carry(%{action: :move, auth: ctx.scope}, file, copy)
+      assert carried.taken_on == file.taken_on
+      assert carried.taken_at_source == "manual"
+      assert carried.latitude == 59.43
+      assert carried.metadata["tags"] == ["sea"]
+      refute Map.has_key?(carried.metadata, "burn_fingerprint")
+      assert carried.data["en"]["title"] == "Harbour"
+    end
+
+    test "a copy of someone else's photo gets a date, and none of what is theirs", ctx do
+      file = photo(ctx, %{latitude: 59.43, metadata: %{"tags" => ["private"]}})
+      reader = user_fixture("bulk-reader-#{System.unique_integer([:positive])}@example.com")
+      own = library_fixture(reader)
+
+      copy =
+        file_fixture(reader, %{
+          library_uuid: own.uuid,
+          taken_on: nil,
+          taken_at: nil,
+          taken_at_source: nil
+        })
+
+      assert {:ok, carried} =
+               Bulk.carry(%{action: :copy, auth: scope_for(reader)}, file, copy)
+
+      assert carried.taken_on == Date.utc_today()
+      assert carried.taken_at_source == "inserted_at"
+      assert is_nil(carried.latitude)
+      refute (carried.metadata || %{})["tags"]
     end
   end
 
@@ -164,6 +288,15 @@ defmodule PhoenixKitPhotos.BulkTest do
     assert Bulk.action("delete") == nil
     assert Bulk.action("download; rm") == nil
     assert Bulk.action(nil) == nil
+  end
+
+  test "a new tag does not void a confirmed trash, and does void a confirmed tagging", ctx do
+    file = photo(ctx)
+    trash = Bulk.fingerprint(Bulk.plan(:trash, [file.uuid], ctx.scope))
+    tag = Bulk.fingerprint(Bulk.plan(:tag, [file.uuid], ctx.scope, %{"add" => "x"}))
+    Bulk.run(Bulk.plan(:tag, [file.uuid], ctx.scope, %{"add" => "y"}))
+    assert trash == Bulk.fingerprint(Bulk.plan(:trash, [file.uuid], ctx.scope))
+    refute tag == Bulk.fingerprint(Bulk.plan(:tag, [file.uuid], ctx.scope, %{"add" => "x"}))
   end
 
   test "the fingerprint follows the values, not the order", ctx do

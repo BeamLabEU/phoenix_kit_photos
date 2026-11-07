@@ -447,25 +447,42 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   @doc """
-  The condition of the files the timeline puts after a file, for paging through a query.
-  `{:error, :not_found}` for a file `auth` may not read.
+  A place in the timeline's order, for paging. It holds the place itself rather than naming a
+  file, so a page still follows on when the file it ended on has since been trashed or moved.
   """
-  @spec after_condition(scope(), String.t(), Scope.t() | nil) ::
-          {:ok, Ecto.Query.dynamic_expr()} | {:error, error()}
-  def after_condition({:library, library_uuid}, uuid, auth) do
-    with {:ok, query} <- files_query({:library, library_uuid}, auth),
-         {:ok, uuid} <- cast_uuid(uuid),
-         %StorageFile{} = file <- query |> where([f], f.uuid == ^uuid) |> repo().one(),
-         true <- Libraries.can?(auth, file, :read) do
-      {:ok, after_condition(file)}
+  @spec cursor(StorageFile.t()) :: String.t()
+  def cursor(%StorageFile{taken_on: %Date{} = on, taken_at: at, uuid: uuid}) do
+    time = if at, do: DateTime.to_iso8601(at), else: ""
+    Base.url_encode64("#{on}|#{time}|#{uuid}", padding: false)
+  end
+
+  @doc "The condition of the files after a `cursor/1`, or `:error` when it is not one."
+  @spec after_cursor(term()) :: {:ok, Ecto.Query.dynamic_expr()} | :error
+  def after_cursor(cursor) when is_binary(cursor) do
+    with {:ok, text} <- Base.url_decode64(cursor, padding: false),
+         [on, at, uuid] <- String.split(text, "|"),
+         {:ok, on} <- Date.from_iso8601(on),
+         {:ok, at} <- cursor_time(at),
+         {:ok, uuid} <- Ecto.UUID.cast(uuid) do
+      {:ok, after_condition(%{taken_on: on, taken_at: at, uuid: uuid})}
     else
-      {:error, _} = error -> error
-      _ -> {:error, :not_found}
+      _ -> :error
+    end
+  end
+
+  def after_cursor(_cursor), do: :error
+
+  defp cursor_time(""), do: {:ok, nil}
+
+  defp cursor_time(text) do
+    case DateTime.from_iso8601(text) do
+      {:ok, at, _offset} -> {:ok, at}
+      {:error, _reason} -> :error
     end
   end
 
   # A file without a time sorts after those that have one, as in `before_condition/1`.
-  defp after_condition(%StorageFile{taken_at: nil} = file) do
+  defp after_condition(%{taken_at: nil} = file) do
     dynamic(
       [f],
       f.taken_on > ^file.taken_on or
@@ -473,7 +490,7 @@ defmodule PhoenixKitPhotos.Timeline do
     )
   end
 
-  defp after_condition(%StorageFile{} = file) do
+  defp after_condition(file) do
     dynamic(
       [f],
       f.taken_on > ^file.taken_on or

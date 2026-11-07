@@ -81,6 +81,16 @@ try {
       if (before.id && after.top > 0) {
         assert(Math.abs(after.middle - before.middle) < 2, `${style}: the middle photo moved from ${before.middle} to ${after.middle}`)
       }
+      // A finished change leaves no animation in force over the tiles' own places.
+      const held = await page.evaluate(() => {
+        const node = [...hook.pool].find(([key]) => !key.startsWith("header:"))[1]
+        const was = node.style.left
+        node.style.left = "7px"
+        const seen = getComputedStyle(node).left
+        node.style.left = was
+        return seen
+      })
+      assert.equal(held, "7px", `${style}: an animation still holds the tiles`)
       if (shots) await page.screenshot({ path: `${shots}/${name}-${style}.png` })
 
       // A jump lands on the month's first row, wherever the style put it.

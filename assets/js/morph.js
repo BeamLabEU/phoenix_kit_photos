@@ -39,6 +39,11 @@ function delayFor(rect, focusX, focusY, reach) {
   return Math.min(1, distance / reach) * WAVE
 }
 
+/**
+ * A tile fills only backwards, to hold its start through the wave's delay. Filling forwards would
+ * leave the finished animation in force, and it would outrank the inline place of every later
+ * zoom or resize. A tile on its way out keeps its end state until it is removed.
+ */
 function travel(node, from, to, delay, options, heavy) {
   const fade = options.fade ? [options.fade[0], options.fade[1]] : [1, 1]
   const keyframes = heavy
@@ -51,7 +56,7 @@ function travel(node, from, to, delay, options, heavy) {
         { transform: "none", transformOrigin: "0 0", opacity: fade[1] }
       ]
     : [{ ...px(from), opacity: fade[0] }, { ...px(to), opacity: fade[1] }]
-  return node.animate(keyframes, { duration: DURATION, delay, easing: EASING, fill: "both" })
+  return node.animate(keyframes, { duration: DURATION, delay, easing: EASING, fill: options.fill || "backwards" })
 }
 
 /**
@@ -95,7 +100,7 @@ export function morph({ tiles, from, leaving, shift, viewport, focusX, focusY, p
     node.style.width = `${start.w}px`
     node.style.height = `${start.h}px`
     const to = target ? onScreen(target, 0, viewport) : start
-    travel(node, start, to, delayFor(start, focusX, focusY, reach), { fade: [1, 0] }, false).finished
+    travel(node, start, to, delayFor(start, focusX, focusY, reach), { fade: [1, 0], fill: "both" }, false).finished
       .then(() => clear(node), () => clear(node))
   }
 }

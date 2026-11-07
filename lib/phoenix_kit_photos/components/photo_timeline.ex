@@ -118,6 +118,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   use Phoenix.LiveComponent
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Bulk
   alias PhoenixKitPhotos.Timeline
@@ -516,7 +517,10 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       when is_list(ids) do
     action = Bulk.action(name)
 
-    if socket.assigns.selectable and action in menu_actions(socket) and !socket.assigns.running do
+    # A download never comes this way: it is a form post of its own.
+    allowed = menu_actions(socket) -- [:download]
+
+    if socket.assigns.selectable and action in allowed and !socket.assigns.running do
       {:noreply, open_bulk(socket, action, ids)}
     else
       {:noreply, socket}
@@ -647,6 +651,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     auth
     |> Timeline.libraries()
     |> Enum.filter(&(&1.uuid != here and Uploads.can_upload?(auth, &1.uuid)))
+    |> Enum.reject(&(Libraries.managed?(&1) or Libraries.hidden?(&1)))
   end
 
   defp targets(_socket, _action), do: []
@@ -670,12 +675,26 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         end
       end
 
-      result = Bulk.run(plan, on_progress: progress)
+      # Whatever happens, the page hears of it: a bar that never ends locks the bulk actions.
+      result =
+        try do
+          Bulk.run(plan, on_progress: progress)
+        rescue
+          _error -> failed_run(plan)
+        catch
+          _kind, _reason -> failed_run(plan)
+        end
+
       result = %{result | failed: plan.refused ++ result.failed}
       Phoenix.LiveView.send_update(page, __MODULE__, id: id, bulk_done: result)
     end)
 
     assign(socket, :running, %{done: 0, total: total})
+  end
+
+  defp failed_run(plan) do
+    failed = Enum.map(plan.files, &%{id: &1.uuid, name: nil, reason: :failed})
+    %{action: plan.action, done: [], failed: failed, created: []}
   end
 
   defp finish_bulk(socket, %{action: action, done: done} = result) do
@@ -760,6 +779,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       data-library-path={@library_path}
       data-download-path={@download_path}
       data-select-month-label={gettext("Select this month")}
+      data-selection-limit={Bulk.limit()}
     >
       <%!-- The month, and the choice of style. Filling the screen they float under the header
            as pills. --%>
@@ -904,6 +924,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         data-gap={@gap}
         data-fill={to_string(@fill)}
         data-style={@layout}
+        data-styles={Enum.join(@styles, " ")}
         data-selectable={to_string(@selectable)}
         class={[
           "phoenix-kit-photo-timeline__viewport relative touch-pan-y overflow-y-auto",

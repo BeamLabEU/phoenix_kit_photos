@@ -6,7 +6,7 @@ defmodule PhoenixKitPhotos.APITest do
   alias PhoenixKitPhotos.API
 
   setup do
-    start_supervised!(PhoenixKit.PubSub.Manager)
+    _ = start_supervised(PhoenixKit.PubSub.Manager)
     owner = user_fixture("api-owner-#{System.unique_integer([:positive])}@example.com")
     stranger = user_fixture("api-stranger-#{System.unique_integer([:positive])}@example.com")
     library = library_fixture(owner)
@@ -67,6 +67,25 @@ defmodule PhoenixKitPhotos.APITest do
       seen = Enum.flat_map([one, two, three], & &1["files"]) |> Enum.map(& &1["id"])
       assert seen == Enum.map(files, & &1.uuid)
       assert is_nil(three["next"])
+    end
+
+    test "a page follows on from a file that has since been trashed", setup do
+      files =
+        for day <- 1..4 do
+          date = Date.new!(2020, 2, day)
+          photo(setup, %{taken_on: date, taken_at: DateTime.new!(date, ~T[12:00:00])})
+        end
+
+      input = %{"library" => setup.library.uuid, "limit" => 2}
+      {:ok, one} = API.find_files(input, setup.ctx)
+      {:ok, _} = API.trash_files(%{"ids" => Enum.map(one["files"], & &1["id"])}, setup.ctx)
+      {:ok, two} = API.find_files(Map.put(input, "after", one["next"]), setup.ctx)
+      assert Enum.map(two["files"], & &1["id"]) == files |> Enum.drop(2) |> Enum.map(& &1.uuid)
+    end
+
+    test "a cursor that is not one says so", setup do
+      input = %{"library" => setup.library.uuid, "after" => "not-a-cursor"}
+      assert {:error, :validation_failed, _, _} = API.find_files(input, setup.ctx)
     end
 
     test "a bad date says so, a library the key's owner cannot open does not exist", setup do

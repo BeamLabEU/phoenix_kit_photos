@@ -7,8 +7,11 @@ defmodule PhoenixKitPhotos.Zip do
   costs a lot of CPU to save almost nothing. ZIP64 records appear only when a size or an offset
   needs them, so an ordinary archive opens in everything, and one of 40 GB still works.
 
-  Each file is measured before it is written (`add/4`), which is why the headers can carry the
-  real sizes and need no data descriptors.
+  Each file is measured before it is written (`add/5`), which is why the headers can carry the
+  real sizes and need no data descriptors. That is also what makes a file that cannot be read
+  harmless: `{:error, {:read, reason}}` means nothing of it was written and the archive can go
+  on. `{:error, {:write, reason}}` means it cannot: stop, and do not `finish/1`, so what the
+  reader has is plainly broken rather than quietly short.
   """
 
   import Bitwise
@@ -33,13 +36,12 @@ defmodule PhoenixKitPhotos.Zip do
   answers `:ok` or `{:error, reason}`. `time` is the file's date, a `DateTime` or nil.
   """
   @spec add(t(), String.t(), Path.t(), DateTime.t() | nil, (iodata() -> :ok | {:error, term()})) ::
-          {:ok, t()} | {:error, term()}
+          {:ok, t()} | {:error, {:read | :write, term()}}
   def add(%__MODULE__{} = zip, name, path, time, write) do
-    with {:ok, %{size: size}} <- File.stat(path),
-         {:ok, crc} <- crc(path),
+    with {:ok, size, crc} <- measure(path),
          entry = %{name: name, size: size, crc: crc, offset: zip.offset, time: dos_time(time)},
          header = local_header(entry),
-         :ok <- write.(header),
+         :ok <- written(write.(header)),
          :ok <- send_file(path, write) do
       {:ok,
        %{
@@ -47,6 +49,45 @@ defmodule PhoenixKitPhotos.Zip do
          | offset: zip.offset + IO.iodata_length(header) + size,
            entries: [entry | zip.entries]
        }}
+    end
+  end
+
+  @doc "Adds a small text as a file, for a note about the archive itself."
+  @spec add_text(t(), String.t(), iodata(), (iodata() -> :ok | {:error, term()})) ::
+          {:ok, t()} | {:error, {:write, term()}}
+  def add_text(%__MODULE__{} = zip, name, text, write) do
+    text = IO.iodata_to_binary(text)
+    size = byte_size(text)
+
+    entry = %{
+      name: name,
+      size: size,
+      crc: :erlang.crc32(text),
+      offset: zip.offset,
+      time: dos_time(nil)
+    }
+
+    header = local_header(entry)
+
+    with :ok <- written(write.([header, text])) do
+      {:ok,
+       %{
+         zip
+         | offset: zip.offset + IO.iodata_length(header) + size,
+           entries: [entry | zip.entries]
+       }}
+    end
+  end
+
+  defp written(:ok), do: :ok
+  defp written({:error, reason}), do: {:error, {:write, reason}}
+
+  defp measure(path) do
+    with {:ok, %{size: size}} <- File.stat(path),
+         {:ok, crc} <- crc(path) do
+      {:ok, size, crc}
+    else
+      {:error, reason} -> {:error, {:read, reason}}
     end
   end
 
@@ -78,9 +119,12 @@ defmodule PhoenixKitPhotos.Zip do
     |> Enum.reduce_while(:ok, fn chunk, :ok ->
       case write.(chunk) do
         :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
+        {:error, reason} -> {:halt, {:error, {:write, reason}}}
       end
     end)
+  rescue
+    # The header has gone out: this one cannot be left out any more.
+    error in File.Error -> {:error, {:write, error.reason}}
   end
 
   defp local_header(%{name: name, size: size, crc: crc, time: {time, date}}) do

@@ -51,10 +51,31 @@ defmodule PhoenixKitPhotos.ZipTest do
   test "a reader who left stops the writing", %{tmp_dir: tmp_dir} do
     path = Path.join(tmp_dir, "in")
     File.write!(path, "x")
-    assert {:error, :closed} = Zip.add(Zip.new(), "x", path, nil, fn _ -> {:error, :closed} end)
+
+    assert {:error, {:write, :closed}} =
+             Zip.add(Zip.new(), "x", path, nil, fn _ -> {:error, :closed} end)
   end
 
   test "a file that is not there is an error, not a crash" do
-    assert {:error, :enoent} = Zip.add(Zip.new(), "x", "/nonexistent/file", nil, fn _ -> :ok end)
+    assert {:error, {:read, :enoent}} =
+             Zip.add(Zip.new(), "x", "/nonexistent/file", nil, fn _ -> :ok end)
+  end
+
+  test "a note goes in like any other file", %{tmp_dir: tmp_dir} do
+    {:ok, sink} = Agent.start_link(fn -> [] end)
+
+    write = fn data ->
+      Agent.update(sink, &[data | &1])
+      :ok
+    end
+
+    path = Path.join(tmp_dir, "in")
+    File.write!(path, "one")
+    {:ok, zip} = Zip.add(Zip.new(), "a.jpg", path, nil, write)
+    {:ok, zip} = Zip.add_text(zip, "Not included.txt", "b.jpg", write)
+    write.(Zip.finish(zip))
+    bytes = sink |> Agent.get(& &1) |> Enum.reverse() |> IO.iodata_to_binary()
+    assert {:ok, files} = :zip.unzip(bytes, [:memory])
+    assert {~c"Not included.txt", "b.jpg"} in files
   end
 end

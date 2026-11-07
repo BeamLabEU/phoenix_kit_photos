@@ -47,10 +47,16 @@ export const selection = {
 
   // --- changing what is chosen ---------------------------------------------
 
+  /** The most a selection holds, as the server told the page. */
+  selectionLimit() {
+    return Number(this.root()?.dataset.selectionLimit) || Infinity
+  },
+
   toggleSelected(id, global) {
     this.selected = this.selected || new Set()
     if (this.selected.has(id)) this.selected.delete(id)
-    else this.selected.add(id)
+    else if (this.selected.size < this.selectionLimit()) this.selected.add(id)
+    else this.noteCapped(true)
     this.selectAnchor = global
     this.selectionChanged()
   },
@@ -64,7 +70,14 @@ export const selection = {
 
   addSelected(ids) {
     this.selected = this.selected || new Set()
-    for (const id of ids) this.selected.add(id)
+    const limit = this.selectionLimit()
+    for (const id of ids) {
+      if (this.selected.size >= limit && !this.selected.has(id)) {
+        this.noteCapped(true)
+        break
+      }
+      this.selected.add(id)
+    }
     this.selectionChanged()
   },
 
@@ -119,7 +132,7 @@ export const selection = {
     const remove = mode === "remove" || (mode === "toggle" && ids.every(id => this.selected?.has(id)))
     if (remove) this.removeSelected(ids)
     else this.addSelected(ids)
-    this.noteCapped(capped)
+    if (capped) this.noteCapped(true)
   },
 
   /** The server took as many as a selection may hold; say so where the count is. */
@@ -261,6 +274,7 @@ export const selection = {
     if (!drag.box) {
       if (Math.hypot(drag.last.x - drag.start.x, drag.last.y - drag.start.y) < DRAG_PX) return
       drag.base = new Set(drag.keep ? this.selected || [] : [])
+      drag.hits = new Map()
       drag.box = document.createElement("div")
       drag.box.className = "pkt-marquee"
       this.layer.appendChild(drag.box)
@@ -281,13 +295,20 @@ export const selection = {
     Object.assign(drag.box.style, {
       left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px`
     })
+    // The page's windows follow the screen, so what the box took further up may no longer be
+    // fetched. It stays chosen for as long as the box still reaches its place.
+    for (const [id, global] of drag.hits) {
+      const r = this.rectIn(this.geometry(), global)
+      if (!r || r.x > right || r.x + r.w < left || r.y > bottom || r.y + r.h < top) drag.hits.delete(id)
+    }
+    for (const [id, global] of this.itemsInBox(left, top, right, bottom)) drag.hits.set(id, global)
     this.selected = new Set(drag.base)
-    for (const id of this.idsInBox(left, top, right, bottom)) this.selected.add(id)
+    for (const id of drag.hits.keys()) this.selected.add(id)
     this.selectionChanged()
   },
 
-  idsInBox(left, top, right, bottom) {
-    const ids = []
+  itemsInBox(left, top, right, bottom) {
+    const items = []
     for (let index = 0; index < this.sections.length; index++) {
       const start = this.offsets[index]
       if (this.offsets[index + 1] < top) continue
@@ -299,11 +320,12 @@ export const selection = {
         const r = layout.rect(item)
         const y = start + r.y
         if (r.x > right || r.x + r.w < left || y > bottom || y + r.h < top) continue
-        const found = this.itemAtGlobal(this.sectionStarts[index] + item)
-        if (found) ids.push(found.id)
+        const global = this.sectionStarts[index] + item
+        const found = this.itemAtGlobal(global)
+        if (found) items.push([found.id, global])
       }
     }
-    return ids
+    return items
   },
 
   /** Near the top or bottom of the page the box, or the finger, takes the page along. */
@@ -351,7 +373,7 @@ export const selection = {
     const id = tile.dataset.fileId
     this.selected = this.selected || new Set()
     const removing = this.selected.has(id)
-    this.paint = { from: global, to: global, base: new Set(this.selected), removing }
+    this.paint = { from: global, to: global, base: new Set(this.selected), removing, hits: new Map() }
     this.selectAnchor = global
     this.paintTo(global)
     navigator.vibrate?.(12)
@@ -361,10 +383,14 @@ export const selection = {
     const paint = this.paint
     paint.to = global
     const [from, to] = paint.from <= global ? [paint.from, global] : [global, paint.from]
-    this.selected = new Set(paint.base)
+    // As with the box: a tile passed over stays taken after its window has been let go.
+    for (const [id, at] of paint.hits) if (at < from || at > to) paint.hits.delete(id)
     for (let at = from; at <= to; at++) {
       const id = this.itemAtGlobal(at)?.id
-      if (!id) continue
+      if (id) paint.hits.set(id, at)
+    }
+    this.selected = new Set(paint.base)
+    for (const id of paint.hits.keys()) {
       if (paint.removing) this.selected.delete(id)
       else this.selected.add(id)
     }

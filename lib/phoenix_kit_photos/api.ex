@@ -65,7 +65,9 @@ defmodule PhoenixKitPhotos.API do
           "Files of one library, oldest first, narrowed by capture date (`from`, `to`, " <>
             "YYYY-MM-DD, both inclusive), `kind` (image or video), a `tag` or part of the file " <>
             "`name`. Answers at most `limit` files (default and most #{@find_limit}) and `next`, " <>
-            "to pass as `after` for the following page. Use the ids with the write tools.",
+            "a cursor to pass as `after` for the following page; `next` is null at the end. A " <>
+            "cursor stays good when its file is trashed or moved. Use the ids with the write " <>
+            "tools.",
         input_schema:
           object(
             %{
@@ -76,7 +78,7 @@ defmodule PhoenixKitPhotos.API do
               "tag" => %{"type" => "string", "minLength" => 1, "maxLength" => 60},
               "name" => %{"type" => "string", "minLength" => 1, "maxLength" => 120},
               "limit" => %{"type" => "integer", "minimum" => 1, "maximum" => @find_limit},
-              "after" => @uuid
+              "after" => %{"type" => "string", "minLength" => 1, "maxLength" => 200}
             },
             ["library"]
           ),
@@ -172,13 +174,13 @@ defmodule PhoenixKitPhotos.API do
   @doc false
   def find_files(%{"library" => library} = input, ctx) do
     with {:ok, query} <- Timeline.files_query({:library, library}, ctx.scope),
-         {:ok, query} <- narrow(query, input) do
+         {:ok, query} <- narrow(query, input),
+         {:ok, query} <- after_place(query, input["after"]) do
       limit = input["limit"] || @find_limit
 
       files =
         query
         |> where([f], not is_nil(f.taken_on))
-        |> after_file(input["after"], {:library, library}, ctx.scope)
         |> order_by([f], asc: f.taken_on, asc: f.taken_at, asc: f.uuid)
         |> limit(^(limit + 1))
         |> repo().all()
@@ -189,11 +191,14 @@ defmodule PhoenixKitPhotos.API do
       {:ok,
        %{
          "files" => Enum.map(page, &file_row/1),
-         "next" => if(length(files) > limit, do: page |> List.last() |> Map.get(:uuid))
+         "next" => if(length(files) > limit, do: page |> List.last() |> Timeline.cursor())
        }}
     else
       {:error, :bad_date} ->
         {:error, :validation_failed, "`from` and `to` are dates, YYYY-MM-DD.", %{}}
+
+      {:error, :bad_cursor} ->
+        {:error, :validation_failed, "`after` must be a `next` from an earlier answer.", %{}}
 
       {:error, _reason} ->
         {:error, :not_found, "No such library.", %{}}
@@ -241,13 +246,13 @@ defmodule PhoenixKitPhotos.API do
     end
   end
 
-  # After a file: everything the timeline puts later than it.
-  defp after_file(query, nil, _scope, _auth), do: query
+  # After a cursor: everything the timeline puts later than that place.
+  defp after_place(query, nil), do: {:ok, query}
 
-  defp after_file(query, uuid, scope, auth) do
-    case Timeline.after_condition(scope, uuid, auth) do
-      {:ok, condition} -> where(query, ^condition)
-      {:error, _reason} -> where(query, [f], false)
+  defp after_place(query, cursor) do
+    case Timeline.after_cursor(cursor) do
+      {:ok, condition} -> {:ok, where(query, ^condition)}
+      :error -> {:error, :bad_cursor}
     end
   end
 
@@ -287,7 +292,12 @@ defmodule PhoenixKitPhotos.API do
         {:preview, preview(plan), Bulk.fingerprint(plan)}
 
       true ->
-        result = Bulk.run(plan, via: "api")
+        result =
+          Bulk.run(plan,
+            via: "api",
+            approved_by: Map.get(ctx, :approved_by_uuid),
+            on_progress: progress(ctx)
+          )
 
         {:ok,
          %{
@@ -295,6 +305,17 @@ defmodule PhoenixKitPhotos.API do
            "created" => result.created,
            "skipped" => Enum.map(plan.refused ++ result.failed, &row_out/1)
          }}
+    end
+  end
+
+  # A long batch under an approval reports as it goes, so it is not taken for dead.
+  defp progress(ctx) do
+    report = Map.get(ctx, :progress)
+
+    fn done, total ->
+      if is_function(report, 1) and (rem(done, 25) == 0 or done == total) do
+        report.(%{"done" => done, "total" => total})
+      end
     end
   end
 

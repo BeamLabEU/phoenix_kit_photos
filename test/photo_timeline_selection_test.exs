@@ -132,6 +132,13 @@ defmodule PhoenixKitPhotos.PhotoTimelineSelectionTest do
     refute trashed?(file)
   end
 
+  test "a forged download event does not bring the page down", ctx do
+    file = photo(ctx)
+    view = open(ctx, ctx.owner, %{"download_path" => "/photos/download"})
+    refute hook(view, "timeline:bulk", %{action: "download", ids: [file.uuid]}) =~ "modal-open"
+    assert render(view) =~ "test-timeline"
+  end
+
   test "a timeline that is not selectable answers none of it", ctx do
     file = photo(ctx)
     view = open(ctx, ctx.owner, %{"selectable" => false})

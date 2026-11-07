@@ -11,67 +11,67 @@
 msgid ""
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:615
+#: lib/phoenix_kit_photos/timeline.ex:633
 #, elixir-autogen, elixir-format
 msgid "April"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:619
+#: lib/phoenix_kit_photos/timeline.ex:637
 #, elixir-autogen, elixir-format
 msgid "August"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:623
+#: lib/phoenix_kit_photos/timeline.ex:641
 #, elixir-autogen, elixir-format
 msgid "December"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:613
+#: lib/phoenix_kit_photos/timeline.ex:631
 #, elixir-autogen, elixir-format
 msgid "February"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:612
+#: lib/phoenix_kit_photos/timeline.ex:630
 #, elixir-autogen, elixir-format
 msgid "January"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:618
+#: lib/phoenix_kit_photos/timeline.ex:636
 #, elixir-autogen, elixir-format
 msgid "July"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:617
+#: lib/phoenix_kit_photos/timeline.ex:635
 #, elixir-autogen, elixir-format
 msgid "June"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:614
+#: lib/phoenix_kit_photos/timeline.ex:632
 #, elixir-autogen, elixir-format
 msgid "March"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:616
+#: lib/phoenix_kit_photos/timeline.ex:634
 #, elixir-autogen, elixir-format
 msgid "May"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:622
+#: lib/phoenix_kit_photos/timeline.ex:640
 #, elixir-autogen, elixir-format
 msgid "November"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:621
+#: lib/phoenix_kit_photos/timeline.ex:639
 #, elixir-autogen, elixir-format
 msgid "October"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:620
+#: lib/phoenix_kit_photos/timeline.ex:638
 #, elixir-autogen, elixir-format
 msgid "September"
 msgstr ""
 
-#: lib/phoenix_kit_photos/timeline.ex:624
+#: lib/phoenix_kit_photos/timeline.ex:642
 #, elixir-autogen, elixir-format
 msgid "Unknown"
 msgstr ""
@@ -113,7 +113,7 @@ msgstr[1] ""
 msgid "Add photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1097
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1118
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:419
 #, elixir-autogen, elixir-format
 msgid "Cancel"
@@ -129,9 +129,9 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1097
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1121
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1200
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1118
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1142
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1221
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:368
 #, elixir-autogen, elixir-format
 msgid "Close"
@@ -267,34 +267,34 @@ msgstr ""
 msgid "%{count} already in this library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1153
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1174
 #, elixir-autogen, elixir-format
 msgid "Add"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1137
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1158
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a library"
 msgid_plural "Add %{count} items to a library"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1055
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1076
 #, elixir-autogen, elixir-format
 msgid "Add tags (separate with commas)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1000
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1021
 #, elixir-autogen, elixir-format
 msgid "Add to library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:974
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:995
 #, elixir-autogen, elixir-format
 msgid "All photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:973
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:994
 #, elixir-autogen, elixir-format
 msgid "All videos"
 msgstr ""
@@ -304,12 +304,12 @@ msgstr ""
 msgid "Cancel all"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:792
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:812
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:793
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:813
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown (V)"
 msgstr ""
@@ -319,207 +319,207 @@ msgstr ""
 msgid "Changes are saved automatically."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:954
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:975
 #, elixir-autogen, elixir-format
 msgid "Clear selection"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:955
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:976
 #, elixir-autogen, elixir-format
 msgid "Clear selection (Esc)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:337
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:338
 #, elixir-autogen, elixir-format
 msgid "Columns"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1103
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1124
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:708
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:727
 #, elixir-autogen, elixir-format
 msgid "Copied 1 item"
 msgid_plural "Copied %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1106
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1127
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:999
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1020
 #, elixir-autogen, elixir-format
 msgid "Copy links"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:344
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:345
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:998
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1019
 #, elixir-autogen, elixir-format
 msgid "Download"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:975
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:996
 #, elixir-autogen, elixir-format
 msgid "Everything"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:340
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:341
 #, elixir-autogen, elixir-format
 msgid "Feed"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:342
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:343
 #, elixir-autogen, elixir-format
 msgid "Film"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:335
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:336
 #, elixir-autogen, elixir-format
 msgid "Grid"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:343
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:344
 #, elixir-autogen, elixir-format
 msgid "Honeycomb"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1038
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1059
 #, elixir-autogen, elixir-format
 msgid "Library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1145
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1166
 #, elixir-autogen, elixir-format
 msgid "Link to 1 photo"
 msgid_plural "Links to %{count} photos"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:338
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:339
 #, elixir-autogen, elixir-format
 msgid "Mosaic"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1001
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1154
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1022
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1175
 #, elixir-autogen, elixir-format
 msgid "Move"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1140
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1161
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to a library"
 msgid_plural "Move %{count} items to a library"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1134
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1155
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to the trash?"
 msgid_plural "Move %{count} items to the trash?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1152
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1173
 #, elixir-autogen, elixir-format
 msgid "Move to trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:711
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:730
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item"
 msgid_plural "Moved %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:702
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:721
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item to the trash"
 msgid_plural "Moved %{count} items to the trash"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1149
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1170
 #, elixir-autogen, elixir-format
 msgid "Only people who may see the library can open them."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:341
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:342
 #, elixir-autogen, elixir-format
 msgid "Prints"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1065
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1086
 #, elixir-autogen, elixir-format
 msgid "Remove tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:705
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:724
 #, elixir-autogen, elixir-format
 msgid "Restored 1 item"
 msgid_plural "Restored %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:336
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:337
 #, elixir-autogen, elixir-format
 msgid "Rows"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1155
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1176
 #, elixir-autogen, elixir-format
 msgid "Save tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:783
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:968
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:803
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:989
 #, elixir-autogen, elixir-format
 msgid "Select"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:780
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:800
 #, elixir-autogen, elixir-format
 msgid "Select photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:762
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:781
 #, elixir-autogen, elixir-format
 msgid "Select this month"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1142
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1163
 #, elixir-autogen, elixir-format
 msgid "Tag 1 item"
 msgid_plural "Tag %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:714
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:733
 #, elixir-autogen, elixir-format
 msgid "Tagged 1 item"
 msgid_plural "Tagged %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1002
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1023
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1148
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1169
 #, elixir-autogen, elixir-format
 msgid "The originals go to the trash of this library."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:972
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:993
 #, elixir-autogen, elixir-format
 msgid "This day"
 msgstr ""
@@ -529,22 +529,22 @@ msgstr ""
 msgid "This library is shared with signed-in users. Every active account on this site can see what you add."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:971
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:992
 #, elixir-autogen, elixir-format
 msgid "This moment"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1003
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1024
 #, elixir-autogen, elixir-format
 msgid "Trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:339
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:340
 #, elixir-autogen, elixir-format
 msgid "Uncropped"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1195
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1216
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr ""
@@ -555,73 +555,88 @@ msgstr ""
 msgid "Uploads at once"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1147
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1168
 #, elixir-autogen, elixir-format
 msgid "You can bring them back from the trash."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1050
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1071
 #, elixir-autogen, elixir-format
 msgid "You have no other library to add these to."
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:375
+#: lib/phoenix_kit_photos/bulk.ex:504
 #, elixir-autogen, elixir-format
 msgid "already in that library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:374
+#: lib/phoenix_kit_photos/bulk.ex:503
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:509
 #, elixir-autogen, elixir-format
 msgid "already in this library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:381
+#: lib/phoenix_kit_photos/bulk.ex:512
 #, elixir-autogen, elixir-format
 msgid "could not be done"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:377
+#: lib/phoenix_kit_photos/bulk.ex:506
 #, elixir-autogen, elixir-format
 msgid "in the trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:378
+#: lib/phoenix_kit_photos/bulk.ex:507
 #, elixir-autogen, elixir-format
 msgid "no library chosen"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:372
+#: lib/phoenix_kit_photos/bulk.ex:501
 #, elixir-autogen, elixir-format
 msgid "no longer there"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:379
+#: lib/phoenix_kit_photos/bulk.ex:510
 #, elixir-autogen, elixir-format
 msgid "no room left in that library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:376
+#: lib/phoenix_kit_photos/bulk.ex:505
 #, elixir-autogen, elixir-format
 msgid "not in the trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:373
+#: lib/phoenix_kit_photos/bulk.ex:502
 #, elixir-autogen, elixir-format
 msgid "not yours to change"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:961
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:982
 #, elixir-autogen, elixir-format
 msgid "selected"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:380
+#: lib/phoenix_kit_photos/bulk.ex:511
 #, elixir-autogen, elixir-format
 msgid "that library keeps its files elsewhere"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:963
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:984
 #, elixir-autogen, elixir-format
 msgid "the most at once"
+msgstr ""
+
+#: lib/phoenix_kit_photos/web/download.ex:139
+#, elixir-autogen, elixir-format
+msgid "These files could not be read just now, and are not in this archive:"
+msgstr ""
+
+#: lib/phoenix_kit_photos/bulk.ex:508
+#, elixir-autogen, elixir-format
+msgid "edited here, so it can be copied but not moved"
+msgstr ""
+
+#: lib/phoenix_kit_photos/bulk.ex:509
+#, elixir-autogen, elixir-format
+msgid "in use elsewhere on the site"
 msgstr ""

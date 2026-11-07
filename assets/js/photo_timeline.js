@@ -5,7 +5,7 @@ import {
   sectionAtOffset,
   anchorAt
 } from "./geometry.js"
-import { STYLES, STYLE_IDS, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
+import { STYLES, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
 import { installTimelineCss } from "./timeline_css.js"
 import { fillTile, pickSource, swapImage } from "./tiles.js"
 import { morph } from "./morph.js"
@@ -211,9 +211,11 @@ export const PhotoTimeline = {
 
   setIndex(payload) {
     const libraryChanged = payload.library !== this.library
-    // The swipe viewer holds positions in the old index; let it finish, then catch up.
+    // The swipe viewer holds positions in the old index; let it finish, then catch up. The
+    // server sends a month's ratios only once, so a later refresh must not lose them.
     if (!libraryChanged && this.pager) {
-      this.deferred = payload
+      const aspects = { ...this.deferred?.aspects, ...payload.aspects }
+      this.deferred = { ...payload, aspects }
       return
     }
 
@@ -242,6 +244,8 @@ export const PhotoTimeline = {
     }
     this.fresh.clear()
     this.refreshing.clear()
+    // A position means another photo once the index has changed.
+    this.selectAnchor = null
 
     this.sections = payload.sections || []
     this.storeAspects(payload.aspects)
@@ -1227,7 +1231,8 @@ export const PhotoTimeline = {
         check.className = "pkt-section-check"
         check.dataset.sectionSelect = ""
         check.setAttribute("aria-label", this.root()?.dataset.selectMonthLabel || "Select month")
-        check.addEventListener("click", () => this.selectSection(this.sections.indexOf(section)))
+        // By id: a refresh replaces the section objects under a heading that stays on screen.
+        check.addEventListener("click", () => this.selectSection(this.sections.findIndex(s => s.id === section.id)))
         node.append(check)
       }
       this.layer.appendChild(node)
@@ -1303,6 +1308,11 @@ export const PhotoTimeline = {
     return STYLES[this.styleId] || STYLES[DEFAULT_STYLE]
   },
 
+  /** The styles the host offers: the person's choice stays within them. */
+  offeredStyles() {
+    return (this.el.dataset.styles || "").split(" ").filter(id => STYLES[id])
+  },
+
   /** What the person picked last, else what the host asks for, else the plain grid. */
   startingStyle() {
     let stored = null
@@ -1311,7 +1321,7 @@ export const PhotoTimeline = {
     } catch (_error) {
       // private mode and the like
     }
-    if (STYLES[stored]) return stored
+    if (this.offeredStyles().includes(stored)) return stored
     const asked = this.el.dataset.style
     return STYLES[asked] ? asked : DEFAULT_STYLE
   },
@@ -1336,9 +1346,12 @@ export const PhotoTimeline = {
     this.layouts = null
   },
 
-  /** The ratios arrived on their own: for a style waiting on them, or to replace averages. */
-  setAspects({ aspects, revision }) {
-    if (revision !== this.revision) return
+  /**
+   * The ratios arrived on their own: for a style waiting on them, or to replace averages. They
+   * are kept whatever index they were made for: the server sends a month only once, and a month
+   * that has changed since fails the length check and waits for its update.
+   */
+  setAspects({ aspects }) {
     this.storeAspects(aspects)
     clearTimeout(this.aspectsTimer)
     if (this.pendingStyle) {
@@ -1492,9 +1505,11 @@ export const PhotoTimeline = {
     if (event.key !== "v" && event.key !== "V") return
     const target = event.target
     if (target && (/^(input|select|textarea)$/i.test(target.tagName || "") || target.isContentEditable)) return
+    const offered = this.offeredStyles()
+    if (offered.length < 2) return
     const step = event.shiftKey ? -1 : 1
-    const at = STYLE_IDS.indexOf(this.pendingStyle || this.styleId)
-    this.setStyle(STYLE_IDS[(at + step + STYLE_IDS.length) % STYLE_IDS.length])
+    const at = offered.indexOf(this.pendingStyle || this.styleId)
+    this.setStyle(offered[(at + step + offered.length) % offered.length])
     event.preventDefault()
   }
 }

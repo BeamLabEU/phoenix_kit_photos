@@ -103,9 +103,7 @@ read-only dialog. `?at=<uuid>` identifies the open file; closing patches the
 URL and keeps the timeline mounted at the same position. Custom `on_open`
 handlers must reauthorize the UUID with `Timeline.viewer_file/3`.
 
-The v1 contract is deliberately narrow: one library, `:square` layout only,
-no `on_select`. Albums, shares, justified layout and the scrubber are later
-stages.
+The timeline reads one library. Albums, shares and the scrubber are later stages.
 
 ## Architecture
 

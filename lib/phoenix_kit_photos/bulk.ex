@@ -84,10 +84,11 @@ defmodule PhoenixKitPhotos.Bulk do
     by_id = Map.new(found, &{&1.uuid, &1})
     target = target(action, params, auth)
     present = existing_checksums(action, target, found)
+    rights = rights(found, auth)
 
     {files, refused} =
       Enum.reduce(ids, {[], []}, fn id, {files, refused} ->
-        case check(action, Map.get(by_id, id), auth, target, present) do
+        case check(action, Map.get(by_id, id), rights, target, present) do
           :ok -> {[by_id[id] | files], refused}
           {:refused, reason} -> {files, [refusal(id, by_id[id], reason) | refused]}
         end
@@ -133,41 +134,55 @@ defmodule PhoenixKitPhotos.Bulk do
     |> repo().all()
   end
 
-  defp check(_action, nil, _auth, _target, _present), do: {:refused, :not_found}
-
-  defp check(action, %StorageFile{} = file, auth, target, present) do
-    cond do
-      not Libraries.can?(auth, file, :read) -> {:refused, :not_found}
-      true -> check_action(action, file, auth, target, present)
-    end
+  # What a person may do to a file follows from its library and its uploader, and a selection
+  # of thousands has few of those: ask once for each pair, not three queries for each file.
+  defp rights(files, auth) do
+    files
+    |> Enum.uniq_by(&right_key/1)
+    |> Map.new(fn file ->
+      {right_key(file),
+       %{read: Libraries.can?(auth, file, :read), edit: Libraries.can?(auth, file, :edit)}}
+    end)
   end
 
-  defp check_action(action, file, _auth, _target, _present)
+  defp right_key(file), do: {file.library_uuid, file.user_uuid}
+
+  defp may?(rights, file, right), do: rights |> Map.fetch!(right_key(file)) |> Map.fetch!(right)
+
+  defp check(_action, nil, _rights, _target, _present), do: {:refused, :not_found}
+
+  defp check(action, %StorageFile{} = file, rights, target, present) do
+    if may?(rights, file, :read),
+      do: check_action(action, file, rights, target, present),
+      else: {:refused, :not_found}
+  end
+
+  defp check_action(action, file, _rights, _target, _present)
        when action in [:download, :links] do
     if is_nil(file.trashed_at), do: :ok, else: {:refused, :trashed}
   end
 
-  defp check_action(:restore, file, auth, _target, _present) do
+  defp check_action(:restore, file, rights, _target, _present) do
     cond do
       is_nil(file.trashed_at) -> {:refused, :not_trashed}
-      Libraries.can?(auth, file, :edit) -> :ok
+      may?(rights, file, :edit) -> :ok
       true -> {:refused, :not_allowed}
     end
   end
 
-  defp check_action(_action, %{trashed_at: at}, _auth, _target, _present) when not is_nil(at),
+  defp check_action(_action, %{trashed_at: at}, _rights, _target, _present) when not is_nil(at),
     do: {:refused, :trashed}
 
-  defp check_action(action, file, auth, _target, _present) when action in [:trash, :tag] do
-    if Libraries.can?(auth, file, :edit), do: :ok, else: {:refused, :not_allowed}
+  defp check_action(action, file, rights, _target, _present) when action in [:trash, :tag] do
+    if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
   end
 
-  defp check_action(_copy_or_move, _file, _auth, nil, _present), do: {:refused, :no_target}
+  defp check_action(_copy_or_move, _file, _rights, nil, _present), do: {:refused, :no_target}
 
-  defp check_action(action, file, auth, target, present) do
+  defp check_action(action, file, rights, target, present) do
     cond do
       to_string(file.library_uuid) == to_string(target.uuid) -> {:refused, :same_library}
-      action == :move and not Libraries.can?(auth, file, :edit) -> {:refused, :not_allowed}
+      action == :move and not may?(rights, file, :edit) -> {:refused, :not_allowed}
       MapSet.member?(present, file.file_checksum) -> {:refused, :already_there}
       true -> :ok
     end

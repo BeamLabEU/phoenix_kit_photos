@@ -49,6 +49,8 @@ defmodule PhoenixKitPhotos.Timeline do
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
   alias PhoenixKit.Modules.Storage.FileInstance
   alias PhoenixKit.Modules.Storage.Libraries
+  alias PhoenixKit.Modules.Storage.Shape
+  alias PhoenixKit.Modules.Storage.URLSigner
   alias PhoenixKit.RepoHelper
   alias PhoenixKit.Users.Auth.Scope
 
@@ -336,8 +338,7 @@ defmodule PhoenixKitPhotos.Timeline do
         |> limit(@window_limit)
         |> preload(instances: ^completed_instances())
         |> repo().all()
-        |> Enum.filter(&Libraries.can?(auth, &1, :read))
-        |> Enum.map(&to_item(&1, auth))
+        |> to_items(library_uuid, auth)
 
       {:ok, %{section: day, items: items}}
     end
@@ -777,17 +778,45 @@ defmodule PhoenixKitPhotos.Timeline do
     from(i in FileInstance, where: i.processing_status == "completed")
   end
 
-  defp to_item(%StorageFile{} = file, auth) do
-    thumb = variant_url(auth, file, min_width: @thumb_min_width, aspect: :crop)
-    preview = variant_url(auth, file, min_width: @preview_min_width, aspect: :preserve)
-    # The styles that show whole photos: a small picture of the right shape, and a big one
-    # for tiles that fill the page. Only what has been made: the file may be new.
-    {fit, _instance} =
-      pick(auth, file, min_width: @fit_min_width, aspect: :preserve) || {nil, nil}
+  # A window is up to 500 files of one library, and what a URL needs is mostly the same for all
+  # of them: who may read is a matter of the library and the uploader, which sizes fit is a matter
+  # of the library's set and the file's kind and shape, and a library is private or it is not.
+  # Asked per file, as `Storage.authorized_url/4` and `variant_for/2` would, that is over twenty
+  # queries a file.
+  defp to_items(files, library_uuid, auth) do
+    private? = Libraries.private_file?(%{library_uuid: library_uuid})
 
-    {large, _instance} =
-      pick(auth, file, min_width: @large_min_width, aspect: :preserve) || {nil, nil}
+    readable =
+      files
+      |> Enum.map(& &1.user_uuid)
+      |> Enum.uniq()
+      |> Map.new(fn uploader ->
+        {uploader,
+         Libraries.can?(auth, %{library_uuid: library_uuid, user_uuid: uploader}, :read)}
+      end)
 
+    {items, _sizes} =
+      files
+      |> Enum.filter(&readable[&1.user_uuid])
+      |> Enum.map_reduce(%{}, fn file, sizes ->
+        key = {file.file_type, Shape.classify(file)}
+        sizes = Map.put_new_lazy(sizes, key, fn -> size_names(file) end)
+        {to_item(file, sizes[key], private?), sizes}
+      end)
+
+    items
+  end
+
+  defp size_names(file) do
+    %{
+      thumb: Storage.variant_for(file, min_width: @thumb_min_width, aspect: :crop),
+      fit: Storage.variant_for(file, min_width: @fit_min_width, aspect: :preserve),
+      preview: Storage.variant_for(file, min_width: @preview_min_width, aspect: :preserve),
+      large: Storage.variant_for(file, min_width: @large_min_width, aspect: :preserve)
+    }
+  end
+
+  defp to_item(%StorageFile{} = file, sizes, private?) do
     %{
       id: file.uuid,
       code: file.short_code,
@@ -795,15 +824,32 @@ defmodule PhoenixKitPhotos.Timeline do
       w: file.width,
       h: file.height,
       ar: file.width * 1.0 / file.height,
-      thumb: thumb,
-      fit: fit,
-      preview: preview,
-      large: large,
+      thumb: signed_url(file, sizes.thumb, private?),
+      # The styles that show whole photos: a small picture of the right shape, and a big one
+      # for tiles that fill the page. Only what has been made: the file may be new.
+      fit: made_url(file, sizes.fit, private?),
+      preview: signed_url(file, sizes.preview, private?),
+      large: made_url(file, sizes.large, private?),
       kind: if(file.file_type == "video", do: :video, else: :image),
       name: file.original_file_name || file.file_name,
       size: file.size,
       duration: file.duration
     }
+  end
+
+  # The caller has checked the reader (`to_items/3`).
+  defp signed_url(_file, "original", _private?), do: nil
+
+  defp signed_url(%StorageFile{instances: instances} = file, name, private?) do
+    instance = Enum.find(instances || [], &(&1.variant_name == name))
+    url_opts = if instance, do: [version: instance], else: []
+    URLSigner.signed_url(to_string(file.uuid), name, [private: private?] ++ url_opts)
+  end
+
+  defp made_url(%StorageFile{instances: instances} = file, name, private?) do
+    if Enum.any?(instances || [], &(&1.variant_name == name and name != "original")) do
+      signed_url(file, name, private?)
+    end
   end
 
   @web_images ~w(image/jpeg image/png image/webp image/gif image/avif)

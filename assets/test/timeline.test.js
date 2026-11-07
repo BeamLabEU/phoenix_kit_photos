@@ -770,3 +770,45 @@ test("a style a library is too big for cannot be picked, and is left when one ar
   assert.equal(h.styleId, "grid")
   assert.equal(h.pendingStyle, undefined)
 })
+
+// A photo's own address, opened cold: the page brings an index, the hook says hello, and the
+// server answers with a new revision; windows asked for in the first one would be refused.
+test("an address opens the viewer only in the index that answers the hello", () => {
+  const { h, sent } = hook()
+  const opened = []
+  Object.assign(h, {
+    view: { id: "u0", global: 0 },
+    pagerEnabled: () => true,
+    openPager: (global) => opened.push(global),
+    indexCurrent: false
+  })
+
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  assert.deepEqual(opened, [], "the index sent with the page is already old")
+
+  h.setIndex({ library: "a", revision: 2, sections: [section(1)], hello: true })
+  assert.deepEqual(opened, [0])
+  assert.equal(h.revision, 2)
+  const asked = sent.filter(([, event]) => event === "timeline:need_window").map(([, , p]) => p.revision)
+  assert.ok(asked.includes(2), "windows are asked for in the current revision")
+})
+
+test("an unanswered hello does not keep an address from opening", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] })
+  const { h, sent } = hook()
+  const opened = []
+  Object.assign(h, {
+    view: { id: "u0", global: 0 },
+    pagerEnabled: () => true,
+    openPager: (global) => opened.push(global),
+    style: () => ({ aspects: false }),
+    sections: [section(1)]
+  })
+
+  h.sayHello()
+  assert.deepEqual(sent.map(([, event]) => event), ["timeline:ready"])
+  h.openFromAddress()
+  assert.deepEqual(opened, [])
+  t.mock.timers.tick(3000)
+  assert.deepEqual(opened, [0])
+})

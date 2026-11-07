@@ -21,7 +21,9 @@ function hook({ pathname = "/anna/private", paths = true, slides = {}, pager = "
     slides: { get: (i) => slides[i] || null },
     js: () => ({ patch: (to, opts) => calls.patches.push([to, opts.replace]) }),
     openPager: (global) => calls.opened.push(global),
-    pagerEnabled: () => true
+    pagerEnabled: () => true,
+    // The index in hand answers the hook's hello (`sayHello`).
+    indexCurrent: true
   })
 
   if (pager === "open") {
@@ -145,6 +147,16 @@ test("an address that names a photo opens the viewer on it, once there is an ind
   assert.equal(h.addressOpen, true, "the address is already right: opening adds nothing")
   h.openFromAddress()
   assert.deepEqual(calls.opened, [41], "once")
+})
+
+test("an address waits for the index that answers the hook's hello", () => {
+  const { h, calls } = hook()
+  h.indexCurrent = false
+  h.applyView({ id: "u1", global: 41 })
+  assert.deepEqual(calls.opened, [], "the page's own index may be a revision behind")
+  h.indexCurrent = true
+  h.openFromAddress()
+  assert.deepEqual(calls.opened, [41])
 })
 
 test("a viewer already on the photo is left alone; on another it turns", () => {

@@ -28,6 +28,12 @@ const RELOAD_EVERY_MS = 10 * 1000
 // same photo; while the viewer is open that echo must not pull the person back to it.
 const ECHO_MS = 5 * 1000
 
+// A photo's address opens the viewer in the index that answers the hook's hello, not in the one
+// sent with the page: the server moves to a new revision on the hello and refuses windows asked
+// for in the old one. A server that never answers (an index it could not read) must not keep
+// the address from opening for good.
+const HELLO_WAIT_MS = 3 * 1000
+
 // Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
 const MIN_CELL = 56
 const ZOOM_KEY = "phoenix_kit_photos:cell"
@@ -166,11 +172,22 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:range`, (payload) => this.applyRange(payload))
     this.handleEvent(`${prefix}:selection`, (payload) => this.applySelection(payload))
     this.handleEvent(`${prefix}:links`, (payload) => this.showLinks(payload))
-    this.send("timeline:ready", this.readyPayload())
+    this.sayHello()
   },
 
   send(event, payload) {
     this.pushEventTo(Number(this.el.dataset.target), event, payload)
+  },
+
+  /** Ask for the index. Until the answer (`hello: true`) arrives, what the page holds may be old. */
+  sayHello() {
+    this.indexCurrent = false
+    clearTimeout(this.helloTimer)
+    this.helloTimer = setTimeout(() => {
+      this.indexCurrent = true
+      this.openFromAddress()
+    }, HELLO_WAIT_MS)
+    this.send("timeline:ready", this.readyPayload())
   },
 
   disconnected() {
@@ -179,7 +196,7 @@ export const PhotoTimeline = {
 
   reconnected() {
     this.handleScroll()
-    this.send("timeline:ready", this.readyPayload())
+    this.sayHello()
     this.reloadWindows({ olderThan: STALE_AFTER_MS })
   },
 
@@ -203,6 +220,7 @@ export const PhotoTimeline = {
     this.onResize.cancel()
     this.onScroll.cancel()
     clearTimeout(this.openTimer)
+    clearTimeout(this.helloTimer)
     // The page is going: the viewer's closing must not touch the address.
     this.addressClosing = true
     if (this.pager && this.pager.destroy) this.pager.destroy()
@@ -210,6 +228,10 @@ export const PhotoTimeline = {
   },
 
   setIndex(payload) {
+    if (payload.hello) {
+      this.indexCurrent = true
+      clearTimeout(this.helloTimer)
+    }
     const libraryChanged = payload.library !== this.library
     // The swipe viewer holds positions in the old index; let it finish, then catch up. The
     // server sends a month's ratios only once, so a later refresh must not lose them.
@@ -231,7 +253,10 @@ export const PhotoTimeline = {
 
     if (libraryChanged) this.rememberPosition()
     this.library = payload.library
-    if (payload.revision === this.revision && !libraryChanged) return
+    if (payload.revision === this.revision && !libraryChanged) {
+      this.openFromAddress()
+      return
+    }
     this.revision = payload.revision
     if (libraryChanged) {
       this.windows.clear()
@@ -1123,10 +1148,14 @@ export const PhotoTimeline = {
     this.openFromAddress()
   },
 
-  /** Open or turn the viewer to the photo the address names, once there is an index to place it in. */
+  /**
+   * Open or turn the viewer to the photo the address names, once there is an index to place it
+   * in, and that index is the server's current one (`sayHello`).
+   */
   openFromAddress() {
     const view = this.view
     if (!view || !this.pagerEnabled() || !Number.isFinite(view.global) || !this.sections.length) return
+    if (!this.indexCurrent) return
     if (this.pager === true) return
     this.view = null
 

@@ -344,7 +344,10 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp style_label("honeycomb"), do: gettext("Honeycomb")
   defp style_label("details"), do: gettext("Details")
 
-  defp load_index(socket) do
+  # `hello: true` marks the index that answers a hook's `timeline:ready`: the one an address may
+  # open the viewer in. An index sent before it (with the page) has a revision this process has
+  # already left, so every window asked for from it would be refused.
+  defp load_index(socket, opts \\ []) do
     socket = assign(socket, :revision, socket.assigns.revision + 1)
 
     case Timeline.index(socket.assigns.scope, socket.assigns.auth) do
@@ -355,7 +358,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         |> assign(:state, index.state)
         |> assign(:error, nil)
         |> assign(:loaded_for, {socket.assigns.scope, socket.assigns.auth})
-        |> push_index(index)
+        |> push_index(index, Keyword.get(opts, :hello, false))
 
       {:error, reason} ->
         socket
@@ -367,13 +370,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     end
   end
 
-  defp push_index(socket, index) do
+  defp push_index(socket, index, hello?) do
     if connected?(socket) do
       {:library, library_uuid} = socket.assigns.scope
 
       {socket, aspects} = changed_aspects(socket)
 
       push_event(socket, event(socket, "index"), %{
+        hello: hello?,
         revision: socket.assigns.revision,
         library: library_uuid,
         total: index.total,
@@ -426,7 +430,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
      socket
      |> assign(:aspects_wanted, params["aspects"] == true or socket.assigns.aspects_wanted)
      |> assign(:aspects_sent, %{})
-     |> load_index()}
+     |> load_index(hello: true)}
   end
 
   # A style that shows whole photos was picked: from now on the index brings the ratios.

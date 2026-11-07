@@ -36,6 +36,15 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
     assert id == file.uuid
   end
 
+  # The page's own index is a revision behind once the hook says hello: an address may open the
+  # viewer only in the answer.
+  test "only the index answering the hook's hello says so", %{view: view} do
+    assert_push_event(view, "timeline:test-timeline:index", %{hello: false, revision: page})
+    view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})
+    assert_push_event(view, "timeline:test-timeline:index", %{hello: true, revision: hello})
+    assert hello > page
+  end
+
   test "storage PubSub refreshes the component without remounting", %{view: view, user: user} do
     file = file_fixture(user, %{})
     Storage.broadcast_file_processed(file.uuid)

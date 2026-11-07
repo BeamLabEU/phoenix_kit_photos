@@ -12,7 +12,7 @@ erl_crash.dump
 .lexical/
 
 # assets/ toolchain
-/assets/node_modules/
+/assets/node_modules
 
 # NOTE: priv/static/assets/*.js is the prebuilt bundle js_sources/0 points at.
 # It ships in the Hex package, so it is deliberately NOT ignored.

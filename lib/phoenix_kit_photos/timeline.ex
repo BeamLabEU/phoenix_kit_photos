@@ -271,7 +271,8 @@ defmodule PhoenixKitPhotos.Timeline do
   logarithm of the ratio from 1:8 to 8:1 in 256 steps of 1.6%, which is finer than anyone can
   see in a crop and costs 260 KB for 200,000 files, once. `assets/js/layouts.js` reads it.
   """
-  @spec aspects(scope(), Scope.t() | nil) :: {:ok, %{section_id() => binary()}} | {:error, error()}
+  @spec aspects(scope(), Scope.t() | nil) ::
+          {:ok, %{section_id() => binary()}} | {:error, error()}
   def aspects({:library, library_uuid}, auth) when is_binary(library_uuid) do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
@@ -384,6 +385,102 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   def slides(_scope, _day, _from, _count, _want, _auth), do: {:error, :unauthorized}
+
+  @doc """
+  The ids of positions `from` to `to` of the timeline, both included, at most `limit`. With
+  `:kind` (`"image"` or `"video"`) the positions are those of that kind only, and without
+  `from` and `to` that is the whole library.
+
+  This is what a selection asks when a range runs through months the browser has not fetched.
+  """
+  @spec ids_between(scope(), Scope.t() | nil, keyword()) ::
+          {:ok, [String.t()], boolean()} | {:error, error()}
+  def ids_between(scope, auth, opts) do
+    limit = Keyword.fetch!(opts, :limit)
+    from = max(Keyword.get(opts, :from) || 0, 0)
+    to = Keyword.get(opts, :to)
+    wanted = if to, do: max(to - from + 1, 0), else: limit
+
+    with {:ok, query} <- files_query(scope, auth) do
+      ids =
+        query
+        |> where([f], not is_nil(f.taken_on))
+        |> of_kind(Keyword.get(opts, :kind))
+        |> order_by([f], asc: f.taken_on, asc: f.taken_at, asc: f.uuid)
+        |> offset(^from)
+        |> limit(^(min(wanted, limit) + 1))
+        |> select([f], f.uuid)
+        |> repo().all()
+
+      {:ok, Enum.take(ids, min(wanted, limit)),
+       wanted > limit or (is_nil(to) and length(ids) > limit)}
+    end
+  end
+
+  defp of_kind(query, kind) when kind in ["image", "video"],
+    do: where(query, [f], f.file_type == ^kind)
+
+  defp of_kind(query, _kind), do: query
+
+  @doc """
+  The query of what a timeline shows, for code that narrows it further (`PhoenixKitPhotos.API`).
+  The library is checked for `auth`; each file of the answer still has to pass `Libraries.can?/3`.
+  """
+  @spec files_query(scope(), Scope.t() | nil) :: {:ok, Ecto.Query.t()} | {:error, error()}
+  def files_query({:library, library_uuid}, auth) when is_binary(library_uuid) do
+    with {:ok, uuid} <- cast_uuid(library_uuid),
+         :ok <- capture_dates(),
+         :ok <- known_library(uuid),
+         :ok <- reader(auth, uuid) do
+      {:ok, visible(uuid, auth)}
+    end
+  end
+
+  def files_query(_scope, _auth), do: {:error, :unauthorized}
+
+  defp cast_uuid(uuid) do
+    case Ecto.UUID.cast(uuid) do
+      {:ok, uuid} -> {:ok, uuid}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  The condition of the files the timeline puts after a file, for paging through a query.
+  `{:error, :not_found}` for a file `auth` may not read.
+  """
+  @spec after_condition(scope(), String.t(), Scope.t() | nil) ::
+          {:ok, Ecto.Query.dynamic_expr()} | {:error, error()}
+  def after_condition({:library, library_uuid}, uuid, auth) do
+    with {:ok, query} <- files_query({:library, library_uuid}, auth),
+         {:ok, uuid} <- cast_uuid(uuid),
+         %StorageFile{} = file <- query |> where([f], f.uuid == ^uuid) |> repo().one(),
+         true <- Libraries.can?(auth, file, :read) do
+      {:ok, after_condition(file)}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  # A file without a time sorts after those that have one, as in `before_condition/1`.
+  defp after_condition(%StorageFile{taken_at: nil} = file) do
+    dynamic(
+      [f],
+      f.taken_on > ^file.taken_on or
+        (f.taken_on == ^file.taken_on and is_nil(f.taken_at) and f.uuid > ^file.uuid)
+    )
+  end
+
+  defp after_condition(%StorageFile{} = file) do
+    dynamic(
+      [f],
+      f.taken_on > ^file.taken_on or
+        (f.taken_on == ^file.taken_on and
+           (is_nil(f.taken_at) or f.taken_at > ^file.taken_at or
+              (f.taken_at == ^file.taken_at and f.uuid > ^file.uuid)))
+    )
+  end
 
   @doc """
   Where a photo is in the timeline: how many photos of the library come before it, in
@@ -685,8 +782,11 @@ defmodule PhoenixKitPhotos.Timeline do
     preview = variant_url(auth, file, min_width: @preview_min_width, aspect: :preserve)
     # The styles that show whole photos: a small picture of the right shape, and a big one
     # for tiles that fill the page. Only what has been made: the file may be new.
-    {fit, _instance} = pick(auth, file, min_width: @fit_min_width, aspect: :preserve) || {nil, nil}
-    {large, _instance} = pick(auth, file, min_width: @large_min_width, aspect: :preserve) || {nil, nil}
+    {fit, _instance} =
+      pick(auth, file, min_width: @fit_min_width, aspect: :preserve) || {nil, nil}
+
+    {large, _instance} =
+      pick(auth, file, min_width: @large_min_width, aspect: :preserve) || {nil, nil}
 
     %{
       id: file.uuid,

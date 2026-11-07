@@ -173,3 +173,111 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
     assert PhotoTimeline.pager_setting(42) == "true"
   end
 end
+
+defmodule PhoenixKitPhotos.PhotoTimelineStylesTest do
+  use PhoenixKitPhotos.DataCase, async: false
+
+  describe "Timeline.aspects/2" do
+    setup do
+      owner = user_fixture("aspects-#{System.unique_integer([:positive])}@example.com")
+      %{owner: owner, library: library_fixture(owner)}
+    end
+
+    test "one byte per file of each month, in the timeline's order", %{
+      owner: owner,
+      library: library
+    } do
+      wide = file_fixture(owner, %{library_uuid: library.uuid, width: 8000, height: 1000})
+
+      tall =
+        file_fixture(owner, %{
+          library_uuid: library.uuid,
+          width: 1000,
+          height: 8000,
+          taken_at: ~U[2018-07-14 13:00:00Z]
+        })
+
+      square =
+        file_fixture(owner, %{
+          library_uuid: library.uuid,
+          width: 500,
+          height: 500,
+          taken_on: ~D[2018-07-15],
+          taken_at: ~U[2018-07-15 09:00:00Z]
+        })
+
+      _ = {wide, tall, square}
+      {:ok, aspects} = Timeline.aspects({:library, library.uuid}, scope_for(owner))
+      assert aspects == %{"2018-07" => <<255, 0, 128>>}
+    end
+
+    test "a ratio past the ends is held at the end", %{owner: owner, library: library} do
+      file_fixture(owner, %{library_uuid: library.uuid, width: 30000, height: 1000})
+      {:ok, aspects} = Timeline.aspects({:library, library.uuid}, scope_for(owner))
+      assert aspects == %{"2018-07" => <<255>>}
+    end
+
+    test "says nothing to someone who may not read the library", %{owner: owner, library: library} do
+      file_fixture(owner, %{library_uuid: library.uuid})
+      stranger = user_fixture("aspects-x-#{System.unique_integer([:positive])}@example.com")
+
+      assert {:error, :unauthorized} =
+               Timeline.aspects({:library, library.uuid}, scope_for(stranger))
+
+      assert {:error, :unauthorized} = Timeline.aspects({:library, library.uuid}, nil)
+    end
+  end
+
+  describe "Timeline.ids_between/3" do
+    setup do
+      owner = user_fixture("range-#{System.unique_integer([:positive])}@example.com")
+      library = library_fixture(owner)
+
+      files =
+        for day <- 1..4 do
+          date = Date.new!(2020, 3, day)
+
+          file_fixture(owner, %{
+            library_uuid: library.uuid,
+            taken_on: date,
+            taken_at: DateTime.new!(date, ~T[08:00:00]),
+            file_type: if(day == 2, do: "video", else: "image")
+          })
+        end
+
+      %{owner: owner, library: library, files: Enum.map(files, & &1.uuid)}
+    end
+
+    test "gives positions in the timeline's order, both ends included", ctx do
+      scope = {:library, ctx.library.uuid}
+      auth = scope_for(ctx.owner)
+      assert {:ok, ids, false} = Timeline.ids_between(scope, auth, from: 1, to: 2, limit: 100)
+      assert ids == Enum.slice(ctx.files, 1, 2)
+    end
+
+    test "stops at the limit and says so", ctx do
+      scope = {:library, ctx.library.uuid}
+      auth = scope_for(ctx.owner)
+      assert {:ok, ids, true} = Timeline.ids_between(scope, auth, from: 0, to: 3, limit: 2)
+      assert ids == Enum.take(ctx.files, 2)
+    end
+
+    test "takes one kind from the whole library", ctx do
+      scope = {:library, ctx.library.uuid}
+      auth = scope_for(ctx.owner)
+      assert {:ok, [id], false} = Timeline.ids_between(scope, auth, kind: "video", limit: 100)
+      assert id == Enum.at(ctx.files, 1)
+    end
+
+    test "gives nothing to a stranger", ctx do
+      stranger = user_fixture("range-x-#{System.unique_integer([:positive])}@example.com")
+
+      assert {:error, :unauthorized} =
+               Timeline.ids_between({:library, ctx.library.uuid}, scope_for(stranger),
+                 from: 0,
+                 to: 3,
+                 limit: 10
+               )
+    end
+  end
+end

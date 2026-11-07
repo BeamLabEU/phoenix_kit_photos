@@ -165,6 +165,85 @@ every engine. A name the page does not know falls back to the default engine. To
 class with the contract's methods, register it in `viewer/engines.js`, add its name to
 `PhoenixKitPhotos.Viewer` to offer it, and rebuild the bundle.
 
+## Styles
+
+The timeline shows a library in ten styles, picked from the menu by the month pill (`styles`) or
+with `v`: Grid, Rows, Columns, Mosaic, Uncropped, Feed, Prints, Film, Honeycomb and Details. Pinch
+and `+`/`-` zoom each of them. A style is a shape (`assets/js/layouts.js`, pure math) and a look
+(`assets/js/timeline_css.js`), so adding one is a function and a few lines of CSS. The pick is kept
+in the browser and wins over the host's `layout`.
+
+**The heights stay exact in every style.** Jump to month, the bookmark and the viewer's way back all
+need to know where a photo is before its window has been fetched. Square tiles get that from the
+count. Whole-photo styles get it from `Timeline.aspects/2`: one byte of aspect ratio per file, asked
+for the first time such a style is picked (260 KB for 200,000 files), so nothing is measured or
+corrected while scrolling. A refresh sends only the months that changed.
+
+**The change between styles** (`assets/js/morph.js`) keeps the photo in the middle of the screen in
+place and moves every other tile from where it was to where it belongs, in a wave from the middle.
+Width and height are animated rather than a scale, so `object-fit: cover` recrops at every step and
+a square opens up into the whole picture. Past 260 tiles on screen they travel as transforms instead.
+`prefers-reduced-motion` turns it off.
+
+## Choosing many
+
+With `selectable`, a person chooses photos and acts on them from a bar along the bottom.
+
+| To | Do |
+|---|---|
+| Start | The circle on a tile, Ctrl/Cmd + click, or the Select button |
+| Take a run, across months | Shift + click |
+| Draw a box | Drag with the mouse; the page scrolls at the top and bottom edges |
+| On a touch screen | Hold a tile, then slide over others without letting go |
+| Take a month | The circle on its heading |
+| Take this moment, this day, every video, everything | The Select menu of the bar; Ctrl/Cmd + A for everything |
+| Let go | Escape |
+
+What is chosen is a set of ids in the browser (`assets/js/selection.js`); a run through months not
+yet fetched is resolved by the server (`Timeline.ids_between/3`). A selection holds at most 5,000.
+
+Every action goes through `PhoenixKitPhotos.Bulk`, in two steps: `plan/4` checks each file for the
+person and writes nothing, and `run/2` does what the plan says. The dialog shows the plan; saying
+yes plans again, so rights lost in the meantime count. Nothing deletes for good.
+
+| Action | Needs | What happens |
+|---|---|---|
+| Download | read | A ZIP of the originals, streamed as they are read (`Web.Download`, `Zip`) |
+| Copy links | read | The photos' addresses, ready to paste |
+| Add to library | read, and upload in the target | Shares the stored objects where it can, stores again where it cannot; skips what the target holds |
+| Move | edit, and upload in the target | The same, then the original to the trash |
+| Tags | edit | Adds to and removes from `metadata["tags"]` |
+| Trash | edit | With an Undo in the notice that follows |
+
+A host mounts the download in a pipeline with the session and CSRF protection, and says where:
+
+```elixir
+post "/photos/download", PhoenixKitPhotos.Web.Download, []
+```
+
+```heex
+<.live_component module={PhotoTimeline} id="library" scope={...} auth={scope}
+  styles selectable download_path="/photos/download" />
+```
+
+## For agents
+
+`api_tools/0` declares the library for the machine API (`PhoenixKitPhotos.API`): find what a person
+would ask for, then act on it. A key acts as its owner, file by file. Write tools are `Bulk` with an
+API around it, so each answers a dry run with what would happen, and a confirmation or an approval
+fails when the files changed since.
+
+| Tool | Scope | Does |
+|---|---|---|
+| `photos.list_libraries` | `photos.files:read` | The libraries the owner can open, and which they may add to |
+| `photos.find_files` | `photos.files:read` | By capture date, kind, tag or file name, paged |
+| `photos.trash_files`, `photos.restore_files` | `photos.files:write` | To the trash and back |
+| `photos.copy_files`, `photos.move_files` | `photos.files:write` | To another library |
+| `photos.tag_files` | `photos.files:write` | Add and remove tags |
+
+A batch holds at most 1,000 ids. Over `api_confirm_batch_over` (50 by default) core treats a write as
+dangerous and asks for a confirmation.
+
 ## Core media viewer: warming originals
 
 Core's media viewer is deliberately plain: it warms only each neighbour's `small` and

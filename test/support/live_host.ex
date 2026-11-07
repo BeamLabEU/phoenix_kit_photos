@@ -15,7 +15,9 @@ defmodule PhoenixKitPhotos.TestLive do
        scope: scope,
        library: library,
        photo_path: session["photo_path"],
-       library_path: session["library_path"]
+       library_path: session["library_path"],
+       selectable: session["selectable"] == true,
+       download_path: session["download_path"]
      )}
   end
 
@@ -35,7 +37,8 @@ defmodule PhoenixKitPhotos.TestLive do
     ~H"""
     <.live_component module={PhoenixKitPhotos.Components.PhotoTimeline}
       id="test-timeline" scope={@library} auth={@scope}
-      photo_path={@photo_path} library_path={@library_path} />
+      photo_path={@photo_path} library_path={@library_path}
+      selectable={@selectable} download_path={@download_path} />
     """
   end
 end

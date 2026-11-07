@@ -580,3 +580,146 @@ test("the style a person picked wins over the host's, and nonsense is the plain 
   assert.equal(h.startingStyle(), "grid")
   window.localStorage = before
 })
+
+const selecting = () => {
+  const { h, sent } = hook()
+  h.el.dataset.selectable = "true"
+  h.el.clientWidth = 816
+  h.setIndex({ library: "a", revision: 1, sections: [section(3), { ...section(2), id: "2020-02", days_list: [{ id: "2020-02-01", count: 2 }] }] })
+  h.setWindow({ section: "2020-01-01", revision: 1, items: [{ id: "a" }, { id: "b" }, { id: "c" }] })
+  return { h, sent }
+}
+const click = (over = {}) => ({ target: { closest: () => null }, ...over })
+const tile = (global) => ({ dataset: { global: String(global) } })
+
+test("a plain click opens until something is chosen; then a click chooses", () => {
+  const { h } = selecting()
+  const opened = []
+  h.openTile = (id) => opened.push(id)
+  h.tileClick(click(), tile(0), "a")
+  assert.deepEqual(opened, ["a"])
+  h.tileClick(click({ metaKey: true }), tile(0), "a")
+  assert.deepEqual(h.selectedIds(), ["a"])
+  h.tileClick(click(), tile(1), "b")
+  assert.deepEqual(opened, ["a"], "not opened")
+  assert.deepEqual(h.selectedIds(), ["a", "b"])
+  h.tileClick(click(), tile(1), "b")
+  assert.deepEqual(h.selectedIds(), ["a"], "a second click lets go")
+})
+
+test("the circle on a tile starts a selection without opening it", () => {
+  const { h } = selecting()
+  h.openTile = () => assert.fail("opened")
+  h.tileClick(click({ target: { closest: s => (s === ".pkt-check" ? {} : null) } }), tile(2), "c")
+  assert.deepEqual(h.selectedIds(), ["c"])
+})
+
+test("without `selectable` a click only ever opens", () => {
+  const { h } = selecting()
+  h.el.dataset.selectable = "false"
+  const opened = []
+  h.openTile = (id) => opened.push(id)
+  h.tileClick(click({ metaKey: true }), tile(0), "a")
+  assert.deepEqual(opened, ["a"])
+  assert.deepEqual(h.selectedIds(), [])
+})
+
+test("shift takes the run between two tiles at once when they are on hand", () => {
+  const { h, sent } = selecting()
+  h.toggleSelected("a", 0)
+  sent.length = 0
+  h.tileClick(click({ shiftKey: true }), tile(2), "c")
+  assert.deepEqual(h.selectedIds().sort(), ["a", "b", "c"])
+  assert.equal(sent.filter(([, e]) => e === "timeline:range").length, 0)
+})
+
+test("a run through what has not been fetched is asked of the server", () => {
+  const { h, sent } = selecting()
+  h.toggleSelected("a", 0)
+  sent.length = 0
+  h.tileClick(click({ shiftKey: true }), tile(4), "e")
+  assert.deepEqual(sent.find(([, e]) => e === "timeline:range")[2], { from: 0, to: 4, mode: "add", revision: 1 })
+  h.applyRange({ ids: ["a", "b", "c", "d", "e"], mode: "add", revision: 1 })
+  assert.equal(h.selectedIds().length, 5)
+})
+
+test("an answer for an older index is dropped", () => {
+  const { h } = selecting()
+  h.applyRange({ ids: ["x"], mode: "add", revision: 0 })
+  assert.deepEqual(h.selectedIds(), [])
+})
+
+test("a month's circle takes the month, and a second press lets it go", () => {
+  const { h } = selecting()
+  h.selectSection(0)
+  assert.deepEqual(h.selectedIds().sort(), ["a", "b", "c"])
+  h.selectSection(0)
+  assert.deepEqual(h.selectedIds(), [])
+})
+
+test("what is chosen in one library does not follow to the next", () => {
+  const { h } = selecting()
+  h.toggleSelected("a", 0)
+  h.setIndex({ library: "b", revision: 2, sections: [section(1)] })
+  assert.deepEqual(h.selectedIds(), [])
+  assert.equal(h.selecting(), false)
+})
+
+test("a refresh of the same library keeps what is chosen", () => {
+  const { h } = selecting()
+  h.toggleSelected("a", 0)
+  h.setIndex({ library: "a", revision: 2, sections: [section(4)] })
+  assert.deepEqual(h.selectedIds(), ["a"])
+})
+
+test("this moment is the photos taken close together around the last one touched", () => {
+  const { h } = selecting()
+  h.setWindow({ section: "2020-01-01", revision: 1, items: [
+    { id: "a", taken_at: "2020-01-01T10:00:00Z" },
+    { id: "b", taken_at: "2020-01-01T10:02:00Z" },
+    { id: "c", taken_at: "2020-01-01T14:00:00Z" }
+  ] })
+  h.toggleSelected("b", 1)
+  h.selectMoment()
+  assert.deepEqual(h.selectedIds().sort(), ["a", "b"])
+})
+
+test("this day takes every slice of a big day, and nothing of the next", () => {
+  const { h, sent } = hook()
+  h.el.dataset.selectable = "true"
+  h.el.clientWidth = 816
+  const days = [{ id: "2020-01-01", count: 500 }, { id: "2020-01-01:500", count: 20 }, { id: "2020-01-02", count: 3 }]
+  h.setIndex({ library: "a", revision: 1, sections: [{ id: "2020-01", count: 523, days_list: days }] })
+  h.selectAnchor = 510
+  sent.length = 0
+  h.selectDay()
+  assert.deepEqual(sent.find(([, e]) => e === "timeline:range")[2], { from: 0, to: 519, mode: "add", revision: 1 })
+})
+
+test("the server's answer about a finished action clears the selection", () => {
+  const { h } = selecting()
+  h.toggleSelected("a", 0)
+  h.applySelection({ clear: true })
+  assert.deepEqual(h.selectedIds(), [])
+})
+
+test("a bulk action sends the ids; a download never goes through the socket", () => {
+  const { h, sent } = selecting()
+  h.toggleSelected("a", 0)
+  sent.length = 0
+  h.bulk("trash")
+  assert.deepEqual(sent.at(-1).slice(1), ["timeline:bulk", { action: "trash", ids: ["a"] }])
+  const downloads = []
+  h.download = (ids) => downloads.push(ids)
+  sent.length = 0
+  h.bulk("download")
+  assert.deepEqual(downloads, [["a"]])
+  assert.equal(sent.length, 0)
+})
+
+test("nothing chosen, nothing asked", () => {
+  const { h, sent } = selecting()
+  sent.length = 0
+  h.bulk("trash")
+  assert.equal(sent.length, 0)
+})

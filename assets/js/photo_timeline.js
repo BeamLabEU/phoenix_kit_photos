@@ -9,6 +9,7 @@ import { STYLES, STYLE_IDS, DEFAULT_STYLE, buildLayout, decodeAspects } from "./
 import { installTimelineCss } from "./timeline_css.js"
 import { fillTile, pickSource, swapImage } from "./tiles.js"
 import { morph } from "./morph.js"
+import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
 import { engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
@@ -50,6 +51,8 @@ const ASPECTS_WAIT_MS = 1500
  * inside a prebuilt bundle. `PhotoTimeline`, never `Grid`.
  */
 export const PhotoTimeline = {
+  ...selection,
+
   // Height of the header the grid scrolls under (see `readInset`).
   inset: 0,
   // A pinch in progress, and the tile size a pinch chose (see "zoom" below).
@@ -116,6 +119,7 @@ export const PhotoTimeline = {
     this.styleId = this.startingStyle()
     this.el.dataset.activeStyle = this.styleId
     this.bindStyleMenu()
+    this.bindSelection()
 
     this.mountBookmark()
     this.onPositionInput = event => this.beginPositionInput(event)
@@ -159,6 +163,9 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:view`, (payload) => this.applyView(payload))
     this.handleEvent(`${prefix}:slides`, (payload) => this.setSlides(payload))
     this.handleEvent(`${prefix}:aspects`, (payload) => this.setAspects(payload))
+    this.handleEvent(`${prefix}:range`, (payload) => this.applyRange(payload))
+    this.handleEvent(`${prefix}:selection`, (payload) => this.applySelection(payload))
+    this.handleEvent(`${prefix}:links`, (payload) => this.showLinks(payload))
     this.send("timeline:ready", this.readyPayload())
   },
 
@@ -190,6 +197,7 @@ export const PhotoTimeline = {
     clearTimeout(this.positionInputTimer)
     window.removeEventListener("resize", this.onResize)
     this.unbindStyleMenu()
+    this.unbindSelection()
     clearTimeout(this.aspectsTimer)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
@@ -227,6 +235,10 @@ export const PhotoTimeline = {
       this.windows.clear()
       this.known.clear()
       this.aspects?.clear()
+      // What was chosen was chosen in the last library.
+      this.selected?.clear()
+      this.selectMode = false
+      this.selectAnchor = null
     }
     this.fresh.clear()
     this.refreshing.clear()
@@ -260,6 +272,7 @@ export const PhotoTimeline = {
     this.markNew = refresh
     this.handleScroll()
     this.markNew = false
+    this.selectionChanged()
     this.openFromAddress()
   },
 
@@ -603,6 +616,8 @@ export const PhotoTimeline = {
     this.gliding = arrived
     this.handleScroll()
     this.gliding = false
+    // A box being drawn takes in what has just arrived under it.
+    if (this.drag?.box) this.drawBox()
   },
 
   /**
@@ -1199,12 +1214,22 @@ export const PhotoTimeline = {
     if (!node) {
       node = document.createElement("div")
       node.className = this.fill
-        ? "pointer-events-none px-3 text-base font-semibold"
-        : "pointer-events-none px-1 text-sm font-semibold"
+        ? "pkt-header pointer-events-none px-3 text-base font-semibold"
+        : "pkt-header pointer-events-none px-1 text-sm font-semibold"
+      node.append(document.createElement("span"))
+      if (this.selectable()) {
+        const check = document.createElement("button")
+        check.type = "button"
+        check.className = "pkt-section-check"
+        check.dataset.sectionSelect = ""
+        check.setAttribute("aria-label", this.root()?.dataset.selectMonthLabel || "Select month")
+        check.addEventListener("click", () => this.selectSection(this.sections.indexOf(section)))
+        node.append(check)
+      }
       this.layer.appendChild(node)
       this.pool.set(id, node)
     }
-    node.textContent = section.label || section.id
+    node.firstChild.textContent = section.label || section.id
     const top = this.offsets[sectionIndex]
     if (this.gliding) glide(node, 0, top)
     node.style.position = "absolute"
@@ -1229,7 +1254,7 @@ export const PhotoTimeline = {
       node.setAttribute("aria-label", item.kind === "video" ? "Open video" : "Open photo")
       node.className = "pkt-tile"
       node.addEventListener("pointerdown", () => this.prefetchSlides(Number(node.dataset.global)))
-      node.addEventListener("click", () => this.openTile(item.id, Number(node.dataset.global)))
+      node.addEventListener("click", (event) => this.tileClick(event, node, item.id))
       fillTile(node, item)
       this.layer.appendChild(node)
       this.pool.set(item.id, node)
@@ -1239,6 +1264,7 @@ export const PhotoTimeline = {
     }
 
     node.dataset.global = String(global)
+    node.toggleAttribute("data-selected", this.isSelected(item.id))
     node.style.position = "absolute"
     node.style.left = `${x}px`
     node.style.top = `${y}px`

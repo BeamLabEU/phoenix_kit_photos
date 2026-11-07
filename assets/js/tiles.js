@@ -65,7 +65,7 @@ export function fillTile(node, item) {
   const meta = span("pkt-meta")
   meta.append(span("pkt-name", item.name || date), span("pkt-sub", facts.filter(Boolean).join(" · ")))
 
-  node.append(paper, caption, meta, span("pkt-badge", formatDuration(item.duration)))
+  node.append(paper, caption, meta, span("pkt-badge", formatDuration(item.duration)), span("pkt-check"))
 }
 
 /**

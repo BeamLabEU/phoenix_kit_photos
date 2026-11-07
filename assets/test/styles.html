@@ -7,7 +7,7 @@ html,body{margin:0;background:#fff;color:#1c1917;font-family:system-ui}
 .phoenix-kit-photo-timeline__layer{position:absolute;left:0;right:0;top:0}
 </style>
 <div id="root" class="phoenix-kit-photo-timeline" data-pager="false">
-<div id="timeline" data-columns="5" data-cell="170" data-gap="2" data-target="7" data-timeline-id="test">
+<div id="timeline" data-columns="5" data-cell="170" data-gap="2" data-target="7" data-timeline-id="test" data-selectable="false">
 <div class="phoenix-kit-photo-timeline__spacer"></div><div class="phoenix-kit-photo-timeline__layer"></div>
 </div></div>
 <script type="module">
@@ -49,12 +49,16 @@ for (let month = 0; month < months; month++) {
   aspects[id] = btoa(String.fromCharCode(...bytes))
 }
 window.counts = { aspects: 0 }
+if (location.search.includes("selectable")) document.querySelector("#timeline").dataset.selectable = "true"
+const ordered = () => sections.flatMap(s => s.days_list.flatMap(d => windows.get(d.id)))
 window.hook = Object.assign({}, PhotoTimeline, {
   el: document.querySelector("#timeline"), handleEvent() {},
   pushEventTo(target, event, payload) {
     if (target !== 7) throw Error("wrong component target")
     if (event === "timeline:need_window") queueMicrotask(() =>
       hook.setWindow({ section: payload.window, revision: payload.revision, items: windows.get(payload.window) || [] }))
+    if (event === "timeline:range") setTimeout(() => hook.applyRange({
+      ids: ordered().slice(payload.from, payload.to + 1).map(item => item.id), mode: payload.mode, revision: payload.revision }), 10)
     if (event === "timeline:aspects") { counts.aspects++; setTimeout(() => hook.setAspects({ aspects, revision: payload.revision }), 30) }
   }
 })

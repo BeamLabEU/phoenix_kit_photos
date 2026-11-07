@@ -69,6 +69,19 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   swipes, and its Info button sends `on_open` for the file on screen, so the
   host's own viewer (details, comments) is still one tap away.
 
+  ## Choosing many
+
+  `selectable` lets a person choose photos, and act on them from a bar along the bottom. How
+  they choose is in `assets/js/selection.js`: the circle on a tile, Shift + click, a box
+  dragged with the mouse, hold and slide on a touch screen, the circle on a month, Ctrl/Cmd + A,
+  and the "Select" menu of the bar (the day, the moment, every video). The ids stay in the
+  browser until an action is asked for; then every file is checked again on the server
+  (`PhoenixKitPhotos.Bulk`), the person sees what would happen, and it runs in the background
+  with a progress bar. Trash can be undone from the notice that follows it.
+
+  `download_path` is where `PhoenixKitPhotos.Web.Download` is mounted; without it there is no
+  Download. Copy links needs `photo_path`.
+
   ## Addresses
 
   With `photo_path` and `library_path` the swipe viewer keeps the page's address in step with
@@ -106,7 +119,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
   alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKitPhotos.Bulk
   alias PhoenixKitPhotos.Timeline
+  alias PhoenixKitPhotos.Uploads
 
   @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details)
   @layouts Map.new(@styles, &{String.to_atom(&1), &1}) |> Map.put(:square, "grid")
@@ -117,6 +132,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
      socket
      |> assign(:aspects_wanted, false)
      |> assign(:aspects_sent, %{})
+     |> assign(:bulk, nil)
+     |> assign(:running, nil)
+     |> assign(:notice, nil)
      |> assign(:index, nil)
      |> assign(:sections, [])
      |> assign(:state, :empty)
@@ -155,6 +173,23 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     {:ok, socket |> assign(:refresh_queued, false) |> load_index()}
   end
 
+  # From the process running a bulk action.
+  def update(%{bulk_progress: {done, total}}, socket) do
+    {:ok, assign(socket, :running, %{done: done, total: total})}
+  end
+
+  def update(%{bulk_done: result}, socket) do
+    {:ok, finish_bulk(socket, result)}
+  end
+
+  def update(%{dismiss_notice: ref}, socket) do
+    {:ok,
+     if(match?(%{ref: ^ref}, socket.assigns.notice),
+       do: assign(socket, :notice, nil),
+       else: socket
+     )}
+  end
+
   def update(assigns, socket) do
     scope = validate_scope!(assigns.scope)
     auth = validate_auth!(assigns.auth)
@@ -167,6 +202,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:auth, auth)
       |> assign(:layout, layout)
       |> assign(:styles, offered_styles(Map.get(assigns, :styles, false)))
+      |> assign(:selectable, Map.get(assigns, :selectable, false) == true)
+      |> assign(:download_path, local_path(Map.get(assigns, :download_path)))
       |> assign(:columns, Map.get(assigns, :columns, 5))
       |> assign(:fill, Map.get(assigns, :fill, false) == true)
       |> assign(:cell, positive_integer(Map.get(assigns, :cell)))
@@ -276,7 +313,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           "PhotoTimeline :auth must be a PhoenixKit.Users.Auth.Scope, got: #{inspect(other)}"
   end
 
-  defp validate_layout!(layout) when is_map_key(@layouts, layout), do: Map.fetch!(@layouts, layout)
+  defp validate_layout!(layout) when is_map_key(@layouts, layout),
+    do: Map.fetch!(@layouts, layout)
 
   defp validate_layout!(other) do
     raise ArgumentError,
@@ -445,6 +483,92 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   def handle_event("timeline:slides", _params, socket), do: {:noreply, socket}
 
+  # A run of positions, for a selection that goes through what the browser has not fetched.
+  def handle_event("timeline:range", %{"revision" => revision} = params, socket) do
+    if socket.assigns.selectable and revision == socket.assigns.revision do
+      opts = [
+        from: integer(params["from"]),
+        to: integer(params["to"]),
+        kind: params["kind"],
+        limit: Bulk.limit()
+      ]
+
+      case Timeline.ids_between(socket.assigns.scope, socket.assigns.auth, opts) do
+        {:ok, ids, capped} ->
+          {:noreply,
+           push_event(socket, event(socket, "range"), %{
+             ids: ids,
+             mode: range_mode(params["mode"]),
+             capped: capped,
+             revision: revision
+           })}
+
+        {:error, _reason} ->
+          {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # An action on what is chosen: first what would happen, for the person to say yes to.
+  def handle_event("timeline:bulk", %{"action" => name, "ids" => ids}, socket)
+      when is_list(ids) do
+    action = Bulk.action(name)
+
+    if socket.assigns.selectable and action in menu_actions(socket) and !socket.assigns.running do
+      {:noreply, open_bulk(socket, action, ids)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:bulk", _params, socket), do: {:noreply, socket}
+
+  # The choices of the dialog changed: the plan is made again for them.
+  def handle_event("timeline:bulk_change", params, socket) do
+    case socket.assigns.bulk do
+      %{action: action, ids: ids} = bulk ->
+        plan = Bulk.plan(action, ids, socket.assigns.auth, params)
+        {:noreply, assign(socket, :bulk, %{bulk | plan: plan, params: params})}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:bulk_cancel", _params, socket) do
+    {:noreply, assign(socket, :bulk, nil)}
+  end
+
+  # The person said yes. What runs is planned again now, not what the dialog was opened on: the
+  # rights or the files may have changed since.
+  def handle_event("timeline:bulk_run", params, socket) do
+    case socket.assigns.bulk do
+      %{action: action, ids: ids} when action != :links ->
+        plan = Bulk.plan(action, ids, socket.assigns.auth, params)
+        {:noreply, socket |> assign(:bulk, nil) |> start_run(plan)}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:bulk_undo", _params, socket) do
+    case socket.assigns.notice do
+      %{undo: ids} when ids != [] ->
+        plan = Bulk.plan(:restore, ids, socket.assigns.auth)
+        {:noreply, socket |> assign(:notice, nil) |> start_run(plan)}
+
+      _other ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:notice_close", _params, socket) do
+    {:noreply, assign(socket, :notice, nil)}
+  end
+
   def handle_event("timeline:jump", %{"id" => id}, socket) do
     {:noreply, push_event(socket, event(socket, "jump"), %{id: id})}
   end
@@ -458,6 +582,143 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   defp event(socket, name), do: "timeline:#{socket.assigns.id}:#{name}"
+
+  defp integer(value) when is_integer(value) and value >= 0, do: value
+  defp integer(_value), do: nil
+
+  defp range_mode(mode) when mode in ["add", "remove", "toggle"], do: mode
+  defp range_mode(_mode), do: "add"
+
+  # What the bar offers this person in this library. It is a courtesy: `Bulk` decides per file.
+  defp menu_actions(%{assigns: assigns}) do
+    {:library, library_uuid} = assigns.scope
+    signed_in = is_binary(assigns.auth && Scope.user_uuid(assigns.auth))
+    editor = signed_in and Uploads.can_upload?(assigns.auth, library_uuid)
+
+    [
+      assigns.download_path && :download,
+      assigns.photo_path && :links,
+      signed_in && :copy,
+      editor && :move,
+      editor && :tag,
+      editor && :trash
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  defp open_bulk(socket, :links, ids) do
+    plan = Bulk.plan(:links, ids, socket.assigns.auth)
+    template = socket.assigns.photo_path
+
+    paths =
+      for %{short_code: code} <- plan.files, is_binary(code) do
+        String.replace(template, ":code", URI.encode(code))
+      end
+
+    socket
+    |> assign(:bulk, %{action: :links, ids: ids, plan: plan, params: %{}, targets: []})
+    |> push_event(event(socket, "links"), %{paths: paths})
+  end
+
+  defp open_bulk(socket, action, ids) do
+    targets = targets(socket, action)
+    params = default_params(action, targets)
+    plan = Bulk.plan(action, ids, socket.assigns.auth, params)
+
+    assign(socket, :bulk, %{
+      action: action,
+      ids: ids,
+      plan: plan,
+      params: params,
+      targets: targets
+    })
+  end
+
+  defp default_params(action, [first | _]) when action in [:copy, :move],
+    do: %{"library" => first.uuid}
+
+  defp default_params(_action, _targets), do: %{}
+
+  # The other libraries this person may add to.
+  defp targets(socket, action) when action in [:copy, :move] do
+    {:library, here} = socket.assigns.scope
+    auth = socket.assigns.auth
+
+    auth
+    |> Timeline.libraries()
+    |> Enum.filter(&(&1.uuid != here and Uploads.can_upload?(auth, &1.uuid)))
+  end
+
+  defp targets(_socket, _action), do: []
+
+  # Runs apart from the page: leaving the page does not stop a bulk action halfway.
+  defp start_run(socket, %{files: []} = plan) do
+    finish_bulk(socket, %{action: plan.action, done: [], failed: plan.refused, created: []})
+  end
+
+  defp start_run(socket, plan) do
+    page = self()
+    id = socket.assigns.id
+    total = length(plan.files)
+    # A hundred steps at most, however many files.
+    every = max(1, div(total, 100))
+
+    Task.start(fn ->
+      progress = fn done, total ->
+        if rem(done, every) == 0 do
+          Phoenix.LiveView.send_update(page, __MODULE__, id: id, bulk_progress: {done, total})
+        end
+      end
+
+      result = Bulk.run(plan, on_progress: progress)
+      result = %{result | failed: plan.refused ++ result.failed}
+      Phoenix.LiveView.send_update(page, __MODULE__, id: id, bulk_done: result)
+    end)
+
+    assign(socket, :running, %{done: 0, total: total})
+  end
+
+  defp finish_bulk(socket, %{action: action, done: done} = result) do
+    ref = make_ref()
+
+    Phoenix.LiveView.send_update_after(
+      __MODULE__,
+      [id: socket.assigns.id, dismiss_notice: ref],
+      9_000
+    )
+
+    socket
+    |> assign(:running, nil)
+    |> assign(:notice, %{
+      ref: ref,
+      text: outcome_text(action, length(done)),
+      problems: problems(result.failed),
+      undo: if(action == :trash, do: done, else: [])
+    })
+    |> push_event(event(socket, "selection"), %{clear: true})
+  end
+
+  defp outcome_text(:trash, count),
+    do: ngettext("Moved 1 item to the trash", "Moved %{count} items to the trash", count)
+
+  defp outcome_text(:restore, count),
+    do: ngettext("Restored 1 item", "Restored %{count} items", count)
+
+  defp outcome_text(:copy, count),
+    do: ngettext("Copied 1 item", "Copied %{count} items", count)
+
+  defp outcome_text(:move, count),
+    do: ngettext("Moved 1 item", "Moved %{count} items", count)
+
+  defp outcome_text(:tag, count),
+    do: ngettext("Tagged 1 item", "Tagged %{count} items", count)
+
+  # A line for each reason something was left out: nobody reads a list of two hundred files.
+  defp problems(failed) do
+    failed
+    |> Enum.frequencies_by(& &1.reason)
+    |> Enum.map(fn {reason, count} -> "#{count}: #{Bulk.reason_text(reason)}" end)
+  end
 
   defp window_payload(%{section: section, items: items}) do
     %{
@@ -473,6 +734,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             thumb: item.thumb,
             preview: item.preview,
             kind: item.kind,
+            code: item.code,
             fit: item.fit,
             large: item.large,
             name: item.name,
@@ -496,6 +758,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       data-pager={to_string(@pager)}
       data-photo-path={@photo_path}
       data-library-path={@library_path}
+      data-download-path={@download_path}
+      data-select-month-label={gettext("Select this month")}
     >
       <%!-- The month, and the choice of style. Filling the screen they float under the header
            as pills. --%>
@@ -508,6 +772,17 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         ]}
         style={@fill && "top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"}
       >
+        <button
+          :if={@selectable}
+          id={"#{@id}-select"}
+          type="button"
+          data-select-start
+          title={gettext("Select photos")}
+          class="cursor-pointer rounded-full border border-base-content/10 bg-base-100/50 px-3 py-1.5 text-sm font-medium shadow-sm backdrop-blur-md"
+        >
+          {gettext("Select")}
+        </button>
+
         <div :if={@styles != []} id={"#{@id}-styles"} class="relative" phx-update="ignore">
           <button
             type="button"
@@ -629,6 +904,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         data-gap={@gap}
         data-fill={to_string(@fill)}
         data-style={@layout}
+        data-selectable={to_string(@selectable)}
         class={[
           "phoenix-kit-photo-timeline__viewport relative touch-pan-y overflow-y-auto",
           @fill && "h-full overscroll-contain",
@@ -643,6 +919,290 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
              zoom sets an inline transform while it runs and clears it after, so
              this one is back in force at rest. --%>
         <div class="phoenix-kit-photo-timeline__layer pointer-events-none absolute inset-x-0 top-0 [transform:translateZ(0)]"></div>
+      </div>
+
+      <.selection_bar
+        :if={@selectable && !@error}
+        id={"#{@id}-selection-#{elem(@scope, 1)}"}
+        actions={menu_actions(%{assigns: assigns})}
+      />
+      <.bulk_dialog :if={@bulk} bulk={@bulk} myself={@myself} id={@id} />
+      <.bulk_progress :if={@running} running={@running} />
+      <.bulk_notice :if={@notice && !@running} notice={@notice} myself={@myself} />
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :actions, :list, required: true
+
+  # Shown and counted by the hook, which is why LiveView keeps its hands off it. The id carries
+  # the library: another library means other rights, and a new bar.
+  defp selection_bar(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      data-selection-bar
+      hidden
+      phx-update="ignore"
+      class="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+    >
+      <div class="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1 rounded-2xl border border-base-content/10 bg-base-100/90 p-1.5 shadow-xl backdrop-blur-xl">
+        <button
+          type="button"
+          data-select="none"
+          aria-label={gettext("Clear selection")}
+          title={gettext("Clear selection (Esc)")}
+          class="btn btn-ghost btn-circle btn-sm"
+        >
+          <span class="hero-x-mark size-5" aria-hidden="true"></span>
+        </button>
+        <span class="whitespace-nowrap px-1 text-sm font-medium tabular-nums">
+          <span data-selection-count>0</span> {gettext("selected")}
+          <span data-selection-capped hidden class="text-warning">
+            ({gettext("the most at once")})
+          </span>
+        </span>
+        <details class="dropdown dropdown-top">
+          <summary class="btn btn-ghost btn-sm font-normal">
+            {gettext("Select")}<span class="hero-chevron-up size-3.5" aria-hidden="true"></span>
+          </summary>
+          <ul class="menu dropdown-content z-40 mb-2 w-56 rounded-box border border-base-content/10 bg-base-100 p-1 shadow-xl">
+            <li><button type="button" data-select="moment">{gettext("This moment")}</button></li>
+            <li><button type="button" data-select="day">{gettext("This day")}</button></li>
+            <li><button type="button" data-select="videos">{gettext("All videos")}</button></li>
+            <li><button type="button" data-select="photos">{gettext("All photos")}</button></li>
+            <li><button type="button" data-select="all">{gettext("Everything")}</button></li>
+          </ul>
+        </details>
+        <span class="mx-0.5 h-5 w-px bg-base-content/15" aria-hidden="true"></span>
+        <button
+          :for={action <- @actions}
+          type="button"
+          data-bulk={action}
+          disabled
+          title={bulk_label(action)}
+          class={[
+            "btn btn-ghost btn-sm gap-1.5 px-2 font-normal",
+            action == :trash && "text-error"
+          ]}
+        >
+          <span class={[bulk_icon(action), "size-5"]} aria-hidden="true"></span>
+          <span class="hidden lg:inline">{bulk_label(action)}</span>
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  defp bulk_label(:download), do: gettext("Download")
+  defp bulk_label(:links), do: gettext("Copy links")
+  defp bulk_label(:copy), do: gettext("Add to library")
+  defp bulk_label(:move), do: gettext("Move")
+  defp bulk_label(:tag), do: gettext("Tags")
+  defp bulk_label(:trash), do: gettext("Trash")
+
+  defp bulk_icon(:download), do: "hero-arrow-down-tray"
+  defp bulk_icon(:links), do: "hero-link"
+  defp bulk_icon(:copy), do: "hero-document-duplicate"
+  defp bulk_icon(:move), do: "hero-arrow-right-circle"
+  defp bulk_icon(:tag), do: "hero-tag"
+  defp bulk_icon(:trash), do: "hero-trash"
+
+  attr :bulk, :map, required: true
+  attr :myself, :any, required: true
+  attr :id, :string, required: true
+
+  # What is about to happen, for the person to agree to.
+  defp bulk_dialog(assigns) do
+    assigns =
+      assigns
+      |> assign(:count, length(assigns.bulk.plan.files))
+      |> assign(:refused, problems(assigns.bulk.plan.refused))
+
+    ~H"""
+    <div class="modal modal-open z-50" role="dialog" aria-modal="true">
+      <form
+        id={"#{@id}-bulk"}
+        class="modal-box max-w-md"
+        phx-change="timeline:bulk_change"
+        phx-submit="timeline:bulk_run"
+        phx-target={@myself}
+      >
+        <h3 class="text-lg font-bold">{dialog_title(@bulk.action, @count)}</h3>
+        <p :if={dialog_hint(@bulk.action)} class="mt-2 text-sm text-base-content/70">
+          {dialog_hint(@bulk.action)}
+        </p>
+
+        <label :if={@bulk.action in [:copy, :move] && @bulk.targets != []} class="mt-4 block">
+          <span class="mb-1 block text-sm">{gettext("Library")}</span>
+          <select name="library" class="select select-bordered w-full">
+            <option
+              :for={library <- @bulk.targets}
+              value={library.uuid}
+              selected={library.uuid == @bulk.params["library"]}
+            >
+              {library.name}
+            </option>
+          </select>
+        </label>
+        <p :if={@bulk.action in [:copy, :move] && @bulk.targets == []} class="mt-4 text-sm">
+          {gettext("You have no other library to add these to.")}
+        </p>
+
+        <div :if={@bulk.action == :tag} class="mt-4 space-y-3">
+          <label class="block">
+            <span class="mb-1 block text-sm">{gettext("Add tags (separate with commas)")}</span>
+            <input
+              name="add"
+              value={@bulk.params["add"]}
+              class="input input-bordered w-full"
+              maxlength="400"
+              autocomplete="off"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1 block text-sm">{gettext("Remove tags")}</span>
+            <input
+              name="remove"
+              value={@bulk.params["remove"]}
+              class="input input-bordered w-full"
+              maxlength="400"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+
+        <textarea
+          :if={@bulk.action == :links}
+          id={"#{@id}-links"}
+          data-links
+          phx-update="ignore"
+          readonly
+          rows="6"
+          class="textarea textarea-bordered mt-4 w-full font-mono text-xs"
+        ></textarea>
+
+        <ul :if={@refused != []} class="mt-4 space-y-1 text-sm text-warning">
+          <li :for={line <- @refused}>{line}</li>
+        </ul>
+
+        <div class="modal-action">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            phx-click="timeline:bulk_cancel"
+            phx-target={@myself}
+          >
+            {if @bulk.action == :links, do: gettext("Close"), else: gettext("Cancel")}
+          </button>
+          <button
+            :if={@bulk.action == :links}
+            type="button"
+            data-copy-links
+            data-done={gettext("Copied")}
+            class="btn btn-primary"
+          >
+            {gettext("Copy")}
+          </button>
+          <button
+            :if={@bulk.action != :links}
+            type="submit"
+            disabled={@count == 0 or not ready?(@bulk)}
+            class={["btn", (@bulk.action == :trash && "btn-error") || "btn-primary"]}
+          >
+            {dialog_confirm(@bulk.action)}
+          </button>
+        </div>
+      </form>
+      <button
+        type="button"
+        class="modal-backdrop"
+        aria-label={gettext("Close")}
+        phx-click="timeline:bulk_cancel"
+        phx-target={@myself}
+      >
+      </button>
+    </div>
+    """
+  end
+
+  defp ready?(%{action: :tag, plan: plan}), do: plan.add != [] or plan.remove != []
+  defp ready?(_bulk), do: true
+
+  defp dialog_title(:trash, count),
+    do: ngettext("Move 1 item to the trash?", "Move %{count} items to the trash?", count)
+
+  defp dialog_title(:copy, count),
+    do: ngettext("Add 1 item to a library", "Add %{count} items to a library", count)
+
+  defp dialog_title(:move, count),
+    do: ngettext("Move 1 item to a library", "Move %{count} items to a library", count)
+
+  defp dialog_title(:tag, count), do: ngettext("Tag 1 item", "Tag %{count} items", count)
+
+  defp dialog_title(:links, count),
+    do: ngettext("Link to 1 photo", "Links to %{count} photos", count)
+
+  defp dialog_hint(:trash), do: gettext("You can bring them back from the trash.")
+  defp dialog_hint(:move), do: gettext("The originals go to the trash of this library.")
+  defp dialog_hint(:links), do: gettext("Only people who may see the library can open them.")
+  defp dialog_hint(_action), do: nil
+
+  defp dialog_confirm(:trash), do: gettext("Move to trash")
+  defp dialog_confirm(:copy), do: gettext("Add")
+  defp dialog_confirm(:move), do: gettext("Move")
+  defp dialog_confirm(:tag), do: gettext("Save tags")
+
+  attr :running, :map, required: true
+
+  defp bulk_progress(assigns) do
+    ~H"""
+    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div
+        class="flex w-full max-w-sm items-center gap-3 rounded-2xl border border-base-content/10 bg-base-100/95 p-3 shadow-xl backdrop-blur-xl"
+        role="status"
+      >
+        <span class="text-sm tabular-nums">{@running.done} / {@running.total}</span>
+        <progress class="progress progress-primary flex-1" value={@running.done} max={@running.total}>
+        </progress>
+      </div>
+    </div>
+    """
+  end
+
+  attr :notice, :map, required: true
+  attr :myself, :any, required: true
+
+  defp bulk_notice(assigns) do
+    ~H"""
+    <div class="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div
+        class="pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl border border-base-content/10 bg-base-100/95 px-4 py-2.5 shadow-xl backdrop-blur-xl"
+        role="status"
+      >
+        <div class="min-w-0 text-sm">
+          <p class="font-medium">{@notice.text}</p>
+          <p :for={line <- @notice.problems} class="text-warning">{line}</p>
+        </div>
+        <button
+          :if={@notice.undo != []}
+          type="button"
+          class="btn btn-ghost btn-sm"
+          phx-click="timeline:bulk_undo"
+          phx-target={@myself}
+        >
+          {gettext("Undo")}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-circle btn-xs"
+          aria-label={gettext("Close")}
+          phx-click="timeline:notice_close"
+          phx-target={@myself}
+        >
+          <span class="hero-x-mark size-4" aria-hidden="true"></span>
+        </button>
       </div>
     </div>
     """
@@ -735,14 +1295,27 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   defp glyph("honeycomb") do
-    for {x, y} <- [{4, 3.5}, {12, 3.5}, {20, 3.5}, {8, 10}, {16, 10}, {4, 16.5}, {12, 16.5}, {20, 16.5}] do
+    for {x, y} <- [
+          {4, 3.5},
+          {12, 3.5},
+          {20, 3.5},
+          {8, 10},
+          {16, 10},
+          {4, 16.5},
+          {12, 16.5},
+          {20, 16.5}
+        ] do
       {:circle, [cx: x, cy: y, r: 3.3]}
     end
   end
 
   defp glyph("details") do
     for y <- [0, 6.5, 13] do
-      [box(0, y, 5, 5, rx: 0.8), box(7, y + 0.5, 17, 1.8, rx: 0.9), box(7, y + 3, 10, 1.4, rx: 0.7, opacity: "0.6")]
+      [
+        box(0, y, 5, 5, rx: 0.8),
+        box(7, y + 0.5, 17, 1.8, rx: 0.9),
+        box(7, y + 3, 10, 1.4, rx: 0.7, opacity: "0.6")
+      ]
     end
     |> List.flatten()
   end

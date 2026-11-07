@@ -97,6 +97,10 @@ defmodule PhoenixKitPhotos do
     ]
   end
 
+  @doc "The tools agents get through the machine API: see `PhoenixKitPhotos.API`."
+  @impl PhoenixKit.Module
+  def api_tools, do: PhoenixKitPhotos.API.tools()
+
   @doc """
   Claim `photos` so no other module's routes take it.
   """

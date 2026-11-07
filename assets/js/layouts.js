@@ -12,7 +12,8 @@
  * Every style, in the order the switcher offers them.
  *
  * `aspects`: the shape depends on the aspect ratio of each photo. `crop`: tiles have a shape of
- * their own, so the square thumbnail will do while they are small.
+ * their own, so the square thumbnail will do while they are small. `maxFiles`: the largest
+ * library the style can show.
  */
 export const STYLES = {
   grid: { aspects: false, crop: true },
@@ -20,7 +21,8 @@ export const STYLES = {
   columns: { aspects: true, crop: false },
   mosaic: { aspects: true, crop: true },
   whole: { aspects: true, crop: false },
-  feed: { aspects: true, crop: false },
+  // A photo a screen tall: past this many, the page is taller than a browser can scroll.
+  feed: { aspects: true, crop: false, maxFiles: 30000 },
   prints: { aspects: false, crop: true },
   film: { aspects: false, crop: true },
   honeycomb: { aspects: false, crop: true },

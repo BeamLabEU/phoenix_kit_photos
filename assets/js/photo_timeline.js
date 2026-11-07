@@ -245,6 +245,10 @@ export const PhotoTimeline = {
 
     this.sections = payload.sections || []
     this.storeAspects(payload.aspects)
+    if (!this.styleFits(this.styleId)) {
+      this.styleId = DEFAULT_STYLE
+      if (this.el.dataset) this.el.dataset.activeStyle = DEFAULT_STYLE
+    }
     this.resetSlides()
     if (payload.metrics) {
       const { gap, ...rest } = payload.metrics
@@ -1351,9 +1355,15 @@ export const PhotoTimeline = {
     return this.sections.every(s => this.aspects?.get(s.id)?.length === s.count)
   },
 
+  /** Whether this library is small enough for a style. */
+  styleFits(id) {
+    const limit = STYLES[id]?.maxFiles
+    return !limit || this.sections.reduce((sum, section) => sum + section.count, 0) <= limit
+  },
+
   /** Change style. One that shows whole photos first asks for the ratios it is placed by. */
   setStyle(id) {
-    if (!STYLES[id]) return
+    if (!STYLES[id] || !this.styleFits(id)) return
     this.pendingStyle = null
     clearTimeout(this.aspectsTimer)
     this.markStyle(id)
@@ -1433,6 +1443,7 @@ export const PhotoTimeline = {
     if (!root) return
     for (const button of root.querySelectorAll("[data-style-pick]")) {
       button.setAttribute("aria-pressed", String(button.dataset.stylePick === id))
+      button.disabled = !this.styleFits(button.dataset.stylePick)
     }
     const icon = root.querySelector("[data-style-current]")
     const picked = root.querySelector(`[data-style-pick="${id}"] svg`)

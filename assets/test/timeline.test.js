@@ -723,3 +723,16 @@ test("nothing chosen, nothing asked", () => {
   h.bulk("trash")
   assert.equal(sent.length, 0)
 })
+
+test("a style a library is too big for cannot be picked, and is left when one arrives", () => {
+  const { h } = hook()
+  h.el.clientWidth = 816
+  const big = { ...section(500), count: 40000, sum_aspect: 60000, days_list: [{ id: "x", count: 40000 }] }
+  h.setIndex({ library: "a", revision: 1, sections: [section(3)] })
+  h.styleId = "feed"
+  h.setIndex({ library: "b", revision: 2, sections: [big] })
+  assert.equal(h.styleId, "grid", "the page would be taller than a browser can scroll")
+  h.setStyle("feed")
+  assert.equal(h.styleId, "grid")
+  assert.equal(h.pendingStyle, undefined)
+})

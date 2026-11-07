@@ -46,8 +46,18 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   is a tile size, kept in the browser (`localStorage`, `phoenix_kit_photos:cell`), so it carries
   over to another screen width and wins over `cell`. Tiles go down to 56 px and up to one column.
 
-  `layout` accepts `:square` only. Square heights are exact, which is why
-  the grid does not need tombstone refinement. There is no `on_select`.
+  ## Styles
+
+  `layout` is the style a person sees first: `:square` (the plain grid), `:rows`, `:columns`,
+  `:mosaic`, `:whole`, `:feed`, `:prints`, `:film`, `:honeycomb` or `:details`. `styles` puts
+  a menu by the month pill that lets them change it: `true` for all of them, or a list of the
+  ones to offer. Their pick is kept in the browser (`localStorage`,
+  `phoenix_kit_photos:style`) and wins over `layout`. `v` steps through the styles.
+
+  A change of style is an animation in the browser and asks nothing of the server, except
+  the first time a style needs the aspect ratio of every file (`Timeline.aspects/2`). Every
+  style's heights are exact, so the scrollbar, a jump to a month, the bookmark and the swipe
+  viewer's way back work the same in all of them.
 
   `pager` makes a click on a tile open the swipe viewer (in the `PhotoTimeline`
   hook) instead of sending `on_open`. `false` (the default) is no swipe viewer;
@@ -93,14 +103,20 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   """
 
   use Phoenix.LiveComponent
+  use Gettext, backend: PhoenixKitPhotos.Gettext
 
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Timeline
+
+  @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details)
+  @layouts Map.new(@styles, &{String.to_atom(&1), &1}) |> Map.put(:square, "grid")
 
   @impl true
   def mount(socket) do
     {:ok,
      socket
+     |> assign(:aspects_wanted, false)
+     |> assign(:aspects_sent, %{})
      |> assign(:index, nil)
      |> assign(:sections, [])
      |> assign(:state, :empty)
@@ -150,6 +166,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:scope, scope)
       |> assign(:auth, auth)
       |> assign(:layout, layout)
+      |> assign(:styles, offered_styles(Map.get(assigns, :styles, false)))
       |> assign(:columns, Map.get(assigns, :columns, 5))
       |> assign(:fill, Map.get(assigns, :fill, false) == true)
       |> assign(:cell, positive_integer(Map.get(assigns, :cell)))
@@ -259,15 +276,34 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           "PhotoTimeline :auth must be a PhoenixKit.Users.Auth.Scope, got: #{inspect(other)}"
   end
 
-  defp validate_layout!(:square), do: :square
-
-  defp validate_layout!(:justified) do
-    raise ArgumentError, ":justified layout arrives in Stage 3; use :square"
-  end
+  defp validate_layout!(layout) when is_map_key(@layouts, layout), do: Map.fetch!(@layouts, layout)
 
   defp validate_layout!(other) do
-    raise ArgumentError, "PhotoTimeline :layout must be :square, got: #{inspect(other)}"
+    raise ArgumentError,
+          "PhotoTimeline :layout must be one of #{inspect(Map.keys(@layouts))}, " <>
+            "got: #{inspect(other)}"
   end
+
+  # What the menu offers: every style, or the host's list in the order of the menu.
+  defp offered_styles(true), do: @styles
+
+  defp offered_styles(list) when is_list(list) do
+    wanted = Enum.map(list, &Map.get(@layouts, &1))
+    Enum.filter(@styles, &(&1 in wanted))
+  end
+
+  defp offered_styles(_none), do: []
+
+  defp style_label("grid"), do: gettext("Grid")
+  defp style_label("rows"), do: gettext("Rows")
+  defp style_label("columns"), do: gettext("Columns")
+  defp style_label("mosaic"), do: gettext("Mosaic")
+  defp style_label("whole"), do: gettext("Uncropped")
+  defp style_label("feed"), do: gettext("Feed")
+  defp style_label("prints"), do: gettext("Prints")
+  defp style_label("film"), do: gettext("Film")
+  defp style_label("honeycomb"), do: gettext("Honeycomb")
+  defp style_label("details"), do: gettext("Details")
 
   defp load_index(socket) do
     socket = assign(socket, :revision, socket.assigns.revision + 1)
@@ -296,15 +332,40 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     if connected?(socket) do
       {:library, library_uuid} = socket.assigns.scope
 
+      {socket, aspects} = changed_aspects(socket)
+
       push_event(socket, event(socket, "index"), %{
         revision: socket.assigns.revision,
         library: library_uuid,
         total: index.total,
         sections: Enum.map(index.sections, &section_payload/1),
-        metrics: %{cell: 160, gap: socket.assigns.gap, header: 40}
+        metrics: %{cell: 160, gap: socket.assigns.gap, header: 40},
+        aspects: aspects
       })
     else
       socket
+    end
+  end
+
+  # The aspect ratios of the sections the browser does not have yet, or that changed since it
+  # last got them. A burst of uploads changes one month, not the library. Nil until asked for.
+  defp changed_aspects(%{assigns: %{aspects_wanted: false}} = socket), do: {socket, nil}
+
+  defp changed_aspects(socket) do
+    case Timeline.aspects(socket.assigns.scope, socket.assigns.auth) do
+      {:ok, aspects} ->
+        sent = Map.new(aspects, fn {id, bytes} -> {id, :erlang.phash2(bytes)} end)
+        before = socket.assigns.aspects_sent
+
+        changed =
+          for {id, bytes} <- aspects, sent[id] != before[id], into: %{} do
+            {id, Base.encode64(bytes)}
+          end
+
+        {assign(socket, :aspects_sent, sent), changed}
+
+      {:error, _reason} ->
+        {socket, nil}
     end
   end
 
@@ -320,8 +381,21 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   @impl true
-  def handle_event("timeline:ready", _params, socket) do
-    {:noreply, load_index(socket)}
+  # A hook saying hello has nothing yet, whatever this process sent an earlier one.
+  def handle_event("timeline:ready", params, socket) do
+    {:noreply,
+     socket
+     |> assign(:aspects_wanted, params["aspects"] == true or socket.assigns.aspects_wanted)
+     |> assign(:aspects_sent, %{})
+     |> load_index()}
+  end
+
+  # A style that shows whole photos was picked: from now on the index brings the ratios.
+  def handle_event("timeline:aspects", %{"revision" => revision}, socket) do
+    {socket, aspects} = socket |> assign(:aspects_wanted, true) |> changed_aspects()
+
+    {:noreply,
+     push_event(socket, event(socket, "aspects"), %{aspects: aspects || %{}, revision: revision})}
   end
 
   def handle_event("timeline:need_window", %{"window" => day, "revision" => revision}, socket) do
@@ -398,7 +472,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             ar: item.ar,
             thumb: item.thumb,
             preview: item.preview,
-            kind: item.kind
+            kind: item.kind,
+            fit: item.fit,
+            large: item.large,
+            name: item.name,
+            size: item.size,
+            duration: item.duration
           }
         end)
     }
@@ -418,43 +497,82 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       data-photo-path={@photo_path}
       data-library-path={@library_path}
     >
-      <form
-        :if={@sections != [] && !@fill}
-        id={"#{@id}-jump"}
-        phx-change="timeline:jump"
-        phx-auto-recover="ignore"
-        phx-target={@myself}
-        class="flex justify-end"
+      <%!-- The month, and the choice of style. Filling the screen they float under the header
+           as pills. --%>
+      <div
+        :if={@sections != []}
+        class={[
+          "flex items-center gap-2",
+          @fill && "absolute right-3 z-10",
+          !@fill && "justify-end"
+        ]}
+        style={@fill && "top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"}
       >
-        <select name="id" class="select select-bordered select-sm" aria-label="Jump to month">
-          <option :for={section <- @sections} value={section.id}>{section.label}</option>
-        </select>
-      </form>
-
-      <%!-- Filling the screen: the month at the top, as a pill under the header. The
-           invisible select over it is the list; the browser's own picker opens, which
-           is the right one on a phone. --%>
-      <form
-        :if={@sections != [] && @fill}
-        id={"#{@id}-jump"}
-        phx-change="timeline:jump"
-        phx-auto-recover="ignore"
-        phx-target={@myself}
-        class="absolute right-3 z-10"
-        style="top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"
-      >
-        <label class="relative flex cursor-pointer items-center gap-1 rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-3 pr-2 text-sm font-medium shadow-sm backdrop-blur-md">
-          <span id={"#{@id}-current"} data-current-section phx-update="ignore"></span>
-          <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
-          <select
-            name="id"
-            class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            aria-label="Jump to month"
+        <div :if={@styles != []} id={"#{@id}-styles"} class="relative" phx-update="ignore">
+          <button
+            type="button"
+            data-style-toggle
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label={gettext("Change how photos are shown")}
+            title={gettext("Change how photos are shown (V)")}
+            class="flex cursor-pointer items-center gap-1 rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-2.5 pr-2 shadow-sm backdrop-blur-md"
           >
+            <span data-style-current class="block h-[18px] w-6"></span>
+            <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
+          </button>
+          <div
+            data-style-menu
+            hidden
+            class="absolute right-0 top-full z-20 mt-2 w-[min(21rem,calc(100vw-1.5rem))] rounded-box border border-base-content/10 bg-base-100/90 p-2 shadow-xl backdrop-blur-xl [&:not([hidden])]:grid grid-cols-3 gap-1 sm:grid-cols-4"
+          >
+            <button
+              :for={style <- @styles}
+              type="button"
+              data-style-pick={style}
+              aria-pressed="false"
+              class="flex cursor-pointer flex-col items-center gap-1.5 rounded-field px-1 py-2 text-xs transition-colors hover:bg-base-content/5 aria-pressed:bg-primary/15 aria-pressed:text-primary"
+            >
+              <.style_glyph style={style} />
+              <span>{style_label(style)}</span>
+            </button>
+          </div>
+        </div>
+
+        <form
+          :if={!@fill}
+          id={"#{@id}-jump"}
+          phx-change="timeline:jump"
+          phx-auto-recover="ignore"
+          phx-target={@myself}
+        >
+          <select name="id" class="select select-bordered select-sm" aria-label="Jump to month">
             <option :for={section <- @sections} value={section.id}>{section.label}</option>
           </select>
-        </label>
-      </form>
+        </form>
+
+        <%!-- The invisible select over the pill is the list; the browser's own picker opens,
+             which is the right one on a phone. --%>
+        <form
+          :if={@fill}
+          id={"#{@id}-jump"}
+          phx-change="timeline:jump"
+          phx-auto-recover="ignore"
+          phx-target={@myself}
+        >
+          <label class="relative flex cursor-pointer items-center gap-1 rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-3 pr-2 text-sm font-medium shadow-sm backdrop-blur-md">
+            <span id={"#{@id}-current"} data-current-section phx-update="ignore"></span>
+            <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
+            <select
+              name="id"
+              class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              aria-label="Jump to month"
+            >
+              <option :for={section <- @sections} value={section.id}>{section.label}</option>
+            </select>
+          </label>
+        </form>
+      </div>
 
       <div :if={@error && !@fill} class="alert alert-warning" role="status">
         {error_message(@error)}
@@ -510,7 +628,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         data-cell={@cell}
         data-gap={@gap}
         data-fill={to_string(@fill)}
-        data-layout={@layout}
+        data-style={@layout}
         class={[
           "phoenix-kit-photo-timeline__viewport relative touch-pan-y overflow-y-auto",
           @fill && "h-full overscroll-contain",
@@ -528,6 +646,105 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       </div>
     </div>
     """
+  end
+
+  attr :style, :string, required: true
+
+  # A little picture of each style, for the menu.
+  defp style_glyph(assigns) do
+    assigns = assign(assigns, :shapes, glyph(assigns.style))
+
+    ~H"""
+    <svg viewBox="0 0 24 18" class="h-[18px] w-6" fill="currentColor" aria-hidden="true">
+      <%= for {shape, attrs} <- @shapes do %>
+        <rect :if={shape == :rect} {attrs} />
+        <circle :if={shape == :circle} {attrs} />
+      <% end %>
+    </svg>
+    """
+  end
+
+  defp box(x, y, w, h, extra), do: {:rect, [x: x, y: y, width: w, height: h] ++ extra}
+
+  defp glyph("grid") do
+    for x <- [0, 8.5, 17], y <- [0, 6.5, 13], do: box(x, y, 7, 5, rx: 0.8)
+  end
+
+  defp glyph("rows") do
+    [
+      box(0, 0, 9, 5.2, rx: 0.8),
+      box(10, 0, 6, 5.2, rx: 0.8),
+      box(17, 0, 7, 5.2, rx: 0.8),
+      box(0, 6.4, 5, 5.2, rx: 0.8),
+      box(6, 6.4, 11, 5.2, rx: 0.8),
+      box(18, 6.4, 6, 5.2, rx: 0.8),
+      box(0, 12.8, 13, 5.2, rx: 0.8),
+      box(14, 12.8, 10, 5.2, rx: 0.8)
+    ]
+  end
+
+  defp glyph("columns") do
+    [
+      box(0, 0, 7, 8, rx: 1),
+      box(0, 9, 7, 9, rx: 1),
+      box(8.5, 0, 7, 5, rx: 1),
+      box(8.5, 6, 7, 12, rx: 1),
+      box(17, 0, 7, 11, rx: 1),
+      box(17, 12, 7, 6, rx: 1)
+    ]
+  end
+
+  defp glyph("mosaic") do
+    [
+      box(0, 0, 11, 11, rx: 1.2),
+      box(12.5, 0, 5, 5, rx: 1),
+      box(19, 0, 5, 11, rx: 1),
+      box(12.5, 6, 5, 5, rx: 1),
+      box(0, 12.5, 5, 5.5, rx: 1),
+      box(6.5, 12.5, 17.5, 5.5, rx: 1)
+    ]
+  end
+
+  defp glyph("whole") do
+    [
+      box(0.5, 2, 7, 4.5, rx: 0.4),
+      box(10, 0, 4, 7, rx: 0.4),
+      box(16.5, 2, 7, 4, rx: 0.4),
+      box(1.5, 11, 5, 7, rx: 0.4),
+      box(8.5, 12, 7, 4.5, rx: 0.4),
+      box(16.5, 12, 7, 5, rx: 0.4)
+    ]
+  end
+
+  defp glyph("feed") do
+    [box(5, 0, 14, 10.5, rx: 1.6), box(5, 12, 14, 6, rx: 1.6)]
+  end
+
+  defp glyph("prints") do
+    [
+      box(1, 1.5, 9, 11, rx: 0.5, transform: "rotate(-6 5.5 7)"),
+      box(13.5, 0.5, 9, 11, rx: 0.5, transform: "rotate(5 18 6)", opacity: "0.7"),
+      box(7.5, 7, 9, 11, rx: 0.5, transform: "rotate(2 12 12.5)", opacity: "0.85")
+    ]
+  end
+
+  defp glyph("film") do
+    holes = for x <- [1, 5, 9, 13, 17, 21], y <- [1, 15.5], do: box(x, y, 2, 1.5, rx: 0.3)
+    frames = for x <- [0.5, 8.5, 16.5], do: box(x, 4, 7, 10, rx: 0.5)
+    holes ++ frames
+  end
+
+  defp glyph("honeycomb") do
+    for {x, y} <- [{4, 3.5}, {12, 3.5}, {20, 3.5}, {8, 10}, {16, 10}, {4, 16.5}, {12, 16.5}, {20, 16.5}] do
+      {:circle, [cx: x, cy: y, r: 3.3]}
+    end
+  end
+
+  defp glyph("details") do
+    for y <- [0, 6.5, 13] do
+      [box(0, y, 5, 5, rx: 0.8), box(7, y + 0.5, 17, 1.8, rx: 0.9), box(7, y + 3, 10, 1.4, rx: 0.7, opacity: "0.6")]
+    end
+    |> List.flatten()
   end
 
   defp state_message(:empty), do: "No photos yet."

@@ -1,11 +1,14 @@
 import {
-  squareSectionHeight,
   buildOffsets,
   totalHeight,
   visibleSections,
   sectionAtOffset,
   anchorAt
 } from "./geometry.js"
+import { STYLES, STYLE_IDS, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
+import { installTimelineCss } from "./timeline_css.js"
+import { fillTile, pickSource, swapImage } from "./tiles.js"
+import { morph } from "./morph.js"
 import { SlideStore, wantWidth } from "./slides.js"
 import { engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
@@ -27,6 +30,11 @@ const ECHO_MS = 5 * 1000
 // Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
 const MIN_CELL = 56
 const ZOOM_KEY = "phoenix_kit_photos:cell"
+
+// The style a person picked, and how long a style that shows whole photos waits for the aspect
+// ratios before it makes do with each month's average.
+const STYLE_KEY = "phoenix_kit_photos:style"
+const ASPECTS_WAIT_MS = 1500
 
 /**
  * The timeline hook.
@@ -57,6 +65,9 @@ export const PhotoTimeline = {
   addressClosing: false,
   addressSent: null,
   view: null,
+  // The style on screen (see "styles" below), and the aspect ratios of the files, by section.
+  styleId: DEFAULT_STYLE,
+  aspects: null,
 
   mounted() {
     // The virtual grid owns scroll restoration. Browser anchoring must not
@@ -91,6 +102,7 @@ export const PhotoTimeline = {
     this.library = null
     this.revision = null
     this.needed = new Set()
+    this.aspects = new Map()
     this.slides = new SlideStore([])
     this.sectionStarts = []
     this.pager = null
@@ -99,6 +111,11 @@ export const PhotoTimeline = {
 
     this.spacer = this.el.querySelector(".phoenix-kit-photo-timeline__spacer")
     this.layer = this.el.querySelector(".phoenix-kit-photo-timeline__layer")
+
+    installTimelineCss()
+    this.styleId = this.startingStyle()
+    this.el.dataset.activeStyle = this.styleId
+    this.bindStyleMenu()
 
     this.mountBookmark()
     this.onPositionInput = event => this.beginPositionInput(event)
@@ -141,7 +158,8 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:jump`, ({ id }) => this.jumpTo(id))
     this.handleEvent(`${prefix}:view`, (payload) => this.applyView(payload))
     this.handleEvent(`${prefix}:slides`, (payload) => this.setSlides(payload))
-    this.send("timeline:ready", {})
+    this.handleEvent(`${prefix}:aspects`, (payload) => this.setAspects(payload))
+    this.send("timeline:ready", this.readyPayload())
   },
 
   send(event, payload) {
@@ -154,7 +172,7 @@ export const PhotoTimeline = {
 
   reconnected() {
     this.handleScroll()
-    this.send("timeline:ready", {})
+    this.send("timeline:ready", this.readyPayload())
     this.reloadWindows({ olderThan: STALE_AFTER_MS })
   },
 
@@ -171,6 +189,8 @@ export const PhotoTimeline = {
     window.removeEventListener("focus", this.onWindowFocus)
     clearTimeout(this.positionInputTimer)
     window.removeEventListener("resize", this.onResize)
+    this.unbindStyleMenu()
+    clearTimeout(this.aspectsTimer)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
     this.onScroll.cancel()
@@ -206,11 +226,13 @@ export const PhotoTimeline = {
     if (libraryChanged) {
       this.windows.clear()
       this.known.clear()
+      this.aspects?.clear()
     }
     this.fresh.clear()
     this.refreshing.clear()
 
     this.sections = payload.sections || []
+    this.storeAspects(payload.aspects)
     this.resetSlides()
     if (payload.metrics) {
       const { gap, ...rest } = payload.metrics
@@ -233,6 +255,7 @@ export const PhotoTimeline = {
       this.bookmarkAnchor = saved?.anchor || this.captureAnchor()
       if (!saved) this.rememberPosition()
     }
+    this.markStyle(this.styleId)
     if (refresh) this.revalidate()
     this.markNew = refresh
     this.handleScroll()
@@ -299,10 +322,7 @@ export const PhotoTimeline = {
     const index = this.sections.findIndex(s => s.id === a.id)
     if (index < 0) return null
     // Mark the gap before the first complete visible row, below the app header.
-    const row = Math.min(Math.ceil(this.sections[index].count / this.columns) - 1,
-      Math.ceil(a.item / this.columns + (a.rowFraction || 0) - 1e-9))
-    return this.offsets[index] + this.metrics.header + Math.max(0, row) *
-      (this.metrics.cell + this.metrics.gap) - (row > 0 ? this.metrics.gap / 2 : 0)
+    return this.offsets[index] + this.layoutOf(this.sections[index]).mark(a.item, a.rowFraction || 0)
   },
 
   renderBookmark() {
@@ -395,14 +415,39 @@ export const PhotoTimeline = {
   },
 
   measure(section) {
+    return this.layoutOf(section).height
+  },
+
+  /** Where everything in a section goes in the style on screen (see layouts.js). */
+  layoutOf(section) {
     const { cell, gap, header } = this.metrics
-    return squareSectionHeight({
-      count: section.count,
-      columns: this.columns,
-      cell,
-      gap,
-      header
-    })
+    const key = `${this.styleId}:${this.columns}:${cell}:${gap}:${header}`
+    if (key !== this.layoutKey || !this.layouts) {
+      this.layoutKey = key
+      this.layouts = new WeakMap()
+    }
+    let layout = this.layouts.get(section)
+    if (!layout) {
+      layout = buildLayout(this.styleId, {
+        count: section.count,
+        aspectAt: this.aspectReader(section),
+        columns: this.columns,
+        width: this.columns * (cell + gap) - gap,
+        cell,
+        gap,
+        header
+      })
+      this.layouts.set(section, layout)
+    }
+    return layout
+  },
+
+  /** The aspect ratio of each file of a section; the month's average while they are unknown. */
+  aspectReader(section) {
+    const known = this.aspects?.get(section.id)
+    if (known && known.length === section.count) return (index) => known[index]
+    const average = section.count > 0 && section.sum_aspect > 0 ? section.sum_aspect / section.count : 1.4
+    return () => average
   },
 
   /**
@@ -416,22 +461,23 @@ export const PhotoTimeline = {
     // The top of what can be seen is below the inset: the grid scrolls under a header.
     const anchor = anchorAt(this.offsets, this.el.scrollTop + this.inset)
     if (!anchor) return null
-    const row = Math.max(0, anchor.delta - this.metrics.header) / (this.metrics.cell + this.metrics.gap)
-    // Keep the partial row separately: flooring a fractional tile count on every
-    // wake/resize can move the viewport backwards, especially with subpixel cells.
-    const wholeRow = Math.floor(row + 1e-9)
+    const section = this.sections[anchor.index]
+    const { item, fraction } = section
+      ? this.layoutOf(section).anchor(anchor.delta)
+      : { item: 0, fraction: 0 }
     return {
-      id: this.sections[anchor.index]?.id,
+      id: section?.id,
       index: anchor.index,
       delta: anchor.delta,
       columns: this.columns,
       cell: this.metrics.cell,
       header: this.metrics.header,
       gap: this.metrics.gap,
+      style: this.styleId,
       headerOffset: Math.min(anchor.delta, this.metrics.header),
       // The place in the section as a count of tiles, so it survives a change of columns.
-      item: wholeRow * this.columns,
-      rowFraction: Math.max(0, row - wholeRow)
+      item,
+      rowFraction: fraction
     }
   },
 
@@ -471,13 +517,13 @@ export const PhotoTimeline = {
     if (anchor && this.sections.length) {
       const found = this.sections.findIndex(s => s.id === anchor.id)
       const index = found >= 0 ? found : Math.min(anchor.index, this.sections.length - 1)
-      const row = found >= 0 ? Math.floor(anchor.item / this.columns) : 0
       const fraction = Number.isFinite(anchor.rowFraction) ? Math.max(0, Math.min(1, anchor.rowFraction)) : 0
       const unchanged = anchor.columns === this.columns && anchor.cell === this.metrics.cell &&
-        anchor.header === this.metrics.header && anchor.gap === this.metrics.gap
+        anchor.header === this.metrics.header && anchor.gap === this.metrics.gap &&
+        (anchor.style ?? DEFAULT_STYLE) === this.styleId
       const delta = found < 0 ? 0 : unchanged && Number.isFinite(anchor.delta)
         ? anchor.delta
-        : anchor.headerOffset + (row + fraction) * (this.metrics.cell + this.metrics.gap)
+        : anchor.headerOffset + this.layoutOf(this.sections[index]).contentY(anchor.item, fraction)
       this.el.scrollTop = Math.max(0, this.offsets[index] + delta - this.inset)
     }
   },
@@ -669,11 +715,7 @@ export const PhotoTimeline = {
     const index = sectionAtOffset(this.offsets, this.el.scrollTop + y)
     const section = this.sections[index]
     if (!section || section.count <= 0) return null
-    const { cell, gap, header } = this.metrics
-    const stride = cell + gap
-    const row = Math.max(0, Math.floor((this.el.scrollTop + y - this.offsets[index] - header) / stride))
-    const col = Math.min(this.columns - 1, Math.max(0, Math.floor(x / stride)))
-    return { index, item: Math.min(section.count - 1, row * this.columns + col) }
+    return { index, item: this.layoutOf(section).hit(x, this.el.scrollTop + y - this.offsets[index]) }
   },
 
   /** The smallest and largest tile there can be at this width: MIN_CELL, and one column. */
@@ -691,14 +733,15 @@ export const PhotoTimeline = {
     const focus = this.itemAtPoint(x, y)
     this.zoomCell = Math.min(high, Math.max(low, cell))
     this.relayout(null)
-    if (focus) {
-      const row = Math.floor(focus.item / this.columns)
-      const { cell: size, gap, header } = this.metrics
-      const middle = this.offsets[focus.index] + header + row * (size + gap) + size / 2
-      this.el.scrollTop = Math.max(0, middle - y)
-    }
+    if (focus) this.el.scrollTop = Math.max(0, this.tileMiddle(focus) - y)
     this.handleScroll()
     this.rememberZoom()
+  },
+
+  /** The height in the library of the middle of a tile. */
+  tileMiddle({ index, item }) {
+    const { y, h } = this.layoutOf(this.sections[index]).rect(item)
+    return this.offsets[index] + y + h / 2
   },
 
   /** One column more (`steps` > 0, smaller tiles) or fewer, around the middle of the screen. */
@@ -1096,13 +1139,12 @@ export const PhotoTimeline = {
       else break
     }
     if (found < 0) return
-    const { cell, gap, header } = this.metrics
-    const row = Math.floor((index - this.sectionStarts[found]) / this.columns)
-    const top = this.offsets[found] + header + row * (cell + gap)
+    const rect = this.layoutOf(this.sections[found]).rect(index - this.sectionStarts[found])
+    const top = this.offsets[found] + rect.y
     const view = this.el.clientHeight
     // The tile must clear the header the grid scrolls under.
-    if (top < this.el.scrollTop + this.inset || top + cell > this.el.scrollTop + view) {
-      this.el.scrollTop = Math.max(0, top - this.inset - (view - this.inset - cell) / 2)
+    if (top < this.el.scrollTop + this.inset || top + rect.h > this.el.scrollTop + view) {
+      this.el.scrollTop = Math.max(0, top - this.inset - (view - this.inset - rect.h) / 2)
       this.handleScroll()
     }
   },
@@ -1111,20 +1153,9 @@ export const PhotoTimeline = {
     const sectionIndex = this.sections.indexOf(section)
     if (sectionIndex < 0 || !section || section.count <= 0) return { first: 0, last: -1 }
 
-    const { cell, gap, header } = this.metrics
-    const stride = cell + gap
-    const contentTop = this.offsets[sectionIndex] + header
+    const top = this.offsets[sectionIndex]
     const viewTop = this.el.scrollTop
-    const viewBottom = viewTop + this.el.clientHeight
-    const firstRow = Math.max(0, Math.floor((viewTop - contentTop) / stride) - 1)
-    const lastRow = Math.ceil((viewBottom - contentTop) / stride) + 1
-    const lastIndex = Math.max(0, section.count - 1)
-    if (lastRow < 0 || firstRow * this.columns > lastIndex) return { first: 0, last: -1 }
-
-    return {
-      first: Math.min(lastIndex, firstRow * this.columns),
-      last: Math.min(lastIndex, (lastRow + 1) * this.columns - 1)
-    }
+    return this.layoutOf(section).range(viewTop - top, viewTop + this.el.clientHeight - top)
   },
 
   materialize(sectionIndices) {
@@ -1152,7 +1183,9 @@ export const PhotoTimeline = {
 
     for (const [id, node] of this.pool) {
       if (!keep.has(id)) {
-        node.remove()
+        // In a change of style a tile that leaves the screen goes there, not out of existence.
+        if (this.leaving && !id.startsWith("header:")) this.leaving.set(id, node)
+        else node.remove()
         this.pool.delete(id)
       }
     }
@@ -1182,17 +1215,11 @@ export const PhotoTimeline = {
   },
 
   tilePosition(sectionIndex, index) {
-    const { cell, gap, header } = this.metrics
-    const col = index % this.columns
-    const row = Math.floor(index / this.columns)
-    return {
-      x: col * (cell + gap),
-      y: this.offsets[sectionIndex] + header + row * (cell + gap),
-      size: cell
-    }
+    const { x, y, w, h } = this.layoutOf(this.sections[sectionIndex]).rect(index)
+    return { x, y: this.offsets[sectionIndex] + y, w, h }
   },
 
-  placeTile({ item, x, y, size, global }) {
+  placeTile({ item, x, y, w, h, global }) {
     let node = this.pool.get(item.id)
     const created = !node
     if (!node) {
@@ -1200,21 +1227,13 @@ export const PhotoTimeline = {
       node.type = "button"
       node.dataset.fileId = item.id
       node.setAttribute("aria-label", item.kind === "video" ? "Open video" : "Open photo")
-      node.className = "pointer-events-auto overflow-hidden bg-base-200 p-0"
+      node.className = "pkt-tile"
       node.addEventListener("pointerdown", () => this.prefetchSlides(Number(node.dataset.global)))
       node.addEventListener("click", () => this.openTile(item.id, Number(node.dataset.global)))
-      const img = document.createElement("img")
-      img.alt = ""
-      img.loading = "lazy"
-      img.decoding = "async"
-      img.draggable = false
-      img.style.width = "100%"
-      img.style.height = "100%"
-      img.style.objectFit = "cover"
-      node.appendChild(img)
+      fillTile(node, item)
       this.layer.appendChild(node)
       this.pool.set(item.id, node)
-    } else if (this.gliding && parseFloat(node.style.width) === size) {
+    } else if (this.gliding && parseFloat(node.style.width) === w && parseFloat(node.style.height) === h) {
       // Only a move: a change of size (zoom, resize) is laid out, not animated.
       glide(node, x, y)
     }
@@ -1223,21 +1242,238 @@ export const PhotoTimeline = {
     node.style.position = "absolute"
     node.style.left = `${x}px`
     node.style.top = `${y}px`
-    node.style.width = `${size}px`
-    node.style.height = `${size}px`
+    node.style.width = `${w}px`
+    node.style.height = `${h}px`
 
-    const img = node.querySelector("img")
-    const src = item.thumb || item.preview
+    const img = node.querySelector("img:last-of-type")
+    const src = pickSource(item, w, h, this.style(), devicePixels())
     if (img && src && img.dataset.src !== src) {
-      img.dataset.src = src
-      img.src = src
+      // A tile on screen keeps its picture until the better one is ready.
+      if (!created && img.dataset.src && this.sharpening(img.dataset.src, item)) swapImage(node, img, src)
+      else {
+        img.dataset.src = src
+        img.src = src
+      }
     } else if (img && !src) {
       img.removeAttribute("src")
       delete img.dataset.src
     }
 
     if (created && this.fresh.delete(item.id)) popIn(node)
+  },
+
+  /** Whether changing from `old` is a change of picture, not a link that ran out being renewed. */
+  sharpening(old, item) {
+    return [item.thumb, item.fit, item.preview, item.large].includes(old)
+  },
+
+  // --- styles: how the tiles look, and the walk from one look to another ---
+
+  style() {
+    return STYLES[this.styleId] || STYLES[DEFAULT_STYLE]
+  },
+
+  /** What the person picked last, else what the host asks for, else the plain grid. */
+  startingStyle() {
+    let stored = null
+    try {
+      stored = window.localStorage.getItem(STYLE_KEY)
+    } catch (_error) {
+      // private mode and the like
+    }
+    if (STYLES[stored]) return stored
+    const asked = this.el.dataset.style
+    return STYLES[asked] ? asked : DEFAULT_STYLE
+  },
+
+  rememberStyle() {
+    try {
+      window.localStorage.setItem(STYLE_KEY, this.styleId)
+    } catch (_error) {
+      // the choice lasts until the page is left
+    }
+  },
+
+  /** Tell the server on hello whether this style needs the aspect ratios with the index. */
+  readyPayload() {
+    return this.style().aspects ? { aspects: true } : {}
+  },
+
+  storeAspects(aspects) {
+    if (!aspects) return
+    this.aspects = this.aspects || new Map()
+    for (const [id, bytes] of Object.entries(aspects)) this.aspects.set(id, decodeAspects(bytes))
+    this.layouts = null
+  },
+
+  /** The ratios arrived on their own: for a style waiting on them, or to replace averages. */
+  setAspects({ aspects, revision }) {
+    if (revision !== this.revision) return
+    this.storeAspects(aspects)
+    clearTimeout(this.aspectsTimer)
+    if (this.pendingStyle) {
+      const id = this.pendingStyle
+      this.pendingStyle = null
+      this.morphTo(id)
+    } else if (this.style().aspects) {
+      this.relayout()
+      this.handleScroll()
+    }
+  },
+
+  hasAspects() {
+    return this.sections.every(s => this.aspects?.get(s.id)?.length === s.count)
+  },
+
+  /** Change style. One that shows whole photos first asks for the ratios it is placed by. */
+  setStyle(id) {
+    if (!STYLES[id]) return
+    this.pendingStyle = null
+    clearTimeout(this.aspectsTimer)
+    this.markStyle(id)
+    this.toggleStyleMenu(false)
+    if (id === this.styleId) return
+    if (STYLES[id].aspects && !this.hasAspects()) {
+      this.pendingStyle = id
+      this.send("timeline:aspects", { revision: this.revision })
+      this.aspectsTimer = setTimeout(() => {
+        const waiting = this.pendingStyle
+        this.pendingStyle = null
+        if (waiting) this.morphTo(waiting)
+      }, ASPECTS_WAIT_MS)
+      return
+    }
+    this.morphTo(id)
+  },
+
+  /**
+   * Walk the tiles from this style to `id`: the photo in the middle of the screen stays there,
+   * and every tile goes from where it was to where it belongs (see morph.js).
+   */
+  morphTo(id) {
+    const height = this.el.clientHeight
+    const focus = this.sections.length ? this.itemAtPoint(this.el.clientWidth / 2, height / 2) : null
+    const spot = focus ? this.tileMiddle(focus) - this.el.scrollTop : height / 2
+    const before = this.geometry()
+    const from = new Map()
+    for (const [key, node] of this.pool) {
+      if (!key.startsWith("header:")) from.set(key, rectOf(node))
+    }
+
+    this.styleId = id
+    this.el.dataset.activeStyle = id
+    this.rememberStyle()
+    this.beginPositionInput({ type: "wheel" })
+    this.relayout(null)
+    if (focus) this.el.scrollTop = Math.max(0, this.tileMiddle(focus) - spot)
+
+    this.leaving = new Map()
+    this.handleScroll()
+    const leaving = this.leaving
+    this.leaving = null
+
+    morph({
+      layer: this.layer,
+      tiles: this.pool,
+      from,
+      leaving,
+      shift: this.el.scrollTop - before.scrollTop,
+      viewport: { top: this.el.scrollTop, height },
+      focusY: this.el.scrollTop + spot,
+      focusX: this.el.clientWidth / 2,
+      previousRect: (global) => this.rectIn(before, global),
+      nextRect: (global) => this.rectIn(this.geometry(), global)
+    })
+  },
+
+  /** What it takes to place a tile in the style on screen, for when the style has changed. */
+  geometry() {
+    const layouts = this.sections.map(section => this.layoutOf(section))
+    return { layouts, offsets: this.offsets, starts: this.sectionStarts, scrollTop: this.el.scrollTop }
+  },
+
+  /** Where the file at position `global` of the library goes in a `geometry()`. */
+  rectIn({ layouts, offsets, starts }, global) {
+    let found = -1
+    for (let i = 0; i < starts.length && starts[i] <= global; i++) found = i
+    if (found < 0 || !layouts[found] || global - starts[found] >= layouts[found].count) return null
+    const rect = layouts[found].rect(global - starts[found])
+    return { ...rect, y: offsets[found] + rect.y }
+  },
+
+  /** Show which style is on, in the component's menu. */
+  markStyle(id) {
+    const root = this.el.closest?.(".phoenix-kit-photo-timeline")
+    if (!root) return
+    for (const button of root.querySelectorAll("[data-style-pick]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.stylePick === id))
+    }
+    const icon = root.querySelector("[data-style-current]")
+    const picked = root.querySelector(`[data-style-pick="${id}"] svg`)
+    if (icon && picked) icon.replaceChildren(picked.cloneNode(true))
+  },
+
+  toggleStyleMenu(open) {
+    const root = this.el.closest?.(".phoenix-kit-photo-timeline")
+    const menu = root?.querySelector("[data-style-menu]")
+    const toggle = root?.querySelector("[data-style-toggle]")
+    if (!menu || !toggle) return
+    const show = open ?? menu.hidden
+    menu.hidden = !show
+    toggle.setAttribute("aria-expanded", String(show))
+  },
+
+  /** The menu is the component's markup; every click on it is handled here, in the browser. */
+  bindStyleMenu() {
+    const root = this.el.closest?.(".phoenix-kit-photo-timeline")
+    if (!root) return
+    this.onStyleClick = (event) => {
+      const pick = event.target.closest?.("[data-style-pick]")
+      if (pick) {
+        this.setStyle(pick.dataset.stylePick)
+      } else if (event.target.closest?.("[data-style-toggle]")) {
+        this.toggleStyleMenu()
+      } else if (!event.target.closest?.("[data-style-menu]")) {
+        this.toggleStyleMenu(false)
+      }
+    }
+    this.onStyleKey = (event) => this.styleKey(event)
+    document.addEventListener("click", this.onStyleClick)
+    window.addEventListener("keydown", this.onStyleKey)
+    this.markStyle(this.styleId)
+  },
+
+  unbindStyleMenu() {
+    if (this.onStyleClick) document.removeEventListener("click", this.onStyleClick)
+    if (this.onStyleKey) window.removeEventListener("keydown", this.onStyleKey)
+  },
+
+  /** `v` walks through the styles, Shift+`v` back, and Escape closes the menu. */
+  styleKey(event) {
+    if (event.key === "Escape") this.toggleStyleMenu(false)
+    if (this.pager || event.metaKey || event.ctrlKey || event.altKey) return
+    if (event.key !== "v" && event.key !== "V") return
+    const target = event.target
+    if (target && (/^(input|select|textarea)$/i.test(target.tagName || "") || target.isContentEditable)) return
+    const step = event.shiftKey ? -1 : 1
+    const at = STYLE_IDS.indexOf(this.pendingStyle || this.styleId)
+    this.setStyle(STYLE_IDS[(at + step + STYLE_IDS.length) % STYLE_IDS.length])
+    event.preventDefault()
   }
+}
+
+/** Where a tile is on the layer now, from its own inline style. */
+function rectOf(node) {
+  return {
+    x: parseFloat(node.style.left) || 0,
+    y: parseFloat(node.style.top) || 0,
+    w: parseFloat(node.style.width) || 0,
+    h: parseFloat(node.style.height) || 0
+  }
+}
+
+function devicePixels() {
+  return typeof window !== "undefined" ? Math.min(2, window.devicePixelRatio || 1) : 1
 }
 
 /** Move a node from where it is to (x, y) smoothly, when it has moved. */

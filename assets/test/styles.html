@@ -1,0 +1,63 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Timeline styles</title>
+<style>
+:root{--color-base-200:#e7e5e4;--color-base-content:#1c1917;--color-primary:#2563eb}
+html,body{margin:0;background:#fff;color:#1c1917;font-family:system-ui}
+#root{position:fixed;inset:0}
+#timeline{height:100%;overflow-y:auto;position:relative}
+.phoenix-kit-photo-timeline__layer{position:absolute;left:0;right:0;top:0}
+</style>
+<div id="root" class="phoenix-kit-photo-timeline" data-pager="false">
+<div id="timeline" data-columns="5" data-cell="170" data-gap="2" data-target="7" data-timeline-id="test">
+<div class="phoenix-kit-photo-timeline__spacer"></div><div class="phoenix-kit-photo-timeline__layer"></div>
+</div></div>
+<script type="module">
+import { PhotoTimeline } from "/js/photo_timeline.js"
+// A picture that shows its own number, so a screenshot says where each photo went.
+const picture = (n, w, h) => {
+  const hue = (n * 47) % 360
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="hsl(${hue} 70% 62%)"/><stop offset="1" stop-color="hsl(${(hue + 60) % 360} 70% 34%)"/></linearGradient></defs><rect width="${w}" height="${h}" fill="url(#g)"/><circle cx="${w / 2}" cy="${h / 2}" r="${Math.min(w, h) * 0.28}" fill="#fff5"/><text x="${w / 2}" y="${h / 2}" font-size="${Math.min(w, h) * 0.24}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-family="system-ui">${n}</text></svg>`
+  return "data:image/svg+xml," + encodeURIComponent(svg)
+}
+const quantize = ar => Math.max(0, Math.min(255, Math.round((Math.log(ar) + Math.log(8)) * 255 / (2 * Math.log(8)))))
+const shapes = [[4000,3000],[6000,4000],[3000,4000],[1080,1920],[4000,4000],[6000,4000],[8000,2200],[4000,3000]]
+const windows = new Map()
+window.sections = []
+const aspects = {}
+let photo = 0
+const months = Number(new URLSearchParams(location.search).get("months") || 12)
+for (let month = 0; month < months; month++) {
+  const days = [], bytes = []
+  let sum = 0, count = 0
+  for (let day = 0; day < 4; day++) {
+    const id = `m${month}-d${day}`
+    const size = 12 + ((month * 7 + day * 5) % 30)
+    const items = Array.from({ length: size }, () => {
+      const n = photo++
+      const [w, h] = shapes[(n * 5 + (n >> 2)) % shapes.length]
+      const src = picture(n, w / 10, h / 10), square = picture(n, 300, 300)
+      bytes.push(quantize(w / h)); sum += w / h
+      return { id: `p${n}`, w, h, ar: w / h, thumb: square, fit: src, preview: src, large: src,
+        kind: n % 11 === 3 ? "video" : "image", duration: n % 11 === 3 ? 73 : null,
+        name: `IMG_${String(1000 + n)}.HEIC`, size: 1200000 + n * 9311,
+        taken_at: new Date(Date.UTC(2021, month, day * 6 + 1, 10, n % 60)).toISOString() }
+    })
+    days.push({ id, count: size }); windows.set(id, items); count += size
+  }
+  const label = new Date(Date.UTC(2021, month, 1)).toLocaleDateString("en", { month: "long", year: "numeric" })
+  const id = `2021-${String(month + 1).padStart(2, "0")}`
+  sections.push({ id, label, count, sum_aspect: sum, days_list: days })
+  aspects[id] = btoa(String.fromCharCode(...bytes))
+}
+window.counts = { aspects: 0 }
+window.hook = Object.assign({}, PhotoTimeline, {
+  el: document.querySelector("#timeline"), handleEvent() {},
+  pushEventTo(target, event, payload) {
+    if (target !== 7) throw Error("wrong component target")
+    if (event === "timeline:need_window") queueMicrotask(() =>
+      hook.setWindow({ section: payload.window, revision: payload.revision, items: windows.get(payload.window) || [] }))
+    if (event === "timeline:aspects") { counts.aspects++; setTimeout(() => hook.setAspects({ aspects, revision: payload.revision }), 30) }
+  }
+})
+hook.mounted()
+hook.setIndex({ library: "synthetic", revision: 1, sections })
+</script>

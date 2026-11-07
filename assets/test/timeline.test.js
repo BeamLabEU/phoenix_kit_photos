@@ -519,3 +519,64 @@ test("an open tab keeps its own bookmark and unavailable storage does not block 
     else globalThis.window = previous
   }
 })
+
+test("a saved place survives a change of style", () => {
+  const { h } = hook()
+  h.el.clientWidth = 816
+  h.setIndex({ library: "a", revision: 1, sections: [section(400)] })
+  h.el.scrollTop = 40 + 30 * 164
+  const anchor = h.captureAnchor()
+  assert.equal(anchor.item, 150)
+  h.styleId = "details"
+  h.relayout(anchor)
+  const middle = h.tileMiddle({ index: 0, item: 150 })
+  assert(Math.abs(middle - h.el.scrollTop) < 80, "the same photo is at the top")
+})
+
+test("a style that places whole photos makes do with the month's average until the ratios come", () => {
+  const { h, sent } = hook()
+  h.el.clientWidth = 816
+  h.setIndex({ library: "a", revision: 1, sections: [{ ...section(40), sum_aspect: 60 }] })
+  h.morphTo = id => { h.styleId = id; h.relayout(null) }
+  sent.length = 0
+  h.setStyle("rows")
+  assert(sent.some(([, event]) => event === "timeline:aspects"))
+  assert.equal(h.styleId, "grid", "waits for the answer")
+  const bytes = btoa(String.fromCharCode(...Array(40).fill(180)))
+  h.setAspects({ aspects: { "2020-01": bytes }, revision: 1 })
+  assert.equal(h.styleId, "rows")
+  assert.equal(h.aspects.get("2020-01").length, 40)
+  clearTimeout(h.aspectsTimer)
+})
+
+test("ratios for an older index are not used", () => {
+  const { h } = hook()
+  h.setIndex({ library: "a", revision: 2, sections: [section(2)] })
+  h.setAspects({ aspects: { "2020-01": btoa("xy") }, revision: 1 })
+  assert.equal(h.aspects?.get("2020-01"), undefined)
+})
+
+test("the ratios of the last library are dropped with it", () => {
+  const { h } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(2)], aspects: { "2020-01": btoa("xy") } })
+  assert.equal(h.aspects.get("2020-01").length, 2)
+  h.setIndex({ library: "b", revision: 2, sections: [section(2)] })
+  assert.equal(h.aspects.get("2020-01"), undefined)
+})
+
+test("the style a person picked wins over the host's, and nonsense is the plain grid", () => {
+  const { h } = hook()
+  const stored = { value: null }
+  globalThis.window = globalThis.window || {}
+  const before = window.localStorage
+  window.localStorage = { getItem: () => stored.value, setItem() {}, removeItem() {} }
+  h.el.dataset.style = "mosaic"
+  assert.equal(h.startingStyle(), "mosaic")
+  stored.value = "film"
+  assert.equal(h.startingStyle(), "film")
+  stored.value = "<script>"
+  assert.equal(h.startingStyle(), "mosaic")
+  h.el.dataset.style = "nope"
+  assert.equal(h.startingStyle(), "grid")
+  window.localStorage = before
+})

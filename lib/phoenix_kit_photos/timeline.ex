@@ -55,7 +55,9 @@ defmodule PhoenixKitPhotos.Timeline do
   @window_limit 500
   @slide_limit 24
   @thumb_min_width 200
+  @fit_min_width 300
   @preview_min_width 800
+  @large_min_width 1600
 
   @typedoc "A month bucket: `\"2018-07\"`."
   @type section_id :: String.t()
@@ -87,8 +89,14 @@ defmodule PhoenixKitPhotos.Timeline do
           h: pos_integer(),
           ar: float(),
           thumb: String.t() | nil,
+          fit: String.t() | nil,
           preview: String.t() | nil,
-          kind: :image | :video
+          large: String.t() | nil,
+          kind: :image | :video,
+          code: String.t() | nil,
+          name: String.t() | nil,
+          size: non_neg_integer() | nil,
+          duration: non_neg_integer() | nil
         }
 
   @type window :: %{section: window_id(), items: [item()]}
@@ -253,6 +261,54 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   def index(_scope, _auth), do: {:error, :unauthorized}
+
+  @doc """
+  The aspect ratio of every file of a library, for the styles that show whole photos: a map
+  of section id to one byte per file, in the order the timeline shows them.
+
+  With these the browser knows the exact height of every month without fetching a single
+  window, so the scrollbar and jump to month stay honest in those styles too. A byte is the
+  logarithm of the ratio from 1:8 to 8:1 in 256 steps of 1.6%, which is finer than anyone can
+  see in a crop and costs 260 KB for 200,000 files, once. `assets/js/layouts.js` reads it.
+  """
+  @spec aspects(scope(), Scope.t() | nil) :: {:ok, %{section_id() => binary()}} | {:error, error()}
+  def aspects({:library, library_uuid}, auth) when is_binary(library_uuid) do
+    with :ok <- capture_dates(),
+         :ok <- known_library(library_uuid),
+         :ok <- reader(auth, library_uuid) do
+      rows =
+        library_uuid
+        |> visible(auth)
+        |> where([f], not is_nil(f.taken_on))
+        |> group_by([f], f.taken_on)
+        |> order_by([f], asc: f.taken_on)
+        |> select([f], {
+          f.taken_on,
+          fragment(
+            """
+            array_agg(
+              least(255, greatest(0, round((ln(?::double precision / ?) + ?) * ?)))::smallint
+              ORDER BY ? ASC, ? ASC
+            )
+            """,
+            f.width,
+            f.height,
+            ^:math.log(8),
+            ^(255 / (2 * :math.log(8))),
+            f.taken_at,
+            f.uuid
+          )
+        })
+        |> repo().all()
+
+      {:ok,
+       rows
+       |> Enum.group_by(fn {date, _bytes} -> month_id(date) end, fn {_date, bytes} -> bytes end)
+       |> Map.new(fn {id, days} -> {id, days |> List.flatten() |> :binary.list_to_bin()} end)}
+    end
+  end
+
+  def aspects(_scope, _auth), do: {:error, :unauthorized}
 
   @doc """
   One day of items for a library, at most `window_limit/0`, ordered by
@@ -627,6 +683,10 @@ defmodule PhoenixKitPhotos.Timeline do
   defp to_item(%StorageFile{} = file, auth) do
     thumb = variant_url(auth, file, min_width: @thumb_min_width, aspect: :crop)
     preview = variant_url(auth, file, min_width: @preview_min_width, aspect: :preserve)
+    # The styles that show whole photos: a small picture of the right shape, and a big one
+    # for tiles that fill the page. Only what has been made: the file may be new.
+    {fit, _instance} = pick(auth, file, min_width: @fit_min_width, aspect: :preserve) || {nil, nil}
+    {large, _instance} = pick(auth, file, min_width: @large_min_width, aspect: :preserve) || {nil, nil}
 
     %{
       id: file.uuid,
@@ -636,8 +696,13 @@ defmodule PhoenixKitPhotos.Timeline do
       h: file.height,
       ar: file.width * 1.0 / file.height,
       thumb: thumb,
+      fit: fit,
       preview: preview,
-      kind: if(file.file_type == "video", do: :video, else: :image)
+      large: large,
+      kind: if(file.file_type == "video", do: :video, else: :image),
+      name: file.original_file_name || file.file_name,
+      size: file.size,
+      duration: file.duration
     }
   end
 

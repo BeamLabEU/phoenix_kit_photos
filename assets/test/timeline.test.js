@@ -849,3 +849,43 @@ test("an index arriving under an open viewer moves the viewer to it; the grid wa
   h.setSlides({ window: "2020-01-01", from: 0, items: [{ id: "old" }], revision: 1 })
   assert.equal(h.slides.get(0).id, "new")
 })
+
+// Where the marker goes in a style of whole photos, and at the end of a month.
+test("the marker is below the header in a packed style, and moves on into the next month", () => {
+  const { h } = hook()
+  h.el.clientWidth = 997
+  h.readInset = () => 56
+  h.aspects = new Map([["2020-01", Float32Array.from({ length: 40 }, (_, i) => [1.5, 0.66, 1, 2.2][i % 4])]])
+  h.styleId = "rows"
+  const january = { ...section(40), id: "2020-01" }
+  const february = { ...section(12), id: "2020-02", days_list: [{ id: "2020-02-01", count: 12 }] }
+  h.setIndex({ library: "a", revision: 1, sections: [january, february] })
+  assert.equal(h.styleId, "rows")
+  assert.ok(h.layoutOf(h.sections[0]).bottoms, "whole photos, packed one by one")
+
+  for (const top of [300, 517.5, 911, 1234]) {
+    h.beginPositionInput({ type: "wheel" })
+    h.el.scrollTop = top
+    h.handleScroll()
+    const mark = h.bookmarkTop()
+    const line = h.el.scrollTop + h.inset
+    const layout = h.layoutOf(h.sections[0])
+    let first = Infinity
+    for (let i = 0; i < 40; i++) {
+      const y = h.offsets[0] + layout.rect(i).y
+      if (y >= line - 0.5) first = Math.min(first, y)
+    }
+    assert(mark >= line - 0.5, `marker at ${mark} is under the header (${line})`)
+    if (first !== Infinity) assert(Math.abs(mark - (first - h.metrics.gap / 2)) < 1e-6, `at ${top}: ${mark} vs row ${first}`)
+  }
+
+  // The place is in January's last row: the marker is above February's first row.
+  h.styleId = "grid"
+  h.layouts = null
+  h.relayout()
+  const january2 = h.layoutOf(h.sections[0])
+  h.beginPositionInput({ type: "wheel" })
+  h.el.scrollTop = h.offsets[0] + january2.rect(39).y + 10 - h.inset
+  h.handleScroll()
+  assert.equal(h.bookmarkTop(), h.offsets[1] + h.layoutOf(h.sections[1]).header)
+})

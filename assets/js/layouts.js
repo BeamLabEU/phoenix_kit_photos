@@ -35,6 +35,9 @@ export const DEFAULT_STYLE = "grid"
 /** How far past the viewport a packed layout keeps tiles, as the grid keeps a row each way. */
 const OVERSCAN = 240
 
+/** A row whose top is this close above a line (subpixel scrolling) still counts as below it. */
+const EDGE_SLACK = 0.5
+
 // The server's byte: the logarithm of the aspect ratio, from 1:8 to 8:1 in 256 steps of 1.6%.
 const ASPECT_LOW = Math.log(1 / 8)
 const ASPECT_SPAN = Math.log(8) - ASPECT_LOW
@@ -97,10 +100,12 @@ class Grid {
     return (Math.floor(item / this.columns) + fraction) * (this.tileH + this.gapY)
   }
 
-  /** The bookmark's place: the gap before the first complete row. */
-  mark(item, fraction = 0) {
-    const row = Math.min(this.rows - 1, Math.ceil(item / this.columns + fraction - 1e-9))
-    return this.header + Math.max(0, row) * (this.tileH + this.gapY) - (row > 0 ? this.gapY / 2 : 0)
+  /** The top of the first row that starts at or below `y` (px from the section's top), or null. */
+  edgeBelow(y) {
+    if (this.count <= 0) return null
+    const stride = this.tileH + this.gapY
+    const row = Math.max(0, Math.ceil((y - EDGE_SLACK - this.header) / stride))
+    return row < this.rows ? this.header + row * stride : null
   }
 
   /** The tile at a point of the section, or the nearest one. */
@@ -179,9 +184,18 @@ class Packed {
     return y - this.header + fraction * (h + this.gapY)
   }
 
-  mark(item, _fraction = 0) {
-    if (this.count <= 0) return this.header
-    return this.rect(Math.min(item, this.count - 1)).y - this.gapY / 2
+  /**
+   * The top of the first tile that starts at or below `y`, or null. Tiles before `firstAt(y)` end
+   * above `y`; past it, the running minimum of tops says when nothing later can start sooner.
+   */
+  edgeBelow(y) {
+    if (this.count <= 0 || this.bottoms[this.count - 1] < y - EDGE_SLACK) return null
+    let best = Infinity
+    for (let i = this.firstAt(y - EDGE_SLACK); i < this.count && this.tops[i] < best; i++) {
+      const top = this.rects[i * 4 + 1]
+      if (top >= y - EDGE_SLACK && top < best) best = top
+    }
+    return best === Infinity ? null : best
   }
 
   hit(x, y) {

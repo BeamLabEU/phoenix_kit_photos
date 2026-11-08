@@ -364,13 +364,39 @@ export const PhotoTimeline = {
     this.renderBookmark()
   },
 
+  /**
+   * Where the marker goes: the gap above the first row (or photo) that starts at or below the
+   * saved place, so it shows below the app header. That row may be in a later month, when the
+   * place was in a month's last row.
+   */
   bookmarkTop() {
     const a = this.bookmarkAnchor
     if (!a) return null
     const index = this.sections.findIndex(s => s.id === a.id)
     if (index < 0) return null
-    // Mark the gap before the first complete visible row, below the app header.
-    return this.offsets[index] + this.layoutOf(this.sections[index]).mark(a.item, a.rowFraction || 0)
+    const line = this.offsets[index] + this.anchorDelta(a, index)
+    for (let i = index; i < this.sections.length; i++) {
+      const layout = this.layoutOf(this.sections[i])
+      const edge = layout.edgeBelow(line - this.offsets[i])
+      if (edge === null) continue
+      const gap = edge > layout.header + 0.5 ? Math.max(0, layout.gapY) / 2 : 0
+      return this.offsets[i] + edge - gap
+    }
+    return line
+  },
+
+  /**
+   * How far into its section an anchor is, px: its own measure while the page has the same
+   * geometry, else worked out again from the tile it names (the columns, zoom or style changed).
+   */
+  anchorDelta(anchor, index) {
+    const fraction = Number.isFinite(anchor.rowFraction) ? Math.max(0, Math.min(1, anchor.rowFraction)) : 0
+    const unchanged = anchor.columns === this.columns && anchor.cell === this.metrics.cell &&
+      anchor.header === this.metrics.header && anchor.gap === this.metrics.gap &&
+      (anchor.style ?? DEFAULT_STYLE) === this.styleId
+    return unchanged && Number.isFinite(anchor.delta)
+      ? anchor.delta
+      : anchor.headerOffset + this.layoutOf(this.sections[index]).contentY(anchor.item, fraction)
   },
 
   renderBookmark() {
@@ -565,13 +591,7 @@ export const PhotoTimeline = {
     if (anchor && this.sections.length) {
       const found = this.sections.findIndex(s => s.id === anchor.id)
       const index = found >= 0 ? found : Math.min(anchor.index, this.sections.length - 1)
-      const fraction = Number.isFinite(anchor.rowFraction) ? Math.max(0, Math.min(1, anchor.rowFraction)) : 0
-      const unchanged = anchor.columns === this.columns && anchor.cell === this.metrics.cell &&
-        anchor.header === this.metrics.header && anchor.gap === this.metrics.gap &&
-        (anchor.style ?? DEFAULT_STYLE) === this.styleId
-      const delta = found < 0 ? 0 : unchanged && Number.isFinite(anchor.delta)
-        ? anchor.delta
-        : anchor.headerOffset + this.layoutOf(this.sections[index]).contentY(anchor.item, fraction)
+      const delta = found < 0 ? 0 : this.anchorDelta(anchor, index)
       this.el.scrollTop = Math.max(0, this.offsets[index] + delta - this.inset)
     }
   },

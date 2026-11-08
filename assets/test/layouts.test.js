@@ -144,3 +144,24 @@ test("a tile asks for the lightest picture sharp enough for its shape and the sc
   assert.equal(pickSource({ thumb: "t" }, 680, 450, STYLES.feed, 2), "t", "whatever there is")
   assert.equal(pickSource({ preview: "p" }, 170, 170, STYLES.grid, 1), "p", "no thumbnail yet")
 })
+
+// The bookmark marks the gap above the first row (or photo) that starts at or below the saved
+// place; every style answers that by search, checked here against looking at every tile.
+test("edgeBelow is the first tile top at or below a line, in every style", () => {
+  for (const style of STYLE_IDS) {
+    for (const extra of [{}, { columns: 3, width: 500 }, { count: 7 }]) {
+      const layout = buildLayout(style, options(extra))
+      const count = options(extra).count
+      for (let y = 0; y <= layout.height + 50; y += 37.25) {
+        let best = null
+        for (let i = 0; i < count; i++) {
+          const top = layout.rect(i).y
+          if (top >= y - 0.5 && (best === null || top < best)) best = top
+        }
+        const edge = layout.edgeBelow(y)
+        assert(edge === best || Math.abs(edge - best) < 1e-3, `${style} ${JSON.stringify(extra)} at ${y}: ${edge} vs ${best}`)
+      }
+    }
+    assert.equal(buildLayout(style, options({ count: 0 })).edgeBelow(0), null, style)
+  }
+})

@@ -49,7 +49,11 @@ export function fillTile(node, item) {
   const paper = span("pkt-paper")
   const img = document.createElement("img")
   img.alt = ""
-  img.loading = "lazy"
+  // Eager, not lazy: the grid builds tiles for what is on screen only, so there is nothing to
+  // put off, and Safari leaves a lazy image inside a scrolling element unloaded until that
+  // element scrolls. A tile given its picture without a scroll (the grid redrawn as the viewer
+  // closes) stayed blank there.
+  img.loading = "eager"
   img.decoding = "async"
   img.draggable = false
   paper.appendChild(img)

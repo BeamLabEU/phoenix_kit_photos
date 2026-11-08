@@ -51,8 +51,56 @@ test("SlideStore puts slides at global positions and reports only the new ones",
   assert.equal(store.get(31).id, "b")
   assert.equal(store.indexOf("a"), 30)
   assert.equal(store.indexOf("zzz"), -1)
-  assert.deepEqual(store.put("2024-01-09", 0, [{ id: "a2" }]), [])
+  assert.deepEqual(store.put("2024-01-09", 0, [{ id: "a", src: "again" }]), [], "the same file again is nothing new")
+  // Another file where one was kept (over a rebase) is new: the viewer must draw it.
+  assert.deepEqual(store.put("2024-01-09", 0, [{ id: "a2" }]), [30])
   assert.equal(store.get(30).id, "a2")
+  assert.equal(store.indexOf("a"), -1, "the file that was there is no longer said to be")
+})
+
+// An upload while the viewer is open: the index changes under it.
+const small = (days) => [{ id: "2024-01", days_list: days.map(([id, count]) => ({ id, count })) }]
+
+test("rebase keeps every slide of an unchanged day, at the day's new start", () => {
+  const store = new SlideStore(small([["d1", 3], ["d2", 2]]))
+  store.put("d1", 0, [{ id: "a" }, { id: "b" }, { id: "c" }])
+  store.put("d2", 0, [{ id: "x" }, { id: "y" }])
+  store.markAsked({ key: "d2@0" })
+
+  // Two photos of an earlier day arrive: everything after them moves by two.
+  const at = store.rebase(small([["d0", 2], ["d1", 3], ["d2", 2]]), { index: 1, slide: store.get(1) })
+  assert.equal(at, 3)
+  assert.equal(store.total, 7)
+  assert.deepEqual([2, 3, 4, 5, 6].map((i) => store.get(i).id), ["a", "b", "c", "x", "y"])
+  assert.equal(store.indexOf("x"), 5)
+  assert.equal(store.has(0), false)
+  assert.deepEqual(store.missing(3, 2).map((b) => b.key), ["d0@0"], "only the new day is asked for")
+})
+
+test("rebase lets a changed day be fetched again, keeping the slide on screen in its place", () => {
+  const store = new SlideStore(small([["d1", 3], ["d2", 2]]))
+  store.put("d1", 0, [{ id: "a" }, { id: "b" }, { id: "c" }])
+  store.put("d2", 0, [{ id: "x" }, { id: "y" }])
+
+  // An upload into d2, the day on screen; d1 is untouched.
+  const at = store.rebase(small([["d1", 3], ["d2", 3]]), { index: 4, slide: store.get(4) })
+  assert.equal(at, 4)
+  assert.equal(store.get(4).id, "y", "the photo on screen stays until the day's answer")
+  assert.equal(store.has(3), false, "the rest of the changed day is fetched again")
+  assert.equal(store.get(0).id, "a")
+  assert.equal(store.total, 6)
+
+  // The day's answer: the new photo went in before the one on screen.
+  assert.deepEqual(store.put("d2", 0, [{ id: "x" }, { id: "new" }, { id: "y" }]), [3, 4, 5])
+  assert.equal(store.indexOf("y"), 5)
+})
+
+test("rebase of a day that is gone says so", () => {
+  const store = new SlideStore(small([["d1", 3], ["d2", 2]]))
+  store.put("d2", 0, [{ id: "x" }, { id: "y" }])
+  assert.equal(store.rebase(small([["d1", 3]]), { index: 4, slide: store.get(4) }), -1)
+  assert.equal(store.total, 3)
+  assert.equal(store.indexOf("y"), -1)
 })
 
 test("SlideStore ignores an unknown window and clips items past the end", () => {

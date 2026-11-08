@@ -233,11 +233,13 @@ export const PhotoTimeline = {
       clearTimeout(this.helloTimer)
     }
     const libraryChanged = payload.library !== this.library
-    // The swipe viewer holds positions in the old index; let it finish, then catch up. The
-    // server sends a month's ratios only once, so a later refresh must not lose them.
+    // The grid behind the swipe viewer catches up when the viewer closes; the viewer's own
+    // list moves to the new index now (`rebaseViewer`). The server sends a month's ratios only
+    // once, so a later refresh must not lose them.
     if (!libraryChanged && this.pager) {
       const aspects = { ...this.deferred?.aspects, ...payload.aspects }
       this.deferred = { ...payload, aspects }
+      this.rebaseViewer(payload)
       return
     }
 
@@ -931,6 +933,8 @@ export const PhotoTimeline = {
   /** Every position the index lists, from the first section's first file, and where each section starts. */
   resetSlides() {
     this.slides = new SlideStore(this.sections)
+    this.slideRevision = this.revision
+    this.following = null
     this.sectionStarts = []
     let start = 0
     for (const section of this.sections) {
@@ -945,6 +949,30 @@ export const PhotoTimeline = {
     }
   },
 
+  /**
+   * A new index while the viewer is open (an upload): the viewer's slides move to it at once,
+   * while the grid behind waits for the close (`applyDeferred`). What the viewer asks for next
+   * is asked in the new revision, which the server answers; asked in the old one, it was
+   * refused, and the viewer waited for good on the first photo it had not fetched.
+   */
+  rebaseViewer(payload) {
+    this.slideRevision = payload.revision
+    const open = this.pager !== true && this.pager.isOpen
+    const index = open ? this.pager.index : -1
+    const slide = open ? this.slides.get(index) : null
+    const at = this.slides.rebase(payload.sections, open ? { index, slide } : null)
+    if (!open) return
+
+    if (at >= 0 && at !== index && this.pager.goTo) {
+      this.turningTo = at
+      this.pager.goTo(at)
+    }
+    // A photo added earlier in the same day moves the one on screen along: once that day's
+    // slides arrive, `setSlides` turns to where it went.
+    this.following = slide ? slide.id : null
+    this.prefetchSlides(at >= 0 ? at : index)
+  },
+
   prefetchSlides(center, radius = 8) {
     if (!this.pagerEnabled() || !Number.isFinite(center)) return
     for (const block of this.slides.missing(center, radius)) {
@@ -954,19 +982,29 @@ export const PhotoTimeline = {
         from: block.from,
         count: block.count,
         want: wantWidth(window),
-        revision: this.revision
+        revision: this.slideRevision
       })
     }
   },
 
   setSlides({ window: day, from, items, error, revision }) {
-    if (revision !== this.revision) return
+    if (revision !== this.slideRevision) return
     if (error) {
       this.slides.forget(day, from)
       return
     }
 
     const added = this.slides.put(day, from, items || [])
+    if (this.following && this.pager && this.pager !== true && this.pager.isOpen) {
+      const at = this.slides.indexOf(this.following)
+      if (at >= 0) {
+        this.following = null
+        if (at !== this.pager.index && this.pager.goTo) {
+          this.turningTo = at
+          this.pager.goTo(at)
+        }
+      }
+    }
     if (this.pager && this.pager.isOpen) this.pager.refresh(added)
 
     if (this.pendingOpen !== null && this.slides.has(this.pendingOpen)) {
@@ -1031,12 +1069,16 @@ export const PhotoTimeline = {
       tileImage: (i) => this.tileImage(i),
       onInfo: (slideId) => this.send("timeline:open", { id: slideId }),
       onChange: (i) => {
+        // The person turned the page: stop following a photo an upload moved.
+        if (i !== this.turningTo) this.following = null
+        this.turningTo = null
         this.prefetchSlides(i)
         this.reveal(i)
         this.syncAddress(i)
       },
       onClose: () => {
         this.pager = null
+        this.following = null
         this.applyDeferred()
         this.leaveAddress()
       }

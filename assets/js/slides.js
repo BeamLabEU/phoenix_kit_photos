@@ -111,7 +111,10 @@ export class SlideStore {
     this.asked.delete(`${window}@${from}`)
   }
 
-  /** Files `items`, which started at `from` in the day `window`; the indices that were not known before. */
+  /**
+   * Files `items`, which started at `from` in the day `window`; the indices whose slide is new
+   * (not known before, or another file than was kept there over a `rebase`).
+   */
   put(window, from, items) {
     const day = this.days.find((d) => d.id === window)
     if (!day) return []
@@ -119,11 +122,60 @@ export class SlideStore {
     items.forEach((item, offset) => {
       const index = day.start + from + offset
       if (index >= this.total) return
-      if (!this.slides.has(index)) added.push(index)
+      const before = this.slides.get(index)
+      if (!before || before.id !== item.id) added.push(index)
+      if (before && before.id !== item.id && this.byId.get(before.id) === index) this.byId.delete(before.id)
       this.slides.set(index, item)
       this.byId.set(item.id, index)
     })
     return added
+  }
+
+  /**
+   * The index changed under an open viewer (an upload, say). A day with the same id and count
+   * keeps its slides, moved to where the day starts now; a day that changed is fetched again,
+   * and nothing asked before counts. `keep` (`{ index, slide }`, the slide on screen) stays at
+   * its new place even when its day changed, so the viewer does not blink while that day is
+   * fetched; whether it is still there is for the answer to tell.
+   *
+   * Returns where the old position `keep.index` is now: its day moved as a whole, or, in a
+   * changed day, the same place in it. -1 when its day is gone.
+   */
+  rebase(sections, keep = null) {
+    const { days, total } = flattenDays(sections)
+    const now = new Map(days.map((day) => [day.id, day]))
+    const same = (day) => {
+      const next = now.get(day.id)
+      return next && next.count === day.count ? next : null
+    }
+
+    const slides = new Map()
+    const byId = new Map()
+    for (const [index, slide] of this.slides) {
+      const found = locate(this.days, index)
+      const next = found && same(found.day)
+      if (!next) continue
+      slides.set(next.start + found.position, slide)
+      byId.set(slide.id, next.start + found.position)
+    }
+
+    let at = -1
+    if (keep) {
+      const found = locate(this.days, keep.index)
+      const next = found && now.get(found.day.id)
+      if (next) at = next.start + Math.min(found.position, next.count - 1)
+      if (at >= 0 && keep.slide && !slides.has(at)) {
+        slides.set(at, keep.slide)
+        byId.set(keep.slide.id, at)
+      }
+    }
+
+    this.days = days
+    this.total = total
+    this.slides = slides
+    this.byId = byId
+    this.asked = new Set()
+    return at
   }
 }
 

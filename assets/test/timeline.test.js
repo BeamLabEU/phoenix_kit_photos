@@ -812,3 +812,40 @@ test("an unanswered hello does not keep an address from opening", (t) => {
   t.mock.timers.tick(3000)
   assert.deepEqual(opened, [0])
 })
+
+// An upload while the viewer is open: the grid waits for the close, the viewer moves at once,
+// and what it asks for next is asked in the revision the server is in.
+test("an index arriving under an open viewer moves the viewer to it; the grid waits", () => {
+  const { h, sent } = hook()
+  h.pagerEnabled = () => true
+  h.setIndex({ library: "a", revision: 1, sections: [section(3)] })
+  h.slides.put("2020-01-01", 0, [{ id: "a" }, { id: "b" }, { id: "c" }])
+  const turned = []
+  const refreshed = []
+  h.pager = {
+    isOpen: true,
+    index: 1,
+    goTo(i) { turned.push(i); this.index = i },
+    refresh: (indices) => refreshed.push(...indices)
+  }
+  sent.length = 0
+
+  // A photo taken earlier that day arrives.
+  h.setIndex({ library: "a", revision: 2, sections: [section(4)] })
+  assert.equal(h.revision, 1, "the grid behind the viewer waits for the close")
+  assert.equal(h.deferred.revision, 2)
+  assert.equal(h.slides.total, 4)
+  assert.equal(h.slides.get(1).id, "b", "the photo on screen stays put meanwhile")
+  const asked = sent.filter(([, event]) => event === "timeline:slides").map(([, , p]) => p)
+  assert.deepEqual(asked.map((p) => [p.window, p.from, p.revision]), [["2020-01-01", 0, 2]])
+
+  // The day's answer: the photo on screen is one further on now; the viewer follows it.
+  h.setSlides({ window: "2020-01-01", from: 0, items: [{ id: "new" }, { id: "a" }, { id: "b" }, { id: "c" }], revision: 2 })
+  assert.deepEqual(turned, [2])
+  assert.equal(h.slides.get(2).id, "b")
+  assert.ok(refreshed.includes(1), "the place it left shows the photo now there")
+
+  // An answer for the revision the viewer left is not used.
+  h.setSlides({ window: "2020-01-01", from: 0, items: [{ id: "old" }], revision: 1 })
+  assert.equal(h.slides.get(0).id, "new")
+})

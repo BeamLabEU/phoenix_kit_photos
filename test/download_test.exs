@@ -58,4 +58,21 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
     assert post_ids(fillers ++ [file.uuid], nil).status == 404
     assert post_ids([file.uuid], nil).status == 200
   end
+
+  # A session is minted for an account nobody confirmed, so signing up with any address must not
+  # be the way past a visitor's limits.
+  test "an account nobody confirmed is held to a visitor's limits", ctx do
+    ctx.library |> Ecto.Changeset.change(visibility: "site") |> TestRepo.update!()
+    file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
+    fillers = for _ <- 1..200, do: Ecto.UUID.generate()
+    reader = user_fixture("dl-u-#{System.unique_integer([:positive])}@example.com")
+
+    assert is_nil(reader.confirmed_at)
+    assert post_ids(fillers ++ [file.uuid], scope_for(reader)).status == 404
+
+    reader =
+      reader |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now(:second)) |> TestRepo.update!()
+
+    assert post_ids(fillers ++ [file.uuid], scope_for(reader)).status == 200
+  end
 end

@@ -11,6 +11,10 @@ defmodule PhoenixKitPhotos.Web.Download do
   from it too, up to 200 files at a time and 10 times an hour for an address: if they may
   see a photo they may have it, but a site's bandwidth is not theirs to use up.
 
+  A visitor is anyone the site does not admit as signed in (`Libraries.authenticated_reader?/1`:
+  active, email confirmed). A session alone is not that, since one is minted for an account
+  nobody confirmed, and an address typed into the sign-up form would otherwise lift the limits.
+
   The status of a streamed answer is sent before the first file is read, so a file that cannot
   be read later is reported inside the archive, in `Not included.txt`. A failure halfway through
   a file ends the answer without the archive's directory: broken, and visibly so, rather than
@@ -24,7 +28,7 @@ defmodule PhoenixKitPhotos.Web.Download do
   import Plug.Conn
 
   alias PhoenixKit.Modules.Storage
-  alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Utils.IpAddress
   alias PhoenixKitPhotos.Bulk
   alias PhoenixKitPhotos.Zip
@@ -41,7 +45,7 @@ defmodule PhoenixKitPhotos.Web.Download do
   @impl Plug
   def call(conn, _opts) do
     scope = conn.assigns[:phoenix_kit_current_scope]
-    signed_in? = is_binary(scope && Scope.user_uuid(scope))
+    signed_in? = Libraries.authenticated_reader?(scope)
     ids = conn.params |> Map.get("ids", "") |> to_string() |> String.split(",", trim: true)
     ids = if signed_in?, do: ids, else: Enum.take(ids, @visitor_files)
 

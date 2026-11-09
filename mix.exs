@@ -32,7 +32,7 @@ defmodule PhoenixKitPhotos.MixProject do
     [
       # PhoenixKit — Storage schemas, Module behaviour, settings, permissions.
       # PHOENIX_KIT_PATH points at a sibling checkout for local core work.
-      # Unset, core 3.2.6 supplies membership revocation and upload creation status.
+      # Unset, it comes from Hex: 3.5 is the release this package is built against.
       phoenix_kit_dep(),
 
       # Phoenix Framework
@@ -87,7 +87,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, ">= 3.2.6 and < 4.0.0"}
+        {:phoenix_kit, "~> 3.5"}
     end
   end
 

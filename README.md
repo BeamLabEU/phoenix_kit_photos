@@ -49,7 +49,7 @@ rename and the broader scope.
 ```elixir
 def deps do
   [
-    {:phoenix_kit, "~> 2.41"},
+    {:phoenix_kit, "~> 3.5"},
     {:phoenix_kit_photos, "~> 0.1"}
   ]
 end

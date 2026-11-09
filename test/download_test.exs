@@ -71,7 +71,9 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
     assert post_ids(fillers ++ [file.uuid], scope_for(reader)).status == 404
 
     reader =
-      reader |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now(:second)) |> TestRepo.update!()
+      reader
+      |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now(:second))
+      |> TestRepo.update!()
 
     assert post_ids(fillers ++ [file.uuid], scope_for(reader)).status == 200
   end

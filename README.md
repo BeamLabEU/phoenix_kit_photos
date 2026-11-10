@@ -50,7 +50,7 @@ rename and the broader scope.
 def deps do
   [
     {:phoenix_kit, "~> 3.5"},
-    {:phoenix_kit_photos, "~> 0.1"}
+    {:phoenix_kit_photos, "~> 0.3"}
   ]
 end
 ```

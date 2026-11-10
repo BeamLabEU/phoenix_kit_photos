@@ -7,6 +7,7 @@ import {
 } from "./geometry.js"
 import { STYLES, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
 import { installTimelineCss } from "./timeline_css.js"
+import { drawCalendar, today, weekLocale, weekStartFor } from "./calendar.js"
 import { fillTile, pickSource, swapImage } from "./tiles.js"
 import { morph } from "./morph.js"
 import { selection } from "./selection.js"
@@ -122,6 +123,8 @@ export const PhotoTimeline = {
     this.layer = this.el.querySelector(".phoenix-kit-photo-timeline__layer")
 
     installTimelineCss()
+    this.lang = document.documentElement.lang || navigator.language
+    this.weekStart = weekStartFor(weekLocale(this.lang, navigator.languages || [navigator.language]))
     this.styleId = this.startingStyle()
     this.el.dataset.activeStyle = this.styleId
     this.bindStyleMenu()
@@ -509,7 +512,11 @@ export const PhotoTimeline = {
         width: this.columns * (cell + gap) - gap,
         cell,
         gap,
-        header
+        header,
+        month: section.id,
+        days: section.days_list,
+        weekStart: this.weekStart,
+        today: today()
       })
       this.layouts.set(section, layout)
     }
@@ -1282,16 +1289,21 @@ export const PhotoTimeline = {
       if (!section) continue
       keep.add(`header:${section.id}`)
       this.placeHeader(section, sectionIndex)
+      const layout = this.layoutOf(section)
+      if (layout.calendar) {
+        keep.add(`header:back:${section.id}`)
+        keep.add(`header:front:${section.id}`)
+        this.placeCalendar(section, sectionIndex, layout)
+      }
       const { first, last } = this.visibleItemRange(section)
       for (let index = first; index <= last; index++) {
         const item = itemAt(section, index, this.windows)
         if (!item) continue
+        const position = this.tilePosition(sectionIndex, index)
+        // A photo the calendar has no room for has no size: it gets no tile.
+        if (position.w <= 0 || position.h <= 0) continue
         keep.add(item.id)
-        wanted.push({
-          item,
-          global: this.sectionStarts[sectionIndex] + index,
-          ...this.tilePosition(sectionIndex, index)
-        })
+        wanted.push({ item, global: this.sectionStarts[sectionIndex] + index, ...position })
       }
     }
 
@@ -1337,6 +1349,31 @@ export const PhotoTimeline = {
     node.style.top = `${top}px`
     node.style.height = `${this.metrics.header}px`
     node.style.lineHeight = `${this.metrics.header}px`
+  },
+
+  /**
+   * The calendar's weekdays, day squares and numbers for a month (calendar.js): one node behind
+   * the tiles and one in front. Pooled as headers, so a change of style does not walk them.
+   */
+  placeCalendar(section, sectionIndex, layout) {
+    const nodes = ["back", "front"].map(part => {
+      const id = `header:${part}:${section.id}`
+      let node = this.pool.get(id)
+      if (!node) {
+        node = document.createElement("div")
+        node.className = `pkt-cal pkt-cal-${part}`
+        node.setAttribute("aria-hidden", "true")
+        this.layer.appendChild(node)
+        this.pool.set(id, node)
+      }
+      node.style.top = `${this.offsets[sectionIndex]}px`
+      node.style.height = `${layout.height}px`
+      return node
+    })
+    if (nodes[0].pktLayout !== layout) {
+      nodes[0].pktLayout = layout
+      drawCalendar(nodes[0], nodes[1], layout, { lang: this.lang })
+    }
   },
 
   tilePosition(sectionIndex, index) {

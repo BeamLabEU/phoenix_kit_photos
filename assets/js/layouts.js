@@ -26,7 +26,8 @@ export const STYLES = {
   prints: { aspects: false, crop: true },
   film: { aspects: false, crop: true },
   honeycomb: { aspects: false, crop: true },
-  details: { aspects: false, crop: true }
+  details: { aspects: false, crop: true },
+  calendar: { aspects: false, crop: true }
 }
 
 export const STYLE_IDS = Object.keys(STYLES)
@@ -404,11 +405,142 @@ function details({ count, width, gap, header }) {
   return new Grid({ count, columns: columnCount, tileW: tile, tileH: 72, gapX: 16, gapY: space, header })
 }
 
-const BUILDERS = { grid, rows, columns, mosaic, whole, feed, prints, film, honeycomb, details }
+// A calendar month: a weekday row under the heading, then a row a week. A day holds its photos as
+// a small grid in its own square, as many as fit at the zoom (`cell`); the rest of that day have
+// no size and sit in the middle of the last one shown, which wears a "+N" (the hook's job).
+// Everything the hook draws besides the tiles (weekdays, the squares of empty days, the numbers)
+// is in `layout.calendar`.
+
+/** The smallest a photo inside a day may be, px. */
+const CALENDAR_TILE_MIN = 20
+
+/** The space between the photos of one day, px. */
+const CALENDAR_INNER_GAP = 2
+
+/** `"2018-07"` as `{ year, month }` (month 1-12), or null for a section that is not a month. */
+export function parseMonth(id) {
+  const match = /^(\d{4})-(\d{2})$/.exec(id || "")
+  if (!match) return null
+  const year = Number(match[1])
+  const month = Number(match[2])
+  return month >= 1 && month <= 12 ? { year, month } : null
+}
+
+/** How many photos each day of the month has, from the section's day windows (`"2018-07-14:500"`). */
+function dayCounts(days) {
+  const counts = new Map()
+  for (const window of days || []) {
+    const day = Number(String(window.id).slice(8, 10))
+    if (day >= 1 && day <= 31) counts.set(day, (counts.get(day) || 0) + (window.count || 0))
+  }
+  return counts
+}
+
+/**
+ * How `shown` photos share a box: the rows, and how many go in each. The first rows get fewer,
+ * so the day's first photo is its largest, and the photos are kept as near square as the box lets.
+ */
+export function dayGrid(shown, w, h, maxColumns, maxRows) {
+  let best = null
+  for (let cols = 1; cols <= Math.min(maxColumns, shown); cols++) {
+    const rowCount = Math.ceil(shown / cols)
+    if (rowCount > maxRows) continue
+    const tileW = (w - (cols - 1) * CALENDAR_INNER_GAP) / cols
+    const tileH = (h - (rowCount - 1) * CALENDAR_INNER_GAP) / rowCount
+    const score = Math.abs(Math.log(tileW / tileH)) + (cols * rowCount - shown) * 0.3
+    if (!best || score < best.score) best = { score, rowCount }
+  }
+  const rowCount = best ? best.rowCount : 1
+  const base = Math.floor(shown / rowCount)
+  const extra = shown % rowCount
+  return Array.from({ length: rowCount }, (_, row) => base + (row >= rowCount - extra ? 1 : 0))
+}
+
+/** Lay out one day's `count` photos from `start` in a box; returns how many can be seen. */
+function placeDay(rects, start, count, box, tile) {
+  if (count <= 0) return 0
+  const g = CALENDAR_INNER_GAP
+  const maxColumns = Math.max(1, Math.floor((box.w + g) / (tile + g)))
+  const maxRows = Math.max(1, Math.floor((box.h + g) / (tile + g)))
+  const shown = Math.min(count, maxColumns * maxRows)
+  const rowSizes = dayGrid(shown, box.w, box.h, maxColumns, maxRows)
+  const rowH = (box.h - (rowSizes.length - 1) * g) / rowSizes.length
+  let i = start
+  rowSizes.forEach((size, row) => {
+    const tileW = (box.w - (size - 1) * g) / size
+    for (let c = 0; c < size; c++) {
+      rects.set([box.x + c * (tileW + g), box.y + row * (rowH + g), tileW, rowH], i * 4)
+      i++
+    }
+  })
+  // The ones that do not fit shrink into the middle of the last one shown.
+  const at = (i - 1) * 4
+  const midX = rects[at] + rects[at + 2] / 2
+  const midY = rects[at + 1] + rects[at + 3] / 2
+  for (; i < start + count; i++) rects.set([midX, midY, 0, 0], i * 4)
+  return shown
+}
+
+/** A month as a wall calendar. Anything that is not a month falls back to the grid. */
+function calendar(options) {
+  const month = parseMonth(options.month)
+  const { count, width, cell, gap, header, days, weekStart = 1, today } = options
+  if (!month || count <= 0) return grid(options)
+
+  const space = Math.max(gap, 4)
+  const dayW = (width - 6 * space) / 7
+  // Square days on a narrow screen; on a wide one they are as tall as the zoom asks, no taller.
+  const dayH = Math.min(dayW, Math.max(cell * 1.3, 64))
+  const weekdayH = 26
+  const top = header + weekdayH
+  const lead = (new Date(Date.UTC(month.year, month.month - 1, 1)).getUTCDay() - weekStart + 7) % 7
+  const monthLength = new Date(Date.UTC(month.year, month.month, 0)).getUTCDate()
+  const counts = dayCounts(days)
+  // This month ends with the week of today (or of a later photo, a clock being wrong): the
+  // weeks still to come would be the first thing a library opened at its end shows.
+  const current = today && today.year === month.year && today.month === month.month
+  const lastDay = current ? Math.max(today.day, ...counts.keys()) : monthLength
+  const length = Math.min(monthLength, lastDay + 6 - ((lead + lastDay - 1) % 7))
+  const weeks = Math.ceil((lead + length) / 7)
+  // A phone at its furthest zoom (about 60 px a cell) fits four photos in a day.
+  const tile = Math.max(CALENDAR_TILE_MIN, cell * 0.36)
+
+  const rects = new Float32Array(count * 4)
+  const cells = []
+  let index = 0
+  for (let day = 1; day <= length; day++) {
+    const slot = lead + day - 1
+    const box = {
+      x: (slot % 7) * (dayW + space),
+      y: top + Math.floor(slot / 7) * (dayH + space),
+      w: dayW,
+      h: dayH
+    }
+    const photos = Math.min(counts.get(day) || 0, count - index)
+    const shown = placeDay(rects, index, photos, box, tile)
+    const last = shown > 0 ? { x: rects[(index + shown - 1) * 4], y: rects[(index + shown - 1) * 4 + 1],
+      w: rects[(index + shown - 1) * 4 + 2], h: rects[(index + shown - 1) * 4 + 3] } : null
+    const future = Boolean(current && day > today.day)
+    cells.push({ day, weekday: (slot + weekStart) % 7, ...box, count: photos, more: photos - shown, last, future })
+    index += photos
+  }
+  // Files the day list does not account for (it never should) go, sizeless, after the last day.
+  const end = cells[cells.length - 1]
+  for (; index < count; index++) rects.set([end.x + end.w / 2, end.y + end.h / 2, 0, 0], index * 4)
+
+  const height = top + weeks * dayH + (weeks - 1) * space
+  const layout = new Packed(rects, count, height, header, space)
+  layout.calendar = { month, weekStart, weekday: { y: header, h: weekdayH }, dayW, dayH, space, cells }
+  return layout
+}
+
+const BUILDERS = { grid, rows, columns, mosaic, whole, feed, prints, film, honeycomb, details, calendar }
 
 /**
  * The layout of one section. `aspectAt(i)` gives the aspect ratio of its file `i`, `width` is the
  * width to fill, `columns` and `cell` come from the zoom (`cell` is the height of a row in `rows`).
+ * The calendar also takes `month` (the section's id), `days` (its `days_list`), `weekStart`
+ * (0 Sunday … 6 Saturday) and `today` (`{ year, month, day }`: this month stops at its week).
  */
 export function buildLayout(style, options) {
   return (BUILDERS[style] || grid)(options)

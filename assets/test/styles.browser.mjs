@@ -20,7 +20,7 @@ const server = createServer(async (req, res) => {
 })
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve))
 const browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] })
-const STYLES = ["grid", "rows", "columns", "mosaic", "whole", "feed", "prints", "film", "honeycomb", "details"]
+const STYLES = ["grid", "rows", "columns", "mosaic", "whole", "feed", "prints", "film", "honeycomb", "details", "calendar"]
 try {
   for (const [name, viewport] of [["desktop", { width: 1280, height: 800 }], ["phone", { width: 390, height: 780 }]]) {
     const page = await browser.newPage({ viewport })

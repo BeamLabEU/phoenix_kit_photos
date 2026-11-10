@@ -61,12 +61,32 @@ const CSS = `
 [data-selectable="true"] .pkt-tile{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .pkt-marquee{position:absolute;z-index:6;border:1px solid var(--color-primary,#2563eb);background:color-mix(in oklab,var(--color-primary,#2563eb) 16%,transparent);border-radius:3px;pointer-events:none}
 
+[data-active-style="calendar"] .pkt-paper{border-radius:4px}
+[data-active-style="calendar"] .pkt-badge{right:3px;bottom:3px;padding:3px 3px 3px 4px;gap:0;font-size:0;line-height:0}
+[data-active-style="calendar"] .pkt-check{width:18px;height:18px;left:4px;top:4px}
+[data-active-style="calendar"] .pkt-check::after{left:4px;top:1px;width:5px;height:9px}
+.pkt-cal{position:absolute;left:0;right:0;pointer-events:none;animation:pkt-cal-in .3s ease-out}
+.pkt-cal-back{z-index:-1}
+.pkt-cal-front{z-index:2}
+.pkt-cal>div{position:absolute}
+.pkt-cal-wd{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;opacity:.55}
+.pkt-cal-day{border-radius:6px;background:color-mix(in oklab,var(--color-base-content,#000) 4%,transparent)}
+.pkt-cal-front .pkt-cal-day{background:none}
+.pkt-cal-num{position:absolute;top:3px;right:5px;min-width:18px;padding:0 4px;border-radius:999px;text-align:center;font-size:12px;font-weight:600;line-height:18px;font-variant-numeric:tabular-nums;opacity:.5}
+.pkt-cal-future{opacity:.45}
+.pkt-cal-weekend .pkt-cal-num,.pkt-cal-wd.pkt-cal-weekend{opacity:.38}
+.pkt-cal-full .pkt-cal-num{opacity:1;color:#fff;text-shadow:0 1px 3px #000b,0 0 1px #000a}
+.pkt-cal-today .pkt-cal-num{opacity:1;color:var(--color-primary-content,#fff);background:var(--color-primary,#2563eb);text-shadow:none}
+.pkt-cal-more{display:flex;align-items:center;justify-content:center;border-radius:4px;background:#0009;color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
+.pkt-cal-count{position:absolute;left:3px;bottom:3px;padding:0 5px;border-radius:999px;background:#000a;color:#fff;font-size:10px;font-weight:600;line-height:15px;font-variant-numeric:tabular-nums}
+@keyframes pkt-cal-in{from{opacity:0}}
+
 .pkt-header{display:flex;align-items:center;gap:8px}
 .pkt-section-check{pointer-events:auto;position:relative;width:20px;height:20px;padding:0;border-radius:50%;border:2px solid color-mix(in oklab,var(--color-base-content,#000) 40%,transparent);background:none;cursor:pointer;opacity:0;transition:opacity .14s}
 .pkt-section-check::after{content:"";position:absolute;left:4.5px;top:1.5px;width:6px;height:10px;border:solid color-mix(in oklab,var(--color-base-content,#000) 55%,transparent);border-width:0 2px 2px 0;transform:rotate(42deg)}
 @media (hover:hover){.pkt-header:hover .pkt-section-check,.pkt-section-check:focus-visible{opacity:1}}
 [data-selecting="true"] .pkt-section-check{opacity:1}
-@media (prefers-reduced-motion:reduce){.pkt-paper,.pkt-paper img,.pkt-meta,.pkt-caption,.pkt-check{transition:none}}
+@media (prefers-reduced-motion:reduce){.pkt-paper,.pkt-paper img,.pkt-meta,.pkt-caption,.pkt-check{transition:none}.pkt-cal{animation:none}}
 `
 
 let installed = false

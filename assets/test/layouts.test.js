@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { STYLE_IDS, STYLES, buildLayout, decodeAspects } from "../js/layouts.js"
+import { STYLE_IDS, STYLES, buildLayout, dayGrid, decodeAspects, parseMonth } from "../js/layouts.js"
 import { squareSectionHeight } from "../js/geometry.js"
 import { pickSource } from "../js/tiles.js"
 
@@ -164,4 +164,95 @@ test("edgeBelow is the first tile top at or below a line, in every style", () =>
     }
     assert.equal(buildLayout(style, options({ count: 0 })).edgeBelow(0), null, style)
   }
+})
+
+// July 2018 began on a Sunday. Days 14 (20 photos, in two windows the way a big day comes),
+// 1 (1 photo) and 31 (3 photos).
+const july = (extra = {}) => options({
+  count: 24, month: "2018-07", weekStart: 1,
+  days: [{ id: "2018-07-01", count: 1 }, { id: "2018-07-14", count: 12 }, { id: "2018-07-14:12", count: 8 },
+    { id: "2018-07-31", count: 3 }],
+  ...extra
+})
+
+test("the calendar puts each day in its weekday's column, Monday first or Sunday first", () => {
+  const monday = buildLayout("calendar", july()).calendar
+  assert.equal(monday.cells.length, 31)
+  // Sunday the 1st is the last column of the first week, Monday the 2nd the first of the next.
+  assert.equal(monday.cells[0].x, 6 * (monday.dayW + monday.space))
+  assert.equal(monday.cells[1].x, 0)
+  assert(monday.cells[1].y > monday.cells[0].y)
+
+  const sunday = buildLayout("calendar", july({ weekStart: 0 })).calendar
+  assert.equal(sunday.cells[0].x, 0)
+  assert.equal(sunday.cells[0].y, sunday.cells[6].y)
+})
+
+test("a month of the calendar is as tall as its weeks", () => {
+  // Monday first, July 2018 runs over six weeks; Sunday first, over five.
+  const six = buildLayout("calendar", july())
+  const five = buildLayout("calendar", july({ weekStart: 0 }))
+  const { dayH, space } = six.calendar
+  assert(Math.abs(six.height - five.height - (dayH + space)) < 0.01)
+  const last = six.calendar.cells[30]
+  assert(Math.abs(six.height - (last.y + last.h)) < 0.01)
+})
+
+test("a day's photos stay inside its square, and the ones that do not fit have no size", () => {
+  for (const cell of [56, 160, 400]) {
+    const layout = buildLayout("calendar", july({ cell }))
+    let index = 0
+    for (const day of layout.calendar.cells) {
+      for (let i = index; i < index + day.count; i++) {
+        const r = layout.rect(i)
+        if (i - index < day.count - day.more) {
+          assert(r.w > 0 && r.h > 0, `${cell}: photo ${i}`)
+          assert(r.x >= day.x - 0.01 && r.x + r.w <= day.x + day.w + 0.01, `${cell}: photo ${i} x`)
+          assert(r.y >= day.y - 0.01 && r.y + r.h <= day.y + day.h + 0.01, `${cell}: photo ${i} y`)
+        } else {
+          assert.equal(r.w, 0, `${cell}: photo ${i} should be hidden`)
+        }
+      }
+      index += day.count
+    }
+    assert.equal(index, 24)
+  }
+})
+
+test("zooming out shows more of a busy day", () => {
+  const near = buildLayout("calendar", july({ cell: 400 })).calendar.cells[13]
+  const far = buildLayout("calendar", july({ cell: 56 })).calendar.cells[13]
+  assert.equal(near.count, 20)
+  assert(far.count - far.more > near.count - near.more)
+})
+
+test("a day's photos share the square in rows, the first photo the largest", () => {
+  assert.deepEqual(dayGrid(1, 100, 100, 3, 3), [1])
+  assert.equal(dayGrid(2, 100, 100, 3, 3).reduce((a, b) => a + b), 2)
+  assert.deepEqual(dayGrid(3, 100, 100, 3, 3), [1, 2])
+  assert.deepEqual(dayGrid(4, 100, 100, 3, 3), [2, 2])
+  assert.deepEqual(dayGrid(9, 100, 100, 3, 3), [3, 3, 3])
+  assert.equal(dayGrid(5, 100, 100, 3, 3).reduce((a, b) => a + b), 5)
+})
+
+test("a section that is not a month is the plain grid in the calendar", () => {
+  const layout = buildLayout("calendar", options({ month: "unknown" }))
+  assert.equal(layout.calendar, undefined)
+  assert.equal(parseMonth("2018-13"), null)
+  assert.deepEqual(parseMonth("2018-07"), { year: 2018, month: 7 })
+})
+
+test("this month stops at the end of today's week", () => {
+  // Monday first, Tuesday 10 July 2018 is in the third week; the photos of the 14th are in it too.
+  const early = { count: 21, days: [{ id: "2018-07-01", count: 1 }, { id: "2018-07-14", count: 20 }] }
+  const layout = buildLayout("calendar", july({ ...early, today: { year: 2018, month: 7, day: 10 } }))
+  const cells = layout.calendar.cells
+  assert.equal(cells.length, 15)
+  assert.equal(cells[14].future, true)
+  assert.equal(cells[9].future, false)
+  // The photos of the 31st still have a place: a photo is never dropped for the date.
+  const late = buildLayout("calendar", july({ today: { year: 2018, month: 7, day: 3 } })).calendar.cells
+  assert.equal(late.length, 31)
+  // Another month is whole.
+  assert.equal(buildLayout("calendar", july({ today: { year: 2018, month: 8, day: 1 } })).calendar.cells.length, 31)
 })

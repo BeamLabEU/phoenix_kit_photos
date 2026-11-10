@@ -7,7 +7,7 @@ html,body{margin:0;background:#fff;color:#1c1917;font-family:system-ui}
 .phoenix-kit-photo-timeline__layer{position:absolute;left:0;right:0;top:0}
 </style>
 <div id="root" class="phoenix-kit-photo-timeline" data-pager="false">
-<div id="timeline" data-columns="5" data-cell="170" data-gap="2" data-target="7" data-timeline-id="test" data-selectable="false" data-styles="grid rows columns mosaic whole feed prints film honeycomb details">
+<div id="timeline" data-columns="5" data-cell="170" data-gap="2" data-target="7" data-timeline-id="test" data-selectable="false" data-styles="grid rows columns mosaic whole feed prints film honeycomb details calendar">
 <div class="phoenix-kit-photo-timeline__spacer"></div><div class="phoenix-kit-photo-timeline__layer"></div>
 </div></div>
 <script type="module">
@@ -29,7 +29,7 @@ for (let month = 0; month < months; month++) {
   const days = [], bytes = []
   let sum = 0, count = 0
   for (let day = 0; day < 4; day++) {
-    const id = `m${month}-d${day}`
+    const id = `2021-${String(month + 1).padStart(2, "0")}-${String(day * 6 + 1).padStart(2, "0")}`
     const size = 12 + ((month * 7 + day * 5) % 30)
     const items = Array.from({ length: size }, () => {
       const n = photo++

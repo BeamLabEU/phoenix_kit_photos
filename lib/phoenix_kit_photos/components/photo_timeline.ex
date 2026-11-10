@@ -49,7 +49,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   ## Styles
 
   `layout` is the style a person sees first: `:square` (the plain grid), `:rows`, `:columns`,
-  `:mosaic`, `:whole`, `:feed`, `:prints`, `:film`, `:honeycomb` or `:details`. `styles` puts
+  `:mosaic`, `:whole`, `:feed`, `:prints`, `:film`, `:honeycomb`, `:details` or `:calendar`
+  (each month a wall calendar, a day's photos sharing its square). `styles` puts
   a menu by the month pill that lets them change it: `true` for all of them, or a list of the
   ones to offer. Their pick is kept in the browser (`localStorage`,
   `phoenix_kit_photos:style`) and wins over `layout`. `v` steps through the styles.
@@ -124,7 +125,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   alias PhoenixKitPhotos.Timeline
   alias PhoenixKitPhotos.Uploads
 
-  @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details)
+  @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details calendar)
   @layouts Map.new(@styles, &{String.to_atom(&1), &1}) |> Map.put(:square, "grid")
 
   @impl true
@@ -343,6 +344,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp style_label("film"), do: gettext("Film")
   defp style_label("honeycomb"), do: gettext("Honeycomb")
   defp style_label("details"), do: gettext("Details")
+  defp style_label("calendar"), do: gettext("Calendar")
 
   # `hello: true` marks the index that answers a hook's `timeline:ready`: the one an address may
   # open the viewer in. An index sent before it (with the page) has a revision this process has
@@ -1343,6 +1345,20 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       ]
     end
     |> List.flatten()
+  end
+
+  defp glyph("calendar") do
+    head = [box(0, 0, 24, 3, rx: 0.8, opacity: "0.6")]
+
+    days =
+      for {x, y} <- [{0, 4.5}, {6.25, 4.5}, {12.5, 4.5}, {18.75, 4.5}, {0, 11.5}, {6.25, 11.5}],
+          do: box(x, y, 5.25, 5.5, rx: 0.8)
+
+    empty =
+      for {x, y} <- [{12.5, 11.5}, {18.75, 11.5}],
+          do: box(x, y, 5.25, 5.5, rx: 0.8, opacity: "0.3")
+
+    head ++ days ++ empty
   end
 
   defp state_message(:empty), do: "No photos yet."

@@ -265,7 +265,6 @@ defmodule PhoenixKitPhotos.Uploads do
 
   defp outcome({:ok, file}, _library_uuid), do: {:added, file}
   defp outcome({:ok, file, :created}, _library_uuid), do: {:added, file}
-  defp outcome({:error, reason}, _library_uuid), do: {:error, reason}
 
   defp same_library?(file, library_uuid),
     do: to_string(file.library_uuid) == to_string(library_uuid)

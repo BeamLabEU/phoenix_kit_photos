@@ -857,14 +857,14 @@ defmodule PhoenixKitPhotos.Timeline do
   # The caller has checked the reader (`to_items/3`).
   defp signed_url(_file, "original", _private?), do: nil
 
-  defp signed_url(%StorageFile{instances: instances} = file, name, private?) do
-    instance = Enum.find(instances || [], &(&1.variant_name == name))
+  defp signed_url(%StorageFile{} = file, name, private?) do
+    instance = Enum.find(instances(file), &(&1.variant_name == name))
     url_opts = if instance, do: [version: instance], else: []
     URLSigner.signed_url(to_string(file.uuid), name, [private: private?] ++ url_opts)
   end
 
-  defp made_url(%StorageFile{instances: instances} = file, name, private?) do
-    if Enum.any?(instances || [], &(&1.variant_name == name and name != "original")) do
+  defp made_url(%StorageFile{} = file, name, private?) do
+    if Enum.any?(instances(file), &(&1.variant_name == name and name != "original")) do
       signed_url(file, name, private?)
     end
   end
@@ -920,7 +920,7 @@ defmodule PhoenixKitPhotos.Timeline do
   defp original_source(auth, file) do
     case original_url(auth, file) do
       nil -> []
-      url -> [%{url: url, type: file.mime_type || "video/mp4", role: :original}]
+      url -> [%{url: url, type: file.mime_type, role: :original}]
     end
   end
 
@@ -930,8 +930,8 @@ defmodule PhoenixKitPhotos.Timeline do
     if file.mime_type in @web_images, do: original_url(auth, file)
   end
 
-  defp original_url(auth, %StorageFile{instances: instances} = file) do
-    instance = Enum.find(instances || [], &(&1.variant_name == "original"))
+  defp original_url(auth, %StorageFile{} = file) do
+    instance = Enum.find(instances(file), &(&1.variant_name == "original"))
     url_opts = if instance, do: [version: instance], else: []
     Storage.authorized_url(auth, file, "original", url_opts)
   end
@@ -945,9 +945,9 @@ defmodule PhoenixKitPhotos.Timeline do
   # The URL and the stored instance of the size `variant_for/2` picks, or nil
   # when the set has none (`"original"`) or the file has not made it yet: a
   # slide offers only what can be fetched.
-  defp pick(auth, %StorageFile{instances: instances} = file, opts) do
+  defp pick(auth, %StorageFile{} = file, opts) do
     with name when is_binary(name) and name != "original" <- Storage.variant_for(file, opts),
-         %{} = instance <- Enum.find(instances || [], &(&1.variant_name == name)),
+         %{} = instance <- Enum.find(instances(file), &(&1.variant_name == name)),
          url when is_binary(url) <- Storage.authorized_url(auth, file, name, version: instance) do
       {url, instance}
     else
@@ -955,17 +955,21 @@ defmodule PhoenixKitPhotos.Timeline do
     end
   end
 
-  defp variant_url(auth, %StorageFile{instances: instances} = file, opts) do
+  defp variant_url(auth, %StorageFile{} = file, opts) do
     case Storage.variant_for(file, opts) do
       "original" ->
         nil
 
       name when is_binary(name) ->
-        instance = Enum.find(instances || [], &(&1.variant_name == name))
+        instance = Enum.find(instances(file), &(&1.variant_name == name))
         url_opts = if instance, do: [version: instance], else: []
         Storage.authorized_url(auth, file, name, url_opts)
     end
   end
+
+  # The stored sizes of a file, when they were loaded with it: unloaded means none on hand.
+  defp instances(%StorageFile{instances: instances}) when is_list(instances), do: instances
+  defp instances(%StorageFile{}), do: []
 
   defp capture_dates do
     case repo().query("SELECT taken_on FROM phoenix_kit_files LIMIT 0", []) do

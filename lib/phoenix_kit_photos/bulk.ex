@@ -299,7 +299,7 @@ defmodule PhoenixKitPhotos.Bulk do
   defp check_action(action, file, rights, target, present) do
     with :ok <- check_target(file, target),
          :ok <- if(action == :move, do: check_move(file, rights), else: :ok) do
-      if MapSet.member?(present, file.file_checksum),
+      if Map.has_key?(present, file.file_checksum),
         do: {:refused, :already_there},
         else: :ok
     end
@@ -350,10 +350,10 @@ defmodule PhoenixKitPhotos.Bulk do
     |> where([f], f.file_checksum in ^checksums)
     |> select([f], f.file_checksum)
     |> repo().all()
-    |> MapSet.new()
+    |> Map.new(&{&1, true})
   end
 
-  defp existing_checksums(_action, _target, _found), do: MapSet.new()
+  defp existing_checksums(_action, _target, _found), do: %{}
 
   defp tag_changes(:tag, params), do: {tags(params["add"]), tags(params["remove"])}
   defp tag_changes(_action, _params), do: {[], []}

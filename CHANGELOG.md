@@ -2,7 +2,7 @@
 
 ## 0.3.0 - 2026-11-10
 
-The first release on Hex. Requires PhoenixKit `~> 3.5`.
+The first release on Hex. Requires Elixir `~> 1.18` and PhoenixKit `~> 3.5`.
 
 ### Added
 

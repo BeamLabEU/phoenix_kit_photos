@@ -73,12 +73,12 @@ defmodule PhoenixKitPhotos.MixProject do
       # guessed github.com/BeamLabEU/<package> URL.
       links: %{"GitHub" => @source_url},
       # priv/ carries the prebuilt JS bundle that js_sources/0 declares.
-      files: ~w(lib priv mix.exs README.md LICENSE .formatter.exs)
+      files: ~w(lib priv mix.exs README.md CHANGELOG.md LICENSE .formatter.exs)
     ]
   end
 
   defp docs do
-    [main: "readme", extras: ["README.md"], source_ref: "v#{@version}"]
+    [main: "readme", extras: ["README.md", "CHANGELOG.md"], source_ref: "v#{@version}"]
   end
 
   defp phoenix_kit_dep do

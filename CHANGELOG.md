@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The uploader no longer loses a photo when storage is slow. It stored each finished
+  file while the page waited; a store over ~10 s made LiveView's client time out a push,
+  disconnect and reload the page, which deleted the temp files of every upload in
+  flight. A finished file is now moved out of LiveView's hands at once
+  (`PhoenixKitPhotos.UploadStaging`) and stored by `PhoenixKitPhotos.StoreUploadJob`,
+  retried for about 20 minutes while storage is down. The panel shows *Saving…* until
+  it is stored.
+
+### Added
+
+- `PhoenixKitPhotos.StoreUploadJob` (Oban queue `photo_uploads`): add
+  `photo_uploads: 4` to the host's Oban queues. Without it, or on a page without
+  `PhoenixKitPhotos.LiveUpdates`, the uploader stores inline as before.
+- `config :phoenix_kit_photos, :staging_dir` (default `phoenix_kit_photos_staging` in
+  the system temp directory; keep it on the same filesystem as Plug's temp files) and
+  `:store_in_background` (`true`/`false` to force the choice).
+- `PhoenixKitPhotos.StagingSweepJob`, scheduled by itself, removes staged files a
+  crash left behind.
+- `Uploads.precheck/4`: the cheap checks `store/4` starts with.
+- `oban` as a direct dependency (it already came with PhoenixKit).
+
 ## 0.3.0 - 2026-11-10
 
 The first release on Hex. Requires Elixir `~> 1.18` and PhoenixKit `~> 3.5`.

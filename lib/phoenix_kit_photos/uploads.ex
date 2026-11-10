@@ -31,6 +31,11 @@ defmodule PhoenixKitPhotos.Uploads do
 
   ## Storing
 
+  The uploader stores in the background when its page can hear back
+  (`PhoenixKitPhotos.StoreUploadJob`): it makes `precheck/4`'s cheap checks, moves the
+  file out of LiveView's hands (`PhoenixKitPhotos.UploadStaging`) and the job calls
+  `store/4`. Everything else that has a file on disk calls `store/4` directly.
+
   `store/4` hashes the file from disk in chunks (`PhoenixKit.Utils.FileHash`), so a
   video costs the same memory as a thumbnail, and hands it to
   `PhoenixKit.Modules.Storage.store_file_in_buckets/7`, which keeps it, dedups it and
@@ -179,6 +184,23 @@ defmodule PhoenixKitPhotos.Uploads do
     :exit, reason ->
       Logger.warning("[PhotoUploader] storing an upload exited: #{inspect(reason)}")
       {:error, :failed}
+  end
+
+  @doc """
+  The checks `store/4` starts with that cost next to nothing: whether `scope` may add
+  to the library, and whether this is a file it takes (by its name, and for SVG and
+  camera raw by its first 512 bytes). `:ok` or `store/4`'s `{:error, :not_allowed}` or
+  `{:error, :unsupported_type}`. The uploader asks before it hands a file to
+  `PhoenixKitPhotos.StoreUploadJob`, so a refusal is said at once; `store/4` asks again.
+  """
+  @spec precheck(Path.t(), map(), Scope.t() | nil, term()) :: :ok | {:error, atom()}
+  def precheck(path, entry, scope, library_uuid) do
+    name = clean_name(Map.get(entry, :client_name))
+
+    with :ok <- allowed(scope, library_uuid),
+         {:ok, _type, _mime} <- media_type(path, mime_for(entry, name), name) do
+      :ok
+    end
   end
 
   defp allowed(scope, library_uuid),

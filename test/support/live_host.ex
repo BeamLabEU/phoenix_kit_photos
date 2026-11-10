@@ -72,6 +72,35 @@ defmodule PhoenixKitPhotos.UploadLive do
   end
 end
 
+defmodule PhoenixKitPhotos.BackgroundUploadLive do
+  @moduledoc false
+  # The uploader on a page that can hear back (`LiveUpdates`), so it saves in the background.
+  use Phoenix.LiveView
+  on_mount {PhoenixKitPhotos.LiveUpdates, "no-timeline"}
+
+  def mount(_params, %{"scope" => scope, "library" => library}, socket) do
+    {:ok, assign(socket, scope: scope, library: library, stored: [])}
+  end
+
+  def handle_info({:stored, id, outcome}, socket) do
+    {:noreply, assign(socket, :stored, [{id, outcome} | socket.assigns.stored])}
+  end
+
+  def handle_call(:stored, _from, socket), do: {:reply, socket.assigns.stored, socket}
+
+  def render(assigns) do
+    ~H"""
+    <.live_component
+      module={PhoenixKitPhotos.Components.PhotoUploader}
+      id="bg-uploader"
+      library_uuid={@library}
+      auth={@scope}
+      on_stored={:stored}
+    />
+    """
+  end
+end
+
 defmodule PhoenixKitPhotos.ViewerLive do
   @moduledoc false
   use Phoenix.LiveView

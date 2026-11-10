@@ -42,6 +42,8 @@ defmodule PhoenixKitPhotos.MixProject do
 
       # Database
       {:ecto_sql, "~> 3.10"},
+      # The uploader stores files through it (`StoreUploadJob`); PhoenixKit runs it.
+      {:oban, "~> 2.20"},
 
       # Assets & UI
       {:esbuild, "~> 0.10", only: [:dev], runtime: false},

@@ -36,6 +36,19 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   Memory: the browser sends the file in chunks that LiveView writes to disk, and the file
   is hashed and stored from disk, so a video costs what a thumbnail does.
 
+  ## Saving in the background
+
+  A finished file is stored off the page when the page can hear back: it mounts
+  `PhoenixKitPhotos.LiveUpdates` and the host runs the `photo_uploads` Oban queue
+  (`PhoenixKitPhotos.StoreUploadJob.available?/0`). The file is checked (who may add,
+  what it is: `Uploads.precheck/4`), moved out of LiveView's temp file
+  (`PhoenixKitPhotos.UploadStaging`) and listed as *Saving…* until the job says what
+  became of it; storage being slow or down is retried there, and the page never waits
+  for it. A page that waits too long for the server is disconnected and reloaded by
+  LiveView's client, which ends every upload in flight, so this matters most for large
+  files and slow storage. Otherwise (no hook, no queue) the file is stored inline, as
+  before. A file that is saving stays saving after a reload; only the panel forgets it.
+
   ## Options
 
     * `:on_stored` — an atom. When set, the parent LiveView gets
@@ -50,14 +63,21 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   import PhoenixKitWeb.Components.Core.Icon, only: [icon: 1]
 
+  require Logger
+
   alias PhoenixKit.Modules.Storage.Libraries
-  alias PhoenixKitPhotos.Uploads
+  alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKitPhotos.{LiveUpdates, StagingSweepJob, StoreUploadJob, Uploads, UploadStaging}
 
   @upload :photos
   @max_results 50
   # How many waiting file names the hook may send for the panel to list; the rest is
   # only counted ("N more files are waiting"), so a drop of thousands stays cheap.
   @max_queued_names 50
+  # How many files may be saving before the hook is told the window is fuller than its
+  # entries alone say: past this, every file still saving holds a place, so a store that
+  # falls behind slows the transfer down instead of filling the server's disk.
+  @saving_slack 8
 
   @impl true
   def mount(socket) do
@@ -65,6 +85,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
      assign(socket,
        open: false,
        done: [],
+       saving: [],
        skipped: 0,
        unreadable: 0,
        truncated: false,
@@ -80,6 +101,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   end
 
   @impl true
+  # What `PhoenixKitPhotos.StoreUploadJob` said about a file this panel handed it,
+  # relayed by `PhoenixKitPhotos.LiveUpdates`.
+  def update(%{upload_event: {ref, event}}, socket), do: {:ok, upload_event(socket, ref, event)}
+
   def update(assigns, socket) do
     library_uuid = to_string(assigns.library_uuid)
     changed? = socket.assigns.library_uuid not in [nil, library_uuid]
@@ -103,6 +128,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     do:
       assign(socket,
         done: [],
+        saving: [],
         skipped: 0,
         unreadable: 0,
         truncated: false,
@@ -173,20 +199,98 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   end
 
   @doc false
-  # One file finished arriving: store it and say what became of it. A cancelled entry
-  # (its x, or Cancel all) is never stored.
+  # One file finished arriving: hand it to the background store (or store it here, see
+  # the moduledoc) and say what became of it. A cancelled entry (its x, or Cancel all) is
+  # never stored. The callback must be quick in the background case: it runs while the
+  # page waits, and LiveView's temp file is only safe until it returns.
   def handle_progress(@upload, entry, socket) do
     if entry.done? and not entry.cancelled? do
-      outcome =
-        consume_uploaded_entry(socket, entry, fn %{path: path} ->
-          {:ok, Uploads.store(path, entry, socket.assigns.auth, socket.assigns.library_uuid)}
-        end)
+      case consume(socket, entry, background?()) do
+        {:saving, item} ->
+          {:noreply, assign(socket, :saving, socket.assigns.saving ++ [item])}
 
-      {:noreply, socket |> record(entry, outcome) |> notify(outcome)}
+        outcome ->
+          {:noreply, socket |> record(entry.ref, entry.client_name, outcome) |> notify(outcome)}
+      end
     else
       {:noreply, socket}
     end
   end
+
+  defp consume(socket, entry, true = _background?),
+    do: consume_uploaded_entry(socket, entry, &{:ok, hand_over(&1.path, entry, socket)})
+
+  defp consume(socket, entry, false = _background?),
+    do: consume_uploaded_entry(socket, entry, &{:ok, store_here(&1.path, entry, socket)})
+
+  defp background?, do: is_binary(LiveUpdates.upload_topic()) and StoreUploadJob.available?()
+
+  defp store_here(path, entry, socket),
+    do: Uploads.store(path, entry, socket.assigns.auth, socket.assigns.library_uuid)
+
+  # The cheap checks first, so a refusal is said at once; then the file leaves LiveView's
+  # temp file and a job stores it. If either step fails, the file is stored here after
+  # all, from wherever it is now, rather than lost.
+  defp hand_over(path, entry, socket) do
+    %{auth: scope, library_uuid: library_uuid, id: id} = socket.assigns
+
+    with :ok <- Uploads.precheck(path, entry, scope, library_uuid),
+         {:staged, {:ok, staged}} <- {:staged, UploadStaging.stage(path)} do
+      upload = %{
+        name: entry.client_name,
+        type: entry.client_type,
+        user_uuid: Scope.user_uuid(scope),
+        library_uuid: library_uuid,
+        topic: LiveUpdates.upload_topic(),
+        component: id,
+        ref: entry.ref
+      }
+
+      case Oban.insert(StoreUploadJob.new_store(staged, upload)) do
+        {:ok, _job} ->
+          StagingSweepJob.schedule()
+          {:saving, %{ref: entry.ref, name: entry.client_name, retrying: nil}}
+
+        {:error, reason} ->
+          Logger.warning("[PhotoUploader] could not queue a store: #{inspect(reason)}")
+          outcome = store_here(staged, entry, socket)
+          UploadStaging.discard(staged)
+          outcome
+      end
+    else
+      {:staged, {:error, reason}} ->
+        Logger.warning("[PhotoUploader] could not stage an upload: #{inspect(reason)}")
+        store_here(path, entry, socket)
+
+      {:error, _reason} = refused ->
+        refused
+    end
+  end
+
+  defp upload_event(socket, ref, {:stored, outcome}) do
+    case Enum.split_with(socket.assigns.saving, &(&1.ref == ref)) do
+      {[item | _], rest} ->
+        socket
+        |> assign(:saving, rest)
+        |> record(item.ref, item.name, outcome)
+        |> notify(outcome)
+
+      {[], _rest} ->
+        socket
+    end
+  end
+
+  defp upload_event(socket, ref, {:retrying, attempt}) do
+    saving =
+      Enum.map(socket.assigns.saving, fn
+        %{ref: ^ref} = item -> %{item | retrying: attempt}
+        item -> item
+      end)
+
+    assign(socket, :saving, saving)
+  end
+
+  defp upload_event(socket, _ref, _event), do: socket
 
   defp reject_invalid(socket) do
     config = socket.assigns.uploads[@upload]
@@ -199,13 +303,13 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
         [error | _] ->
           socket
           |> cancel_upload(@upload, entry.ref)
-          |> record(entry, {:error, {:rejected, error}})
+          |> record(entry.ref, entry.client_name, {:error, {:rejected, error}})
       end
     end)
   end
 
-  defp record(socket, entry, outcome) do
-    item = %{ref: entry.ref, name: entry.client_name, outcome: outcome}
+  defp record(socket, ref, name, outcome) do
+    item = %{ref: ref, name: name, outcome: outcome}
     assign(socket, :done, Enum.take([item | socket.assigns.done], @max_results))
   end
 
@@ -264,11 +368,15 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   # The hook asks before it sends more of a big drop, and how much room it has: how
   # many entries are still in flight (uploading, waiting for a click in a public
-  # library, or not yet registered). It keeps at most its concurrency control's number
-  # in flight, so `idle` is the window closed all the way.
+  # library, or not yet registered), plus the files saving beyond `@saving_slack`. It
+  # keeps at most its concurrency control's number in flight, so `idle` is the window
+  # closed all the way.
   def handle_event("ready", _params, socket) do
     entries = socket.assigns.uploads[@upload].entries
-    {:reply, %{idle: entries == [], in_flight: length(entries)}, socket}
+    backlog = max(length(socket.assigns.saving) - @saving_slack, 0)
+
+    {:reply, %{idle: entries == [] and backlog == 0, in_flight: length(entries) + backlog},
+     socket}
   end
 
   # From the hook after it hands a batch to LiveView: how many files are still in its
@@ -300,7 +408,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     assigns =
       assigns
       |> assign(:entries, entries)
-      |> assign(:busy, length(entries) + assigns.waiting)
+      |> assign(:busy, length(entries) + length(assigns.saving) + assigns.waiting)
       |> assign(:added, count_outcome(assigns.done, :added))
       |> assign(:duplicates, count_outcome(assigns.done, :duplicate))
       |> assign(:elsewhere, count_outcome(assigns.done, :elsewhere))
@@ -424,6 +532,21 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
                 <p :for={error <- upload_errors(@uploads.photos, entry)} class="text-xs text-error" role="alert">
                   {Uploads.entry_error(error)}
                 </p>
+              </li>
+            </ul>
+
+            <%!-- Arrived, and being stored in the background: nothing to cancel any more. --%>
+            <ul :if={@saving != []} id={"#{@id}-saving"} class="flex flex-col gap-1 text-sm" aria-live="polite">
+              <li :for={item <- @saving} id={"#{@id}-saving-#{item.ref}"} class="flex items-center gap-2">
+                <span class="min-w-0 flex-1 truncate" title={item.name}>{item.name}</span>
+                <span class="flex shrink-0 items-center gap-1 text-xs text-base-content/60">
+                  <span class="loading loading-spinner loading-xs"></span>
+                  <%= if item.retrying do %>
+                    {gettext("Saving… trying again")}
+                  <% else %>
+                    {gettext("Saving…")}
+                  <% end %>
+                </span>
               </li>
             </ul>
 

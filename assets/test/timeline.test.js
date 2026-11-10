@@ -889,3 +889,50 @@ test("the marker is below the header in a packed style, and moves on into the ne
   h.handleScroll()
   assert.equal(h.bookmarkTop(), h.offsets[1] + h.layoutOf(h.sections[1]).header)
 })
+
+test("a finger painting a selection stops at its limit too", () => {
+  const { h } = selecting()
+  h.selectionLimit = () => 2
+  globalThis.navigator ??= {}
+  h.beginPaint({ dataset: { global: "0", fileId: "a" } })
+  h.paintTo(2)
+  assert.deepEqual(h.selectedIds().sort(), ["a", "b"])
+})
+
+test("at the end of the page the box stops with it instead of scrolling on", () => {
+  const { h } = selecting()
+  let top = 0
+  Object.defineProperty(h.el, "scrollTop", { get: () => top, set: (v) => { top = Math.max(0, Math.min(v, 300)) }, configurable: true })
+  const frames = []
+  globalThis.requestAnimationFrame = (fn) => frames.push(fn)
+  h.drawBox = () => {}
+  h.drag = { box: {}, last: { x: 0, y: 400 } }
+  h.edgeSpeed = 18
+  top = 290
+  h.edgeStep()
+  assert.equal(h.drag.last.y, 410, "the box went as far as the page did")
+  assert.equal(frames.length, 1)
+  frames.length = 0
+  h.edgeStep()
+  assert.equal(h.drag.last.y, 410, "and no further")
+  assert.equal(frames.length, 0, "the loop ended")
+  delete globalThis.requestAnimationFrame
+})
+
+test("a key the style menu took, or one outside the timeline, leaves the selection alone", () => {
+  const { h } = selecting()
+  h.toggleSelected("a", 0)
+  h.selectionKey({ key: "Escape", defaultPrevented: true, target: null })
+  assert.deepEqual(h.selectedIds(), ["a"])
+  const elsewhere = { tagName: "DIV" }
+  h.selectionKey({ key: "a", ctrlKey: true, target: elsewhere, preventDefault: () => assert.fail("took ctrl+a") })
+  assert.deepEqual(h.selectedIds(), ["a"])
+})
+
+test("the first index after the hello does not make every photo pop in", () => {
+  const { h } = hook()
+  h.setIndex({ library: "a", revision: 1, sections: [section(1)] })
+  h.setIndex({ library: "a", revision: 2, sections: [section(1)], hello: true })
+  h.setWindow({ section: "2020-01-01", revision: 2, items: [{ id: "x" }] })
+  assert.deepEqual([...h.fresh], [])
+})

@@ -16,7 +16,11 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
         session: %{"scope" => scope_for(user), "library" => {:library, media_uuid()}}
       )
 
-    %{view: view, user: user}
+    # The index sent with the page. Left in the mailbox, it is what a later
+    # `assert_push_event(..., %{total: 0})` would match instead of the push it means.
+    assert_push_event(view, "timeline:test-timeline:index", %{hello: false, revision: page})
+
+    %{view: view, user: user, page_revision: page}
   end
 
   test "hook handshake and targeted window events reach the component", %{view: view, user: user} do
@@ -38,8 +42,7 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
 
   # The page's own index is a revision behind once the hook says hello: an address may open the
   # viewer only in the answer.
-  test "only the index answering the hook's hello says so", %{view: view} do
-    assert_push_event(view, "timeline:test-timeline:index", %{hello: false, revision: page})
+  test "only the index answering the hook's hello says so", %{view: view, page_revision: page} do
     view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})
     assert_push_event(view, "timeline:test-timeline:index", %{hello: true, revision: hello})
     assert hello > page
@@ -221,7 +224,7 @@ defmodule PhoenixKitPhotos.PhotoTimelineStylesTest do
     end
 
     test "a ratio past the ends is held at the end", %{owner: owner, library: library} do
-      file_fixture(owner, %{library_uuid: library.uuid, width: 30000, height: 1000})
+      file_fixture(owner, %{library_uuid: library.uuid, width: 30_000, height: 1000})
       {:ok, aspects} = Timeline.aspects({:library, library.uuid}, scope_for(owner))
       assert aspects == %{"2018-07" => <<255>>}
     end

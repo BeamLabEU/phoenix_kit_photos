@@ -32,6 +32,7 @@ defmodule PhoenixKitPhotos.Bulk do
 
   use Gettext, backend: PhoenixKitPhotos.Gettext
   import Ecto.Query, warn: false
+  require Logger
 
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.CaptureDate
@@ -175,12 +176,84 @@ defmodule PhoenixKitPhotos.Bulk do
 
   defp in_use(_action, _files, _auth), do: MapSet.new()
 
+  # As core's media browser asks it: in a process of its own, so one that hangs or dies cannot
+  # hold or take down the page; under `:file_removal_guard_timeout` (ms); uuids compared in lower
+  # case. Anything but a list of places for files that were asked about fails closed.
   defp ask_guard(guard, uuids, ctx) do
-    guard.places(uuids, ctx) |> Enum.map(& &1.file_uuid) |> MapSet.new()
-  rescue
-    _error -> MapSet.new(uuids)
-  catch
-    _kind, _reason -> MapSet.new(uuids)
+    everything = MapSet.new(uuids)
+    asked = Map.new(uuids, &{String.downcase(&1), &1})
+
+    with {:ok, places} when is_list(places) <- call_guard(fn -> guard.places(uuids, ctx) end),
+         {:ok, used} <- read_places(places, asked) do
+      used
+    else
+      _failed ->
+        Logger.error("Photos: removal guard #{inspect(guard)} failed; treating all as in use")
+        everything
+    end
+  end
+
+  defp read_places(places, asked) do
+    Enum.reduce_while(places, {:ok, MapSet.new()}, fn
+      %{file_uuid: uuid}, {:ok, used} when is_binary(uuid) ->
+        case Map.fetch(asked, String.downcase(uuid)) do
+          {:ok, original} -> {:cont, {:ok, MapSet.put(used, original)}}
+          :error -> {:halt, :error}
+        end
+
+      _other, _acc ->
+        {:halt, :error}
+    end)
+  end
+
+  defp call_guard(fun) do
+    parent = self()
+    ref = make_ref()
+    callers = [parent | Process.get(:"$callers", [])]
+
+    {pid, monitor} =
+      spawn_monitor(fn ->
+        Process.put(:"$callers", callers)
+
+        result =
+          try do
+            {:ok, fun.()}
+          rescue
+            _error -> :error
+          catch
+            _kind, _reason -> :error
+          end
+
+        send(parent, {ref, result})
+      end)
+
+    receive do
+      {^ref, result} ->
+        Process.demonitor(monitor, [:flush])
+        result
+
+      {:DOWN, ^monitor, :process, ^pid, _reason} ->
+        :error
+    after
+      guard_timeout() ->
+        Process.exit(pid, :kill)
+        Process.demonitor(monitor, [:flush])
+
+        receive do
+          {^ref, _late} -> :ok
+        after
+          0 -> :ok
+        end
+
+        :error
+    end
+  end
+
+  defp guard_timeout do
+    case Application.get_env(:phoenix_kit, :file_removal_guard_timeout, 5_000) do
+      ms when is_integer(ms) and ms > 0 -> ms
+      _other -> 5_000
+    end
   end
 
   defp used?(rights, file), do: MapSet.member?(rights.in_use, file.uuid)
@@ -224,12 +297,27 @@ defmodule PhoenixKitPhotos.Bulk do
   defp check_action(_copy_or_move, _file, _rights, nil, _present), do: {:refused, :no_target}
 
   defp check_action(action, file, rights, target, present) do
+    with :ok <- check_target(file, target),
+         :ok <- if(action == :move, do: check_move(file, rights), else: :ok) do
+      if MapSet.member?(present, file.file_checksum),
+        do: {:refused, :already_there},
+        else: :ok
+    end
+  end
+
+  defp check_target(file, target) do
+    if to_string(file.library_uuid) == to_string(target.uuid),
+      do: {:refused, :same_library},
+      else: :ok
+  end
+
+  # What a move asks beyond a copy: the file leaves its library, so it must be the person's to
+  # take, unedited, and used by nothing there.
+  defp check_move(file, rights) do
     cond do
-      to_string(file.library_uuid) == to_string(target.uuid) -> {:refused, :same_library}
-      action == :move and not may?(rights, file, :edit) -> {:refused, :not_allowed}
-      action == :move and edited?(file) -> {:refused, :edited}
-      action == :move and used?(rights, file) -> {:refused, :in_use}
-      MapSet.member?(present, file.file_checksum) -> {:refused, :already_there}
+      not may?(rights, file, :edit) -> {:refused, :not_allowed}
+      edited?(file) -> {:refused, :edited}
+      used?(rights, file) -> {:refused, :in_use}
       true -> :ok
     end
   end

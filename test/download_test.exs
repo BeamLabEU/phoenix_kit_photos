@@ -28,6 +28,19 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
     assert post_ids(["../../etc/passwd"], nil).status == 404
   end
 
+  test "ids that are not the form's string are a 404, not a crash", ctx do
+    scope = scope_for(ctx.owner)
+
+    for ids <- [%{"a" => "x"}, ["a", "b"]] do
+      conn =
+        conn(:post, "/photos/download", %{"ids" => ids})
+        |> assign(:phoenix_kit_current_scope, scope)
+        |> Download.call([])
+
+      assert conn.status == 404
+    end
+  end
+
   test "a file that cannot be read is named in the archive, which still opens", ctx do
     file = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
     conn = post_ids([file.uuid], scope_for(ctx.owner))

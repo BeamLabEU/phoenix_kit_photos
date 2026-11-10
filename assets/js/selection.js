@@ -260,7 +260,8 @@ export const selection = {
       window.addEventListener("pointermove", this.onDragMove)
       window.addEventListener("pointerup", this.onDragEnd)
       window.addEventListener("pointercancel", this.onDragEnd)
-    } else if (tile) {
+    } else if (tile && event.pointerType === "touch") {
+      // Only a finger: a pen sends no touchend, so a paint it started would never end.
       clearTimeout(this.holdTimer)
       this.hold = { x: event.clientX, y: event.clientY }
       this.holdTimer = setTimeout(() => this.beginPaint(tile), HOLD_MS)
@@ -297,14 +298,27 @@ export const selection = {
     })
     // The page's windows follow the screen, so what the box took further up may no longer be
     // fetched. It stays chosen for as long as the box still reaches its place.
+    const geometry = this.geometry()
     for (const [id, global] of drag.hits) {
-      const r = this.rectIn(this.geometry(), global)
+      const r = this.rectIn(geometry, global)
       if (!r || r.x > right || r.x + r.w < left || r.y > bottom || r.y + r.h < top) drag.hits.delete(id)
     }
     for (const [id, global] of this.itemsInBox(left, top, right, bottom)) drag.hits.set(id, global)
     this.selected = new Set(drag.base)
-    for (const id of drag.hits.keys()) this.selected.add(id)
+    this.addWithinLimit(drag.hits.keys())
     this.selectionChanged()
+  },
+
+  /** Add to the selection up to its limit, as a click or a range does, and say when it stops. */
+  addWithinLimit(ids) {
+    const limit = this.selectionLimit()
+    for (const id of ids) {
+      if (this.selected.size >= limit && !this.selected.has(id)) {
+        this.noteCapped(true)
+        return
+      }
+      this.selected.add(id)
+    }
   },
 
   itemsInBox(left, top, right, bottom) {
@@ -344,9 +358,15 @@ export const selection = {
   edgeStep() {
     this.edgeFrame = null
     if (!this.edgeSpeed || !(this.drag?.box || this.paint)) return
+    // The box follows the page only as far as it really moved: at either end the page stops, and
+    // so do the box and the loop. Otherwise the box, which lives inside the scroller, would make
+    // the page taller under itself and scroll on into blank space.
+    const before = this.el.scrollTop
     this.el.scrollTop += this.edgeSpeed
+    const moved = this.el.scrollTop - before
+    if (!moved) return
     if (this.drag?.last) {
-      this.drag.last = { ...this.drag.last, y: this.drag.last.y + this.edgeSpeed }
+      this.drag.last = { ...this.drag.last, y: this.drag.last.y + moved }
       this.drawBox()
     }
     this.edgeFrame = requestAnimationFrame(() => this.edgeStep())
@@ -390,10 +410,8 @@ export const selection = {
       if (id) paint.hits.set(id, at)
     }
     this.selected = new Set(paint.base)
-    for (const id of paint.hits.keys()) {
-      if (paint.removing) this.selected.delete(id)
-      else this.selected.add(id)
-    }
+    if (paint.removing) for (const id of paint.hits.keys()) this.selected.delete(id)
+    else this.addWithinLimit(paint.hits.keys())
     this.selectionChanged()
   },
 
@@ -431,16 +449,34 @@ export const selection = {
     if (!this.selectable() || this.pager) return
     const target = event.target
     if (target && (/^(input|select|textarea)$/i.test(target.tagName || "") || target.isContentEditable)) return
+    // A key that belongs to something on top: the style menu (Escape closes it) or the dialog.
+    if (event.defaultPrevented || this.overlayOpen()) return
 
     if (event.key === "Escape" && this.selecting()) {
       this.clearSelection()
     } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+      // Everything on the page is the page's, unless the timeline is where the person is.
+      if (!this.keysAreOurs(target)) return
       event.preventDefault()
       this.selectAll()
     } else if ((event.key === "Delete" || event.key === "Backspace") && (this.selected?.size || 0) > 0) {
       event.preventDefault()
       this.bulk("trash")
     }
+  },
+
+  overlayOpen() {
+    const root = this.root()
+    if (!root) return false
+    const menu = root.querySelector("[data-style-menu]")
+    return Boolean((menu && !menu.hidden) || root.querySelector("[role='dialog']"))
+  },
+
+  keysAreOurs(target) {
+    const root = this.root()
+    const page = globalThis.document
+    return !target || target === page?.body || target === page?.documentElement ||
+      Boolean(root && root.contains?.(target))
   },
 
   /** Ask for an action on what is chosen. The server checks each file and answers with a plan. */
@@ -543,7 +579,10 @@ export const selection = {
     this.el.addEventListener("touchcancel", this.onSelectTouchEnd)
     this.el.addEventListener("contextmenu", this.onSelectContext)
     window.addEventListener("keydown", this.onSelectKey)
-    this.root()?.addEventListener("click", this.onSelectClick)
+    // Kept: by the time LiveView calls destroyed() the hook's element is out of the page, and
+    // `root()` (a closest()) no longer finds what to unbind from.
+    this.selectionRoot = this.root()
+    this.selectionRoot?.addEventListener("click", this.onSelectClick)
     this.selectionChanged()
   },
 
@@ -557,6 +596,7 @@ export const selection = {
     this.el.removeEventListener("touchcancel", this.onSelectTouchEnd)
     this.el.removeEventListener("contextmenu", this.onSelectContext)
     window.removeEventListener("keydown", this.onSelectKey)
-    this.root()?.removeEventListener("click", this.onSelectClick)
+    this.selectionRoot?.removeEventListener("click", this.onSelectClick)
+    this.selectionRoot = null
   }
 }

@@ -393,7 +393,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               <span>{gettext("Uploads at once")}</span>
               <select
                 data-concurrency-select
-                class="select select-xs select-bordered"
+                class="select select-xs"
                 aria-label={gettext("Uploads at once")}
               >
                 <option

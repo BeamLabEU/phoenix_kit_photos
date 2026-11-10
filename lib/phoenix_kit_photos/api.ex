@@ -184,7 +184,7 @@ defmodule PhoenixKitPhotos.API do
         |> order_by([f], asc: f.taken_on, asc: f.taken_at, asc: f.uuid)
         |> limit(^(limit + 1))
         |> repo().all()
-        |> Enum.filter(&Libraries.can?(ctx.scope, &1, :read))
+        |> readable(ctx.scope)
 
       page = Enum.take(files, limit)
 
@@ -203,6 +203,19 @@ defmodule PhoenixKitPhotos.API do
       {:error, _reason} ->
         {:error, :not_found, "No such library.", %{}}
     end
+  end
+
+  # The query already holds back what the caller may not read; this is the second look. It asks
+  # once per library and uploader, as `Bulk` does, never once per row.
+  defp readable(files, scope) do
+    key = &{&1.library_uuid, &1.user_uuid}
+
+    allowed =
+      files
+      |> Enum.uniq_by(key)
+      |> Map.new(&{key.(&1), Libraries.can?(scope, &1, :read)})
+
+    Enum.filter(files, &Map.fetch!(allowed, key.(&1)))
   end
 
   defp narrow(query, input) do

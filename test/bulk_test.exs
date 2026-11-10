@@ -10,6 +10,19 @@ defmodule PhoenixKitPhotos.BulkTest do
     def places(_uuids, _ctx), do: raise("down")
   end
 
+  defmodule Shouting do
+    def places(uuids, _ctx), do: Enum.map(uuids, &%{file_uuid: String.upcase(&1)})
+  end
+
+  defmodule Stranger do
+    def places(_uuids, _ctx), do: [%{file_uuid: Ecto.UUID.generate()}]
+  end
+
+  defmodule Slow do
+    def places(_uuids, _ctx), do: Process.sleep(:infinity)
+  end
+
+  alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
   alias PhoenixKitPhotos.Bulk
 
@@ -159,6 +172,32 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
     end
 
+    @tag :capture_log
+    test "the guard's uuids match in any case, and an answer about other files means no", ctx do
+      file = photo(ctx)
+      on_exit(fn -> Application.delete_env(:phoenix_kit, :file_removal_guard) end)
+
+      Application.put_env(:phoenix_kit, :file_removal_guard, __MODULE__.Shouting)
+      assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
+
+      Application.put_env(:phoenix_kit, :file_removal_guard, __MODULE__.Stranger)
+      assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
+    end
+
+    @tag :capture_log
+    test "a guard that does not answer in time means no, and does not hold the caller", ctx do
+      file = photo(ctx)
+      Application.put_env(:phoenix_kit, :file_removal_guard, __MODULE__.Slow)
+      Application.put_env(:phoenix_kit, :file_removal_guard_timeout, 50)
+
+      on_exit(fn ->
+        Application.delete_env(:phoenix_kit, :file_removal_guard)
+        Application.delete_env(:phoenix_kit, :file_removal_guard_timeout)
+      end)
+
+      assert [%{reason: :in_use}] = Bulk.plan(:trash, [file.uuid], ctx.scope).refused
+    end
+
     test "a move needs the right to change the original, a copy only to read it", ctx do
       file = photo(ctx)
       member_fixture(ctx.library, ctx.stranger, "viewer")
@@ -304,7 +343,7 @@ defmodule PhoenixKitPhotos.BulkTest do
     b = photo(ctx)
     one = Bulk.fingerprint(Bulk.plan(:trash, [a.uuid, b.uuid], ctx.scope))
     assert one == Bulk.fingerprint(Bulk.plan(:trash, [b.uuid, a.uuid], ctx.scope))
-    {:ok, _} = PhoenixKit.Modules.Storage.trash_file(a)
+    {:ok, _} = Storage.trash_file(a)
     refute one == Bulk.fingerprint(Bulk.plan(:trash, [a.uuid, b.uuid], ctx.scope))
   end
 end

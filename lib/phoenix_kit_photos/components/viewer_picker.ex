@@ -21,6 +21,7 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
   alias PhoenixKit.Modules.Storage.Libraries
+  alias PhoenixKit.PubSub.Manager
   alias PhoenixKitPhotos.Viewer
 
   @impl true
@@ -47,7 +48,7 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
       {:ok, library} ->
         if socket.assigns.notify, do: send(self(), {:viewer_changed, socket.assigns.library_uuid})
 
-        PhoenixKit.PubSub.Manager.broadcast(
+        Manager.broadcast(
           "storage:library_settings",
           {:library_settings_changed, socket.assigns.library_uuid}
         )
@@ -69,7 +70,7 @@ defmodule PhoenixKitPhotos.Components.ViewerPicker do
         <form id={"#{@id}-form"} phx-change="set" phx-target={@myself}>
           <select
             name="viewer"
-            class="select select-bordered select-sm"
+            class="select select-sm"
             aria-label={gettext("Viewer")}
             title={gettext("How this library's photos open")}
           >

@@ -307,6 +307,8 @@ export const PhotoTimeline = {
     }
     this.markStyle(this.styleId)
     if (refresh) this.revalidate()
+    // Nothing shown yet (the page's index was overtaken by the hello's) means nothing is new.
+    this.popNew = refresh && this.known.size > 0
     this.markNew = refresh
     this.handleScroll()
     this.markNew = false
@@ -718,7 +720,7 @@ export const PhotoTimeline = {
    */
   noteArrivals(items, arrived) {
     for (const item of items) {
-      if (arrived && !this.known.has(item.id)) this.fresh.add(item.id)
+      if (arrived && this.popNew && !this.known.has(item.id)) this.fresh.add(item.id)
       this.known.add(item.id)
     }
   },
@@ -1591,6 +1593,11 @@ export const PhotoTimeline = {
     if (icon && picked) icon.replaceChildren(picked.cloneNode(true))
   },
 
+  styleMenuOpen() {
+    const menu = this.el.closest?.(".phoenix-kit-photo-timeline")?.querySelector("[data-style-menu]")
+    return Boolean(menu && !menu.hidden)
+  },
+
   toggleStyleMenu(open) {
     const root = this.el.closest?.(".phoenix-kit-photo-timeline")
     const menu = root?.querySelector("[data-style-menu]")
@@ -1609,6 +1616,8 @@ export const PhotoTimeline = {
       const pick = event.target.closest?.("[data-style-pick]")
       if (pick) {
         this.setStyle(pick.dataset.stylePick)
+        // The picked button is hidden with the menu: focus goes back to what opened it.
+        root.querySelector("[data-style-toggle]")?.focus?.()
       } else if (event.target.closest?.("[data-style-toggle]")) {
         this.toggleStyleMenu()
       } else if (!event.target.closest?.("[data-style-menu]")) {
@@ -1628,7 +1637,12 @@ export const PhotoTimeline = {
 
   /** `v` walks through the styles, Shift+`v` back, and Escape closes the menu. */
   styleKey(event) {
-    if (event.key === "Escape") this.toggleStyleMenu(false)
+    if (event.key === "Escape" && this.styleMenuOpen()) {
+      // Escape closes the menu and does nothing else: the selection stays.
+      this.toggleStyleMenu(false)
+      event.preventDefault()
+      return
+    }
     if (this.pager || event.metaKey || event.ctrlKey || event.altKey) return
     if (event.key !== "v" && event.key !== "V") return
     const target = event.target

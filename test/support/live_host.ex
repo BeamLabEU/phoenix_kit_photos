@@ -7,6 +7,7 @@ end
 defmodule PhoenixKitPhotos.TestLive do
   @moduledoc false
   use Phoenix.LiveView
+  alias PhoenixKitPhotos.Components.PhotoTimeline
   on_mount {PhoenixKitPhotos.LiveUpdates, "test-timeline"}
 
   def mount(_params, %{"scope" => scope, "library" => library} = session, socket) do
@@ -24,7 +25,7 @@ defmodule PhoenixKitPhotos.TestLive do
   # What a host does in `handle_params/3`: say which photo its address names.
   def handle_info({:view, uuid}, socket) do
     {:noreply,
-     PhoenixKitPhotos.Components.PhotoTimeline.push_view(
+     PhotoTimeline.push_view(
        socket,
        "test-timeline",
        socket.assigns.library,
@@ -35,7 +36,7 @@ defmodule PhoenixKitPhotos.TestLive do
 
   def render(assigns) do
     ~H"""
-    <.live_component module={PhoenixKitPhotos.Components.PhotoTimeline}
+    <.live_component module={PhotoTimeline}
       id="test-timeline" scope={@library} auth={@scope}
       photo_path={@photo_path} library_path={@library_path}
       selectable={@selectable} download_path={@download_path} />

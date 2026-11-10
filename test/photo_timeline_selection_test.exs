@@ -168,6 +168,17 @@ defmodule PhoenixKitPhotos.PhotoTimelineSelectionTest do
 
     hook(view, "timeline:range", %{from: "x", to: nil, mode: "<nope>", revision: revision})
     assert_push_event(view, "timeline:test-timeline:range", %{mode: "add"})
+
+    # Past what Postgres takes as an offset: ignored, not a crashed page.
+    huge = 100_000_000_000_000_000_000
+    hook(view, "timeline:range", %{from: huge, to: huge + 5, mode: "add", revision: revision})
+    assert_push_event(view, "timeline:test-timeline:range", %{mode: "add"})
+
+    # Events without the keys they need are dropped.
+    for name <- ~w(timeline:range timeline:aspects timeline:need_window),
+        do: hook(view, name, %{})
+
+    assert render(view) =~ "test-timeline-viewport"
   end
 
   test "copy links gives the page the addresses of the files", ctx do

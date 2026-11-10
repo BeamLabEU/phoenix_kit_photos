@@ -46,14 +46,19 @@ defmodule PhoenixKitPhotos.Web.Download do
   def call(conn, _opts) do
     scope = conn.assigns[:phoenix_kit_current_scope]
     signed_in? = Libraries.authenticated_reader?(scope)
-    ids = conn.params |> Map.get("ids", "") |> to_string() |> String.split(",", trim: true)
+    ids = conn.params |> Map.get("ids") |> requested_ids()
     ids = if signed_in?, do: ids, else: Enum.take(ids, @visitor_files)
 
-    cond do
-      not signed_in? and not allowed?(conn) -> conn |> send_resp(429, "") |> halt()
-      true -> answer(conn, Bulk.plan(:download, ids, scope).files)
+    if signed_in? or allowed?(conn) do
+      answer(conn, Bulk.plan(:download, ids, scope).files)
+    else
+      conn |> send_resp(429, "") |> halt()
     end
   end
+
+  # A comma-separated string, as the timeline's form posts it. Anything else asks for nothing.
+  defp requested_ids(ids) when is_binary(ids), do: String.split(ids, ",", trim: true)
+  defp requested_ids(_other), do: []
 
   defp answer(conn, []), do: conn |> send_resp(404, "") |> halt()
   defp answer(conn, files), do: conn |> stream(files) |> halt()

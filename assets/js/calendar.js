@@ -14,12 +14,23 @@ export function weekLocale(lang, browser = []) {
   return own || lang || browser[0] || "en"
 }
 
+// Where the week does not start on Monday (CLDR's firstDay), for a browser that has Intl.Locale
+// but no week info (Firefox).
+const SUNDAY_FIRST = new Set(("AG AS BD BR BS BT BW BZ CA CN CO DM DO ET GT GU HK HN ID IL IN JM JP " +
+  "KE KH KR LA MH MM MO MT MX MZ NI NP PA PE PH PK PR PT PY SA SG SV TH TT TW UM US VE VI WS YE ZA ZW").split(" "))
+const SATURDAY_FIRST = new Set("AE AF BH DJ DZ EG IQ IR JO KW LY OM QA SD SY".split(" "))
+const FRIDAY_FIRST = new Set(["MV"])
+
 /** The first day of the week where a locale is spoken: 0 Sunday … 6 Saturday. */
 export function weekStartFor(lang) {
   try {
     const locale = new Intl.Locale(lang || "en")
     const info = locale.getWeekInfo?.() || locale.weekInfo
     if (info && info.firstDay) return info.firstDay % 7
+    const region = locale.maximize?.().region
+    if (SUNDAY_FIRST.has(region)) return 0
+    if (SATURDAY_FIRST.has(region)) return 6
+    if (FRIDAY_FIRST.has(region)) return 5
   } catch (_error) {
     // An unknown tag, or a browser without Intl.Locale: Monday, as most of the world.
   }

@@ -220,7 +220,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       if socket.assigns[:loaded_for] == {scope, auth} && socket.assigns.index do
         socket
       else
-        load_index(socket)
+        # Another library (or person): what the browser was sent of the last one's ratios says
+        # nothing of this one's, and the hook drops them when the library changes.
+        socket |> assign(:aspects_sent, %{}) |> load_index()
       end
 
     {:ok, socket}
@@ -489,6 +491,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   def handle_event("timeline:slides", _params, socket), do: {:noreply, socket}
+  def handle_event("timeline:aspects", _params, socket), do: {:noreply, socket}
+  def handle_event("timeline:need_window", _params, socket), do: {:noreply, socket}
 
   # A run of positions, for a selection that goes through what the browser has not fetched.
   def handle_event("timeline:range", %{"revision" => revision} = params, socket) do
@@ -517,6 +521,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       {:noreply, socket}
     end
   end
+
+  def handle_event("timeline:range", _params, socket), do: {:noreply, socket}
 
   # An action on what is chosen: first what would happen, for the person to say yes to.
   def handle_event("timeline:bulk", %{"action" => name, "ids" => ids}, socket)
@@ -566,7 +572,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   def handle_event("timeline:bulk_undo", _params, socket) do
     case socket.assigns.notice do
-      %{undo: ids} when ids != [] ->
+      %{undo: ids} when ids != [] and is_nil(socket.assigns.running) ->
         plan = Bulk.plan(:restore, ids, socket.assigns.auth)
         {:noreply, socket |> assign(:notice, nil) |> start_run(plan)}
 
@@ -593,7 +599,10 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   defp event(socket, name), do: "timeline:#{socket.assigns.id}:#{name}"
 
-  defp integer(value) when is_integer(value) and value >= 0, do: value
+  # Bounded: a position past what Postgres takes as an offset would raise in the query.
+  defp integer(value) when is_integer(value) and value >= 0 and value <= 2_147_483_647,
+    do: value
+
   defp integer(_value), do: nil
 
   defp range_mode(mode) when mode in ["add", "remove", "toggle"], do: mode
@@ -675,11 +684,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     every = max(1, div(total, 100))
 
     Task.start(fn ->
-      progress = fn done, total ->
-        if rem(done, every) == 0 do
-          Phoenix.LiveView.send_update(page, __MODULE__, id: id, bulk_progress: {done, total})
-        end
-      end
+      progress = progress_reporter(page, id, every)
 
       # Whatever happens, the page hears of it: a bar that never ends locks the bulk actions.
       result =
@@ -696,6 +701,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     end)
 
     assign(socket, :running, %{done: 0, total: total})
+  end
+
+  defp progress_reporter(page, id, every) do
+    fn done, total ->
+      if rem(done, every) == 0 do
+        Phoenix.LiveView.send_update(page, __MODULE__, id: id, bulk_progress: {done, total})
+      end
+    end
   end
 
   defp failed_run(plan) do
@@ -847,7 +860,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           phx-auto-recover="ignore"
           phx-target={@myself}
         >
-          <select name="id" class="select select-bordered select-sm" aria-label="Jump to month">
+          <select name="id" class="select select-sm" aria-label="Jump to month">
             <option :for={section <- @sections} value={section.id}>{section.label}</option>
           </select>
         </form>
@@ -1063,7 +1076,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
         <label :if={@bulk.action in [:copy, :move] && @bulk.targets != []} class="mt-4 block">
           <span class="mb-1 block text-sm">{gettext("Library")}</span>
-          <select name="library" class="select select-bordered w-full">
+          <select name="library" class="select w-full">
             <option
               :for={library <- @bulk.targets}
               value={library.uuid}
@@ -1083,7 +1096,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             <input
               name="add"
               value={@bulk.params["add"]}
-              class="input input-bordered w-full"
+              class="input w-full"
+              phx-debounce="300"
               maxlength="400"
               autocomplete="off"
             />
@@ -1093,7 +1107,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             <input
               name="remove"
               value={@bulk.params["remove"]}
-              class="input input-bordered w-full"
+              class="input w-full"
+              phx-debounce="300"
               maxlength="400"
               autocomplete="off"
             />
@@ -1107,7 +1122,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           phx-update="ignore"
           readonly
           rows="6"
-          class="textarea textarea-bordered mt-4 w-full font-mono text-xs"
+          class="textarea mt-4 w-full font-mono text-xs"
         ></textarea>
 
         <ul :if={@refused != []} class="mt-4 space-y-1 text-sm text-warning">

@@ -89,7 +89,7 @@ defmodule PhoenixKitPhotos.Web.TimelineLive do
           auth={assigns[:phoenix_kit_current_scope]}
         />
         <form id="photo-library-picker" :if={@libraries != []} phx-change="library">
-          <select name="library" class="select select-bordered select-sm" aria-label={gettext("Library")}>
+          <select name="library" class="select select-sm" aria-label={gettext("Library")}>
             <option :for={library <- @libraries} value={library.uuid} selected={library.uuid == @library_uuid}>
               {library.name}
             </option>

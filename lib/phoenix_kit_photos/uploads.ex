@@ -44,7 +44,12 @@ defmodule PhoenixKitPhotos.Uploads do
 
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  import Ecto.Query, only: [from: 2]
+
   require Logger
+
+  alias PhoenixKit.Modules.Storage.File, as: StorageFile
+  alias PhoenixKit.Modules.Storage.FileInstance
 
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.{CameraRaw, Libraries, Library, Sniff}
@@ -201,6 +206,36 @@ defmodule PhoenixKitPhotos.Uploads do
          {:ok, _type, _mime} <- media_type(path, mime_for(entry, name), name) do
       :ok
     end
+  end
+
+  @doc """
+  Which of these files a timeline cannot show yet: still `"processing"`, or active with
+  none of its sizes stored so far. A file that failed, was trashed or is gone is not
+  waited for. The uploader asks while it shows a file as *Making previews…*.
+  """
+  @spec still_preparing([String.t()]) :: [String.t()]
+  def still_preparing([]), do: []
+
+  def still_preparing(uuids) do
+    made =
+      from(i in FileInstance,
+        where: i.variant_name != "original" and i.processing_status == "completed",
+        select: i.file_uuid
+      )
+
+    from(f in StorageFile,
+      where: f.uuid in ^uuids,
+      where:
+        f.status == "processing" or
+          (f.status == "active" and f.uuid not in subquery(made)),
+      select: f.uuid
+    )
+    |> PhoenixKit.RepoHelper.repo().all()
+    |> Enum.map(&to_string/1)
+  rescue
+    error ->
+      Logger.warning("[PhotoUploader] could not ask about previews: #{Exception.message(error)}")
+      []
   end
 
   defp allowed(scope, library_uuid),

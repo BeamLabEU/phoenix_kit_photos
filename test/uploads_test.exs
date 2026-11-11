@@ -285,6 +285,46 @@ defmodule PhoenixKitPhotos.UploadsTest do
     end
   end
 
+  describe "still_preparing/1" do
+    test "a file being processed, or active with no size stored yet; not a failed one", ctx do
+      path = Path.join(ctx.dir, "prep.png")
+      File.write!(path, @png)
+
+      assert {:added, file} =
+               Uploads.store(path, entry("prep.png"), scope_for(ctx.owner), ctx.library.uuid)
+
+      uuid = to_string(file.uuid)
+      assert file.status == "processing"
+      assert Uploads.still_preparing([uuid]) == [uuid]
+      assert Uploads.still_preparing([]) == []
+      assert Uploads.still_preparing([Ecto.UUID.generate()]) == []
+
+      file = file |> Ecto.Changeset.change(status: "active") |> TestRepo.update!()
+      assert Uploads.still_preparing([uuid]) == [uuid]
+
+      original = Storage.get_file_instance_by_name(file.uuid, "original")
+
+      {:ok, _small} =
+        Storage.create_file_instance(%{
+          file_uuid: file.uuid,
+          variant_name: "small",
+          file_name: original.file_name <> "_small",
+          mime_type: "image/png",
+          ext: "png",
+          checksum: original.checksum,
+          size: 1,
+          width: 1,
+          height: 1,
+          processing_status: "completed"
+        })
+
+      assert Uploads.still_preparing([uuid]) == []
+
+      file |> Ecto.Changeset.change(status: "failed") |> TestRepo.update!()
+      assert Uploads.still_preparing([uuid]) == []
+    end
+  end
+
   describe "messages" do
     test "every reason has words" do
       for reason <- [:too_large, :not_accepted, :too_many_files, :something_else],

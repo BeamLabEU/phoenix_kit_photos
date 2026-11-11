@@ -32,6 +32,13 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       another of your libraries, or why not. A file is checked for duplicates by its
       bytes and its renditions are made in the background; the timeline shows it when
       they are ready (`PhoenixKitPhotos.LiveUpdates`).
+    * **A tile per file on its way.** Each file in flight is a tile in the panel with a
+      small picture of it that the hook makes in the browser (`upload_previews.js`: a
+      photo the browser can read, a video's frame; a plain tile otherwise) and what is
+      happening to it: *uploading* with its progress, *Saving…*, and, once it is in the
+      library, *Making previews…* until the timeline can show it, then *Added* for a
+      moment. That last wait is the one nothing used to account for: the panel said
+      "added" and the grid stayed as it was until the renditions were made.
 
   Memory: the browser sends the file in chunks that LiveView writes to disk, and the file
   is hashed and stored from disk, so a video costs what a thumbnail does.
@@ -78,6 +85,15 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # entries alone say: past this, every file still saving holds a place, so a store that
   # falls behind slows the transfer down instead of filling the server's disk.
   @saving_slack 8
+  # A stored file whose previews are being made is tracked (a tile, and the count on the
+  # button) until the page hears it is ready, which `LiveUpdates` relays; it is also
+  # asked of the database this often, because that message can be missed, and given up
+  # on after the limit. Beyond `@max_preparing` files nothing more is tracked.
+  @preparing_check_ms 3_000
+  @preparing_limit_s 600
+  @max_preparing 200
+  # How many tiles the panel draws; the rest is counted.
+  @max_tiles 12
 
   @impl true
   def mount(socket) do
@@ -86,6 +102,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        open: false,
        done: [],
        saving: [],
+       preparing: [],
+       preparing_check: false,
        skipped: 0,
        unreadable: 0,
        truncated: false,
@@ -104,6 +122,36 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # What `PhoenixKitPhotos.StoreUploadJob` said about a file this panel handed it,
   # relayed by `PhoenixKitPhotos.LiveUpdates`.
   def update(%{upload_event: {ref, event}}, socket), do: {:ok, upload_event(socket, ref, event)}
+
+  # Files were processed (`PhoenixKitPhotos.LiveUpdates`): those of them this panel is
+  # waiting for can be shown now. Their tiles say *Added* for a moment and then go (the
+  # next check below), which covers the instant the timeline takes to draw them.
+  def update(%{files_processed: uuids}, socket) do
+    uuids = MapSet.new(uuids, &to_string/1)
+    {:ok, mark_shown(socket, &MapSet.member?(uuids, &1.uuid))}
+  end
+
+  # The same question asked of the database, for a message that was missed; and the
+  # tiles that have said *Added* long enough leave.
+  def update(%{preparing_check: true}, socket) do
+    now = System.monotonic_time(:millisecond)
+
+    pending = Enum.reject(socket.assigns.preparing, & &1.shown)
+    waiting = Uploads.still_preparing(Enum.map(pending, & &1.uuid))
+
+    socket =
+      mark_shown(socket, fn item ->
+        item.uuid not in waiting or now - item.since >= @preparing_limit_s * 1000
+      end)
+
+    preparing =
+      Enum.reject(socket.assigns.preparing, &(&1.shown && now - &1.shown >= added_tile_ms()))
+
+    {:ok,
+     socket
+     |> assign(preparing: preparing, preparing_check: false)
+     |> schedule_preparing_check()}
+  end
 
   def update(assigns, socket) do
     library_uuid = to_string(assigns.library_uuid)
@@ -129,6 +177,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       assign(socket,
         done: [],
         saving: [],
+        preparing: [],
         skipped: 0,
         unreadable: 0,
         truncated: false,
@@ -210,7 +259,11 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
           {:noreply, assign(socket, :saving, socket.assigns.saving ++ [item])}
 
         outcome ->
-          {:noreply, socket |> record(entry.ref, entry.client_name, outcome) |> notify(outcome)}
+          {:noreply,
+           socket
+           |> record(entry.ref, entry.client_name, outcome)
+           |> prepare(entry.ref, entry.client_name, outcome)
+           |> notify(outcome)}
       end
     else
       {:noreply, socket}
@@ -273,6 +326,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
         socket
         |> assign(:saving, rest)
         |> record(item.ref, item.name, outcome)
+        |> prepare(item.ref, item.name, outcome)
         |> notify(outcome)
 
       {[], _rest} ->
@@ -311,6 +365,55 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   defp record(socket, ref, name, outcome) do
     item = %{ref: ref, name: name, outcome: outcome}
     assign(socket, :done, Enum.take([item | socket.assigns.done], @max_results))
+  end
+
+  # A new file is in the library but the timeline cannot show it yet: its previews are
+  # being made. Its tile stays, saying so, until they are (`update/2` above).
+  defp prepare(socket, ref, name, {:added, %{status: "processing", uuid: uuid}})
+       when length(socket.assigns.preparing) < @max_preparing do
+    item = %{
+      ref: ref,
+      name: name,
+      uuid: to_string(uuid),
+      since: System.monotonic_time(:millisecond),
+      shown: nil
+    }
+
+    LiveUpdates.watch_processed(socket.assigns.id)
+
+    socket
+    |> assign(:preparing, socket.assigns.preparing ++ [item])
+    |> schedule_preparing_check()
+  end
+
+  defp prepare(socket, _ref, _name, _outcome), do: socket
+
+  # `shown` is when the file became showable: its tile says so from then on.
+  defp mark_shown(socket, which) do
+    now = System.monotonic_time(:millisecond)
+
+    preparing =
+      Enum.map(socket.assigns.preparing, fn item ->
+        if is_nil(item.shown) and which.(item), do: %{item | shown: now}, else: item
+      end)
+
+    assign(socket, :preparing, preparing)
+  end
+
+  # How long a tile says *Added* before it goes (at least; it leaves on a check).
+  defp added_tile_ms, do: Application.get_env(:phoenix_kit_photos, :added_tile_ms, 1_500)
+
+  defp schedule_preparing_check(%{assigns: %{preparing: []}} = socket), do: socket
+  defp schedule_preparing_check(%{assigns: %{preparing_check: true}} = socket), do: socket
+
+  defp schedule_preparing_check(socket) do
+    send_update_after(
+      __MODULE__,
+      [id: socket.assigns.id, preparing_check: true],
+      @preparing_check_ms
+    )
+
+    assign(socket, :preparing_check, true)
   end
 
   defp notify(%{assigns: %{on_stored: event, id: id}} = socket, outcome)
@@ -408,7 +511,17 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     assigns =
       assigns
       |> assign(:entries, entries)
-      |> assign(:busy, length(entries) + length(assigns.saving) + assigns.waiting)
+      |> assign(
+        :tiles,
+        Enum.take(tiles(assigns.uploads[@upload], assigns.saving, assigns.preparing), @max_tiles)
+      )
+      |> assign(:on_the_way, length(entries) + length(assigns.saving) + length(assigns.preparing))
+      |> assign(
+        :busy,
+        length(entries) + length(assigns.saving) +
+          Enum.count(assigns.preparing, &is_nil(&1.shown)) +
+          assigns.waiting
+      )
       |> assign(:added, count_outcome(assigns.done, :added))
       |> assign(:duplicates, count_outcome(assigns.done, :duplicate))
       |> assign(:elsewhere, count_outcome(assigns.done, :elsewhere))
@@ -425,6 +538,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       data-concurrency={PhoenixKitPhotos.Uploads.max_concurrent_uploads()}
       data-concurrency-max={PhoenixKitPhotos.Uploads.max_concurrency_choice()}
       data-auto={to_string(@upload_auto)}
+      data-previews={Jason.encode!(for e <- @entries, do: [e.ref, e.client_name, e.client_size])}
+      data-refs={Jason.encode!(Enum.map(@entries, & &1.ref) ++ Enum.map(@saving ++ @preparing, & &1.ref))}
     >
       <%!-- Shown while files are dragged over the page; it never takes a click. --%>
       <div
@@ -518,37 +633,50 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               {Uploads.entry_error(error)}
             </p>
 
-            <ul :if={@entries != []} class="flex flex-col gap-2" aria-live="polite">
-              <li :for={entry <- @entries} class="flex flex-col gap-1">
-                <div class="flex items-center gap-2 text-sm">
-                  <span class="min-w-0 flex-1 truncate" title={entry.client_name}>{entry.client_name}</span>
-                  <span :if={entry.progress > 0} class="shrink-0 text-xs text-base-content/60">{entry.progress}%</span>
-                  <span :if={entry.progress == 0 && upload_errors(@uploads.photos, entry) == []} class="shrink-0 text-xs text-base-content/60">{gettext("waiting")}</span>
-                  <button type="button" phx-click="cancel" phx-value-ref={entry.ref} phx-target={@myself} class="btn btn-ghost btn-xs btn-circle" aria-label={gettext("Cancel")}>
-                    <.icon name="hero-x-mark" class="h-4 w-4" />
+            <%!-- Every file on its way, as a tile: uploading, then saving (nothing to
+                 cancel any more), then in the library while its previews are made. The
+                 hook draws the picture into the `data-upload-preview` slot, which
+                 LiveView leaves alone; the icon under it shows when there is none. --%>
+            <ul :if={@tiles != []} id={"#{@id}-tiles"} class="grid grid-cols-3 gap-2" aria-live="polite">
+              <li :for={tile <- @tiles} id={"#{@id}-tile-#{tile.ref}"} class="flex min-w-0 flex-col gap-1" data-state={tile.state}>
+                <div class="relative aspect-square overflow-hidden rounded-lg bg-base-200">
+                  <.icon name="hero-photo" class="absolute inset-0 m-auto h-8 w-8 text-base-content/25" />
+                  <div
+                    id={"#{@id}-preview-#{tile.ref}"}
+                    phx-update="ignore"
+                    data-upload-preview={tile.ref}
+                    class="absolute inset-0 [&>img]:h-full [&>img]:w-full [&>img]:object-cover"
+                  ></div>
+                  <button
+                    :if={tile.state == :uploading}
+                    type="button"
+                    phx-click="cancel"
+                    phx-value-ref={tile.ref}
+                    phx-target={@myself}
+                    class="btn btn-circle btn-xs absolute right-1 top-1 border-0 bg-black/55 text-white hover:bg-black/75"
+                    aria-label={gettext("Cancel")}
+                  >
+                    <.icon name="hero-x-mark" class="h-3.5 w-3.5" />
                   </button>
+                  <div class="absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-black/55 px-1.5 py-1 text-[11px] leading-tight text-white">
+                    <span class="flex items-center gap-1">
+                      <span :if={tile.state not in [:uploading, :added]} class="loading loading-spinner h-3 w-3 shrink-0"></span>
+                      <.icon :if={tile.state == :added} name="hero-check-circle" class="h-3.5 w-3.5 shrink-0" />
+                      <span class="min-w-0 break-words">{tile_label(tile)}</span>
+                    </span>
+                    <progress :if={tile.state == :uploading && tile.progress > 0} class="progress progress-primary h-1 w-full" value={tile.progress} max="100"></progress>
+                  </div>
                 </div>
-                <progress :if={entry.progress > 0 && upload_errors(@uploads.photos, entry) == []} class="progress progress-primary h-1.5 w-full" value={entry.progress} max="100"></progress>
-                <p :for={error <- upload_errors(@uploads.photos, entry)} class="text-xs text-error" role="alert">
+                <span class="truncate text-xs" title={tile.name}>{tile.name}</span>
+                <p :for={error <- tile.errors} class="text-xs text-error" role="alert">
                   {Uploads.entry_error(error)}
                 </p>
               </li>
             </ul>
 
-            <%!-- Arrived, and being stored in the background: nothing to cancel any more. --%>
-            <ul :if={@saving != []} id={"#{@id}-saving"} class="flex flex-col gap-1 text-sm" aria-live="polite">
-              <li :for={item <- @saving} id={"#{@id}-saving-#{item.ref}"} class="flex items-center gap-2">
-                <span class="min-w-0 flex-1 truncate" title={item.name}>{item.name}</span>
-                <span class="flex shrink-0 items-center gap-1 text-xs text-base-content/60">
-                  <span class="loading loading-spinner loading-xs"></span>
-                  <%= if item.retrying do %>
-                    {gettext("Saving… trying again")}
-                  <% else %>
-                    {gettext("Saving…")}
-                  <% end %>
-                </span>
-              </li>
-            </ul>
+            <p :if={@on_the_way > length(@tiles)} class="text-xs text-base-content/60">
+              {ngettext("and %{count} more on its way", "and %{count} more on their way", @on_the_way - length(@tiles))}
+            </p>
 
             <ul :if={@queued != []} class="flex flex-col gap-0.5 text-xs text-base-content/60" aria-live="polite">
               <li :for={name <- @queued} class="flex gap-2">
@@ -616,6 +744,54 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     </div>
     """
   end
+
+  # The files on their way, in the order they were chosen (a ref is a counter in the
+  # browser): a tile keeps its place, and its picture (the element's id is its ref), as
+  # the file moves from uploading to saving to having its previews made.
+  defp tiles(config, saving, preparing) do
+    # An entry that has just been handed on is still among the entries for one render.
+    moved_on = MapSet.new(saving ++ preparing, & &1.ref)
+    entries = Enum.reject(config.entries, &MapSet.member?(moved_on, &1.ref))
+
+    (Enum.map(
+       preparing,
+       &%{
+         ref: &1.ref,
+         name: &1.name,
+         state: if(&1.shown, do: :added, else: :preparing),
+         progress: 100,
+         errors: []
+       }
+     ) ++
+       Enum.map(saving, fn item ->
+         state = if item.retrying, do: :retrying, else: :saving
+         %{ref: item.ref, name: item.name, state: state, progress: 100, errors: []}
+       end) ++
+       Enum.map(entries, fn entry ->
+         %{
+           ref: entry.ref,
+           name: entry.client_name,
+           state: :uploading,
+           progress: entry.progress,
+           errors: upload_errors(config, entry)
+         }
+       end))
+    |> Enum.sort_by(&ref_order/1)
+  end
+
+  defp ref_order(%{ref: ref}) do
+    case Integer.parse(to_string(ref)) do
+      {n, ""} -> {0, n, ref}
+      _ -> {1, 0, ref}
+    end
+  end
+
+  defp tile_label(%{state: :added}), do: gettext("Added")
+  defp tile_label(%{state: :preparing}), do: gettext("Making previews…")
+  defp tile_label(%{state: :retrying}), do: gettext("Saving… trying again")
+  defp tile_label(%{state: :saving}), do: gettext("Saving…")
+  defp tile_label(%{state: :uploading, progress: 0}), do: gettext("waiting")
+  defp tile_label(%{state: :uploading, progress: progress}), do: "#{progress}%"
 
   defp library_name(%{name: name}), do: name
   defp library_name(_library), do: ""

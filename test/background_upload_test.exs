@@ -127,6 +127,23 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
       assert [{"bg-uploader", {:added, _file}}] = GenServer.call(view.pid, :stored)
     end
 
+    test "a stored file's tile waits for its previews, and the page's own news ends it", ctx do
+      view = mount!(PhoenixKitPhotos.BackgroundUploadLive, ctx.scope, ctx.library)
+      view |> upload("#bg-uploader-form", "holiday.png") |> render_upload("holiday.png")
+      assert has_element?(view, "#bg-uploader-tiles li[data-state=saving]", "holiday.png")
+
+      assert %{success: 1} = Oban.drain_queue(queue: :photo_uploads)
+      assert has_element?(view, "#bg-uploader-tiles li[data-state=preparing]", "holiday.png")
+      assert [file] = library_files(ctx.library)
+
+      # What core says when a file's sizes are ready, relayed by `LiveUpdates`.
+      Storage.broadcast_file_processed(file.uuid)
+      # The page hears it, then tells the component: two messages to get through.
+      render(view)
+      refute render(view) =~ "Making previews…"
+      assert has_element?(view, "#bg-uploader-tiles li[data-state=added]", "holiday.png")
+    end
+
     test "storage being down is retried with the file kept, and the panel says so", ctx do
       view = mount!(PhoenixKitPhotos.BackgroundUploadLive, ctx.scope, ctx.library)
       view |> upload("#bg-uploader-form", "later.png") |> render_upload("later.png")

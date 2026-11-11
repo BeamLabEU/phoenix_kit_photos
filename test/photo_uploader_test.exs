@@ -133,6 +133,76 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       assert file.user_uuid == ctx.owner.uuid
     end
 
+    test "a new file's tile says its previews are being made until it can be shown", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+
+      html = view |> upload("holiday.png") |> render_upload("holiday.png")
+      # In the library, and said so; the timeline cannot show it yet, and that is said too.
+      assert html =~ "1 added"
+      assert html =~ "Making previews…"
+      assert has_element?(view, "#test-uploader-tiles li[data-state=preparing]", "holiday.png")
+      # The button counts it while the panel is closed.
+      html = view |> element("button[aria-label='Close']") |> render_click()
+      assert html =~ "loading-spinner"
+
+      assert [file] = Storage.list_files()
+
+      # Another file's news changes nothing; this file's takes the tile away.
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        files_processed: [Ecto.UUID.generate()]
+      )
+
+      view |> element("button[aria-label='Add photos']") |> render_click()
+      assert render(view) =~ "Making previews…"
+
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        files_processed: [file.uuid]
+      )
+
+      html = render(view)
+      refute html =~ "Making previews…"
+      assert html =~ "1 added"
+      # The tile says so for a moment (none, in this test), then goes with the next check.
+      assert has_element?(view, "#test-uploader-tiles li[data-state=added]", "holiday.png")
+      Application.put_env(:phoenix_kit_photos, :added_tile_ms, 0)
+      on_exit(fn -> Application.delete_env(:phoenix_kit_photos, :added_tile_ms) end)
+
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        preparing_check: true
+      )
+
+      refute has_element?(view, "#test-uploader-tiles")
+    end
+
+    test "a missed message is made up for by asking the database", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+      assert view |> upload("holiday.png") |> render_upload("holiday.png") =~ "Making previews…"
+      assert [file] = Storage.list_files()
+
+      # Still being processed: the tile stays.
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        preparing_check: true
+      )
+
+      assert render(view) =~ "Making previews…"
+
+      # Processing gave up on it: nothing more to wait for.
+      file |> Ecto.Changeset.change(status: "failed") |> TestRepo.update!()
+
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        preparing_check: true
+      )
+
+      refute render(view) =~ "Making previews…"
+    end
+
     test "the same picture again is already there, not a second file", ctx do
       {view, _} = mount!(scope_for(ctx.owner), ctx.library)
       view |> element("button[aria-label='Add photos']") |> render_click()

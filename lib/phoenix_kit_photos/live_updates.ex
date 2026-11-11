@@ -15,7 +15,8 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   relays what `PhoenixKitPhotos.StoreUploadJob` reports there to the
   `PhoenixKitPhotos.Components.PhotoUploader` it names. That is what lets the uploader
   store files in the background: without this hook on its page it stores them inline,
-  while the page waits.
+  while the page waits. And it tells an uploader that asked (`watch_processed/1`) which
+  files finished processing, so its tiles stop saying *Making previews…* at once.
   """
 
   alias PhoenixKit.Modules.Storage
@@ -23,6 +24,7 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   alias PhoenixKitPhotos.Components.{PhotoTimeline, PhotoUploader}
 
   @upload_topic_key {__MODULE__, :upload_topic}
+  @watching_key {__MODULE__, :watching_processed}
 
   @events [
     :phoenix_kit_file_processed,
@@ -42,6 +44,18 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   """
   @spec upload_topic() :: String.t() | nil
   def upload_topic, do: Process.get(@upload_topic_key)
+
+  @doc """
+  Asks that the `PhotoUploader` with this id be told when files finish processing
+  (`send_update(PhotoUploader, id: id, files_processed: uuids)`), which is how its tiles
+  know a new photo can be shown. Called by the uploader, in the page's process; does
+  nothing more on a page without this hook.
+  """
+  @spec watch_processed(String.t()) :: :ok
+  def watch_processed(component_id) do
+    Process.put(@watching_key, Enum.uniq([component_id | Process.get(@watching_key, [])]))
+    :ok
+  end
 
   def on_mount(ids, _params, _session, socket) do
     if Phoenix.LiveView.connected?(socket) do
@@ -64,6 +78,8 @@ defmodule PhoenixKitPhotos.LiveUpdates do
             )
           end
 
+          if event == :phoenix_kit_file_processed, do: tell_uploaders(List.wrap(file_ids))
+
           if event in [
                :phoenix_kit_file_trashed,
                :phoenix_kit_file_deleted,
@@ -82,6 +98,14 @@ defmodule PhoenixKitPhotos.LiveUpdates do
       end)
 
     {:cont, socket}
+  end
+
+  defp tell_uploaders(file_uuids) do
+    for id <- Process.get(@watching_key, []) do
+      Phoenix.LiveView.send_update(PhotoUploader, id: id, files_processed: file_uuids)
+    end
+
+    :ok
   end
 
   # One topic per page, so a result reaches only the page whose uploader staged the file.

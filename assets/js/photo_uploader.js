@@ -1,4 +1,5 @@
 import { carriesFiles, filesFromDrop } from "./drop_files.js"
+import { makePreview } from "./upload_previews.js"
 
 /**
  * The uploader's hook: the whole window is a drop zone while the hook is mounted.
@@ -18,6 +19,14 @@ import { carriesFiles, filesFromDrop } from "./drop_files.js"
  * waiting; the server could not push the answer, because an event pushed from a
  * component's upload-progress callback never reaches the page.
  *
+ * It also draws the tiles' pictures. The component renders a tile per file on its way
+ * with an empty `data-upload-preview="<ref>"` slot it never touches again
+ * (`phx-update="ignore"`); the hook makes a small picture of each file it handed to
+ * LiveView (`upload_previews.js`), one at a time, and puts it in the slot. Which file a
+ * tile is for is told by `data-previews` (`[[ref, name, size], …]` for the entries
+ * uploading), and `data-refs` lists every file still on its way (uploading, saving,
+ * previews being made), so a picture is kept exactly that long and then released.
+ *
  * Nothing here knows about Elixir, Ecto or PhoenixKit: the contract is the element's
  * data attributes (`data-upload-name`, `data-accept`, `data-batch`,
  * `data-concurrency`, `data-concurrency-max`, and `data-cancel-all` on the button that
@@ -31,6 +40,10 @@ const CONCURRENCY_KEY = "phoenix_kit_photos:upload_concurrency"
 // How many queued file names are told to the server for the panel to list; the rest
 // is only counted, so a drop of thousands does not push thousands of names per batch.
 const MAX_QUEUED_NAMES = 50
+
+// How many handed-over files are remembered until their tile asks for a picture: a file
+// the server turned away never gets a tile, and must not be held for good.
+const MAX_HANDED = 400
 
 export const PhotoUploader = {
   mounted() {
@@ -54,6 +67,9 @@ export const PhotoUploader = {
     this.gone = false
     this.depth = 0
     this.dragging = false
+    this.handed = []
+    this.previews = new Map()
+    this.previewWork = Promise.resolve()
 
     // The panel's concurrency control: purely client-side, kept in localStorage.
     this.onConcurrencyChange = event => {
@@ -140,10 +156,12 @@ export const PhotoUploader = {
     }
     const select = this.el.querySelector("[data-concurrency-select]")
     if (select) select.value = String(this.concurrency)
+    this.syncPreviews()
   },
 
   destroyed() {
     this.gone = true
+    this.releasePreviews()
     window.removeEventListener("dragenter", this.onEnter)
     window.removeEventListener("dragover", this.onOver)
     window.removeEventListener("dragleave", this.onLeave)
@@ -178,6 +196,73 @@ export const PhotoUploader = {
     }
     const select = this.el.querySelector("[data-concurrency-select]")
     if (select) select.value = String(this.concurrency)
+  },
+
+  // Hands files to LiveView, remembering them until their tiles ask for a picture.
+  send(files) {
+    this.handed = (this.handed || []).concat(files).slice(-MAX_HANDED)
+    this.uploadTo(this.el, this.name, files)
+  },
+
+  // After every patch: start a picture for each new entry, let go of those whose file
+  // is no longer on its way, and fill the slots that are in the page.
+  syncPreviews() {
+    if (!this.previews) return
+    const live = new Set(parseList(this.el.dataset.refs))
+
+    for (const [ref, name, size] of parseRows(this.el.dataset.previews)) {
+      if (this.previews.has(ref)) continue
+      this.previews.set(ref, null)
+      const file = this.takeHanded(name, size)
+      if (file) this.queuePreview(ref, file)
+    }
+
+    for (const [ref, url] of this.previews) {
+      if (live.has(ref)) continue
+      this.previews.delete(ref)
+      revoke(url)
+    }
+
+    this.paintPreviews()
+  },
+
+  takeHanded(name, size) {
+    const at = (this.handed || []).findIndex(f => String(f.name) === name && f.size === size)
+    return at < 0 ? null : this.handed.splice(at, 1)[0]
+  },
+
+  // One at a time: decoding eight large photos at once would stall the page.
+  queuePreview(ref, file) {
+    const make = this.makePreview || makePreview
+    this.previewWork = this.previewWork
+      .then(() => (this.gone || !this.previews.has(ref) ? null : make(file)))
+      .then(url => {
+        if (!url) return
+        if (this.gone || !this.previews.has(ref)) return revoke(url)
+        this.previews.set(ref, url)
+        this.paintPreviews()
+      })
+      .catch(() => {})
+    return this.previewWork
+  },
+
+  paintPreviews() {
+    this.el.querySelectorAll("[data-upload-preview]").forEach(slot => {
+      const url = this.previews.get(slot.dataset.uploadPreview)
+      if (!url || slot.firstChild) return
+      const img = document.createElement("img")
+      img.alt = ""
+      img.decoding = "async"
+      img.src = url
+      slot.appendChild(img)
+    })
+  },
+
+  releasePreviews() {
+    if (!this.previews) return
+    for (const url of this.previews.values()) revoke(url)
+    this.previews.clear()
+    this.handed = []
   },
 
   setDragging(on) {
@@ -243,7 +328,7 @@ export const PhotoUploader = {
           if (room > 0) {
             const next = this.queue.slice(0, room)
             this.queue = this.queue.slice(next.length)
-            this.uploadTo(this.el, this.name, next)
+            this.send(next)
           }
 
           // Told every poll, not only when sending: in a public library nothing is
@@ -259,7 +344,7 @@ export const PhotoUploader = {
           if (state.idle && !this.gone) {
             const next = this.queue.slice(0, this.batch)
             this.queue = this.queue.slice(next.length)
-            this.uploadTo(this.el, this.name, next)
+            this.send(next)
           }
 
           this.pushEventTo(this.el, "waiting", this.waitingPayload())
@@ -289,6 +374,21 @@ export const PhotoUploader = {
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const clamp = (n, low, high) => Math.min(Math.max(isNaN(n) ? low : n, low), high)
+
+function revoke(url) {
+  if (url) URL.revokeObjectURL(url)
+}
+
+// `[[ref, name, size], …]`, with anything else dropped.
+function parseRows(json) {
+  try {
+    const rows = JSON.parse(json || "[]")
+    if (!Array.isArray(rows)) return []
+    return rows.filter(row => Array.isArray(row) && row.length === 3).map(([ref, name, size]) => [String(ref), String(name), size])
+  } catch (_error) {
+    return []
+  }
+}
 
 function parseList(json) {
   try {

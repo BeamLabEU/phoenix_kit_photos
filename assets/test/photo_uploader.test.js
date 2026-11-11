@@ -253,3 +253,100 @@ test("an answer without inFlight falls back to batches, sent only when idle", as
   assert.deepEqual(hook.sent, [100, 50])
   assert.equal(hook.queue.length, 0)
 })
+
+// --- the tiles' pictures --------------------------------------------------------
+
+const slotFake = ref => ({ dataset: { uploadPreview: ref }, firstChild: null, appendChild(child) { this.firstChild = child } })
+
+const previewHook = ({ slots = [] } = {}) => {
+  const hook = makeHook()
+  hook.name = "photos"
+  hook.handed = []
+  hook.previews = new Map()
+  hook.previewWork = Promise.resolve()
+  hook.el.querySelectorAll = () => slots
+  hook.made = []
+  hook.makePreview = file => {
+    hook.made.push(file.name)
+    return Promise.resolve(file.broken ? null : `blob:${file.name}`)
+  }
+  hook.revoked = []
+  globalThis.URL.revokeObjectURL = url => hook.revoked.push(url)
+  globalThis.document = { createElement: () => ({}) }
+  return hook
+}
+
+test("a handed-over file gets a picture when its entry shows up, and the slot is filled once", async () => {
+  const slot = slotFake("7")
+  const hook = previewHook({ slots: [slot] })
+  hook.send([{ name: "a.jpg", size: 10 }, { name: "b.jpg", size: 20 }])
+  assert.deepEqual(hook.sent, [2])
+
+  hook.el.dataset.previews = JSON.stringify([["7", "a.jpg", 10]])
+  hook.el.dataset.refs = JSON.stringify(["7"])
+  hook.syncPreviews()
+  await hook.previewWork
+
+  assert.deepEqual(hook.made, ["a.jpg"])
+  assert.equal(slot.firstChild.src, "blob:a.jpg")
+  assert.equal(hook.handed.length, 1) // b.jpg still waits for its entry
+
+  const first = slot.firstChild
+  hook.syncPreviews()
+  await hook.previewWork
+  assert.equal(slot.firstChild, first)
+  assert.deepEqual(hook.made, ["a.jpg"])
+})
+
+test("the picture stays while the file is saving or its previews are made, then is released", async () => {
+  const hook = previewHook()
+  hook.send([{ name: "a.jpg", size: 10 }])
+  hook.el.dataset.previews = JSON.stringify([["7", "a.jpg", 10]])
+  hook.el.dataset.refs = JSON.stringify(["7"])
+  hook.syncPreviews()
+  await hook.previewWork
+
+  // No longer an entry (saving), still on its way.
+  hook.el.dataset.previews = "[]"
+  hook.syncPreviews()
+  assert.equal(hook.previews.get("7"), "blob:a.jpg")
+  assert.deepEqual(hook.revoked, [])
+
+  hook.el.dataset.refs = "[]"
+  hook.syncPreviews()
+  assert.equal(hook.previews.has("7"), false)
+  assert.deepEqual(hook.revoked, ["blob:a.jpg"])
+})
+
+test("two files of one name are told apart by size, and an unreadable one leaves its slot empty", async () => {
+  const slots = [slotFake("1"), slotFake("2")]
+  const hook = previewHook({ slots })
+  hook.send([{ name: "IMG.heic", size: 5, broken: true }, { name: "IMG.heic", size: 6 }])
+  hook.el.dataset.previews = JSON.stringify([["1", "IMG.heic", 5], ["2", "IMG.heic", 6]])
+  hook.el.dataset.refs = JSON.stringify(["1", "2"])
+  hook.syncPreviews()
+  await hook.previewWork
+
+  assert.equal(slots[0].firstChild, null)
+  assert.equal(slots[1].firstChild.src, "blob:IMG.heic")
+})
+
+test("a picture finished after its file is gone is revoked, not kept", async () => {
+  const hook = previewHook()
+  hook.send([{ name: "a.jpg", size: 10 }])
+  hook.el.dataset.previews = JSON.stringify([["7", "a.jpg", 10]])
+  hook.el.dataset.refs = JSON.stringify(["7"])
+  let finish
+  hook.makePreview = () => new Promise(resolve => (finish = resolve))
+  hook.syncPreviews()
+  await Promise.resolve()
+  await Promise.resolve()
+
+  hook.el.dataset.refs = "[]"
+  hook.syncPreviews()
+  finish("blob:late")
+  await hook.previewWork
+
+  assert.deepEqual(hook.revoked, ["blob:late"])
+  assert.equal(hook.previews.size, 0)
+})

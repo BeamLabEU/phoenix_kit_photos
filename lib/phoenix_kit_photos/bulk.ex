@@ -441,17 +441,31 @@ defmodule PhoenixKitPhotos.Bulk do
   defp record(acc, file, {:ok, _result}), do: %{acc | done: [file.uuid | acc.done]}
 
   defp record(acc, file, {:error, reason}) do
-    %{acc | failed: [refusal(file.uuid, file, failure(reason)) | acc.failed]}
+    failure = failure(reason)
+    if failure == :failed and reason != :failed, do: log_failure(file, inspect(reason, limit: 8))
+    %{acc | failed: [refusal(file.uuid, file, failure) | acc.failed]}
   end
 
   # One file's trouble is that file's: a row deleted since the plan, or a busy database, must not
-  # stop the others or leave the person watching a progress bar that never ends.
+  # stop the others or leave the person watching a progress bar that never ends. The person is
+  # told one word; the log names the file and what went wrong.
   defp apply_safely(plan, file) do
     apply_to(plan, file)
   rescue
-    _error -> {:error, :failed}
+    error ->
+      log_failure(file, Exception.format_banner(:error, error, __STACKTRACE__))
+      {:error, :failed}
   catch
-    _kind, _reason -> {:error, :failed}
+    kind, reason ->
+      log_failure(file, Exception.format_banner(kind, reason, __STACKTRACE__))
+      {:error, :failed}
+  end
+
+  # The start of the error is enough to know it: some carry a whole record.
+  defp log_failure(file, what) do
+    Logger.warning(
+      "Photos: bulk action failed for file #{file.uuid}: #{String.slice(what, 0, 300)}"
+    )
   end
 
   # The file's own failure, in terms a person can be told; anything else is one word.

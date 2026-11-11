@@ -12,6 +12,9 @@
   retried for about 20 minutes while storage is down. The panel shows *Saving…* until
   it is stored.
 
+- A bulk copy or move that fails for a file now says why in the log (the file and the
+  error); the person was told "failed" and the log said nothing.
+
 ### Added
 
 - `PhoenixKitPhotos.StoreUploadJob` (Oban queue `photo_uploads`): add

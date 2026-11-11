@@ -43,6 +43,11 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       library, *Making previews…* until the timeline can show it, then *Added* for a
       moment. That last wait is the one nothing used to account for: the panel said
       "added" and the grid stayed as it was until the renditions were made.
+    * **Out of the way when done.** Once nothing is on its way any more, the panel
+      shrinks to one line saying what became of the files (*Details* opens it again),
+      and that line goes after `:summary_hide_ms` (10 s) unless something failed or a
+      folder could not be read: those stay until closed. Opening the panel with **+**
+      shows it whole, and so does *Details*, without the countdown.
 
   Memory: the browser sends the file in chunks that LiveView writes to disk, and the file
   is hashed and stored from disk, so a video costs what a thumbnail does.
@@ -118,14 +123,34 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        library_uuid: nil,
        can_upload: false,
        public?: false,
-       upload_auto: nil
+       upload_auto: nil,
+       expanded: false,
+       hide_token: nil
      )}
   end
 
   @impl true
   # What `PhoenixKitPhotos.StoreUploadJob` said about a file this panel handed it,
   # relayed by `PhoenixKitPhotos.LiveUpdates`.
-  def update(%{upload_event: {ref, event}}, socket), do: {:ok, upload_event(socket, ref, event)}
+  def update(%{upload_event: {ref, event}}, socket),
+    do: {:ok, socket |> upload_event(ref, event) |> settle()}
+
+  # The summary's countdown ran out (`settle/1`): it goes, unless a newer run started,
+  # the person opened the details, or something in it needs reading.
+  def update(%{hide: token}, socket) do
+    a = socket.assigns
+
+    cond do
+      token != a.hide_token or not idle?(a) ->
+        {:ok, socket}
+
+      a.expanded or count_outcome(a.done, :error) > 0 or a.unreadable > 0 ->
+        {:ok, assign(socket, :hide_token, nil)}
+
+      true ->
+        {:ok, socket |> clear_results() |> assign(open: false, expanded: false, hide_token: nil)}
+    end
+  end
 
   # Files were processed (`PhoenixKitPhotos.LiveUpdates`): those of them this panel is
   # waiting for can be shown now. Their tiles say *Added* for a moment and then go (the
@@ -139,7 +164,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       for item <- socket.assigns.preparing, is_nil(item.shown), item.uuid in uuids, do: item.uuid
 
     ready = MapSet.new(ours -- Uploads.still_preparing(ours))
-    {:ok, mark_shown(socket, &MapSet.member?(ready, &1.uuid))}
+    {:ok, socket |> mark_shown(&MapSet.member?(ready, &1.uuid)) |> settle()}
   end
 
   # The same question asked of the database, for a message that was missed; and the
@@ -161,7 +186,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     {:ok,
      socket
      |> assign(preparing: preparing, preparing_check: false)
-     |> schedule_preparing_check()}
+     |> schedule_preparing_check()
+     |> settle()}
   end
 
   def update(assigns, socket) do
@@ -274,7 +300,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
            socket
            |> record(entry.ref, entry.client_name, outcome)
            |> prepare(entry.ref, entry.client_name, outcome)
-           |> notify(outcome)}
+           |> notify(outcome)
+           |> settle()}
       end
     else
       {:noreply, socket}
@@ -427,6 +454,52 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     assign(socket, :preparing_check, true)
   end
 
+  # Nothing on its way: no entry, nothing saving or having its previews made, nothing
+  # left in the hook's queue.
+  defp idle?(assigns) do
+    entries =
+      case assigns[:uploads] do
+        %{@upload => config} -> config.entries
+        _none -> []
+      end
+
+    entries == [] and assigns.saving == [] and assigns.preparing == [] and assigns.waiting == 0
+  end
+
+  # After anything that may end a run: once nothing is on its way and there is something
+  # to say, the summary's countdown starts (once per run; `update(%{hide: token})`).
+  # Something on its way again cancels it, so an old countdown never hides a new run.
+  defp settle(socket) do
+    a = socket.assigns
+
+    cond do
+      not idle?(a) or a.done == [] ->
+        assign(socket, :hide_token, nil)
+
+      a.hide_token != nil ->
+        socket
+
+      true ->
+        token = System.unique_integer([:positive])
+        send_update_after(__MODULE__, [id: a.id, hide: token], summary_hide_ms())
+        assign(socket, :hide_token, token)
+    end
+  end
+
+  # How long the summary stays once a run is done.
+  defp summary_hide_ms, do: Application.get_env(:phoenix_kit_photos, :summary_hide_ms, 10_000)
+
+  defp clear_results(socket),
+    do:
+      assign(socket,
+        done: [],
+        skipped: 0,
+        unreadable: 0,
+        truncated: false,
+        waiting: 0,
+        queued: []
+      )
+
   defp notify(%{assigns: %{on_stored: event, id: id}} = socket, outcome)
        when is_atom(event) and not is_nil(event) do
     send(self(), {event, id, outcome})
@@ -436,15 +509,28 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   defp notify(socket, _outcome), do: socket
 
   @impl true
-  def handle_event("open", _params, socket), do: {:noreply, assign(socket, :open, true)}
-  def handle_event("close", _params, socket), do: {:noreply, assign(socket, :open, false)}
+  # The **+** button and *Details*: the whole panel, and no countdown while it is read.
+  def handle_event("open", _params, socket),
+    do: {:noreply, assign(socket, open: true, expanded: true, hide_token: nil)}
+
+  def handle_event("expand", _params, socket),
+    do: {:noreply, assign(socket, expanded: true, hide_token: nil)}
+
+  def handle_event("close", _params, socket),
+    do: {:noreply, assign(socket, open: false, expanded: false)}
+
+  # The summary's x: closed, and what it said is forgotten.
+  def handle_event("hide", _params, socket),
+    do:
+      {:noreply,
+       socket |> clear_results() |> assign(open: false, expanded: false, hide_token: nil)}
 
   # The form's change events: files were chosen or dropped. An entry LiveView turned
   # away (not a photo, too large) is reported and cancelled, not left in the list: it
   # would hold one of the batch's places for good, the hook would wait for it to finish
   # before sending the next batch, and nothing ever would.
   def handle_event("validate", _params, socket) do
-    {:noreply, reject_invalid(socket)}
+    {:noreply, socket |> reject_invalid() |> settle()}
   end
 
   # Upload was pressed: in a public library the hook now starts feeding the queue
@@ -453,31 +539,36 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   def handle_event("start", _params, socket), do: {:noreply, assign(socket, :started, true)}
 
   def handle_event("cancel", %{"ref" => ref}, socket) do
-    {:noreply, cancel_upload(socket, @upload, ref)}
+    {:noreply, socket |> cancel_upload(@upload, ref) |> settle()}
   end
 
   # Cancel all: every entry in flight or waiting. The hook empties its own queue of
   # not-yet-sent files when it sees this button clicked (`data-cancel-all`).
   def handle_event("cancel_all", _params, socket) do
-    {:noreply, socket |> cancel_all() |> assign(waiting: 0, queued: [])}
+    {:noreply, socket |> cancel_all() |> assign(waiting: 0, queued: []) |> settle()}
   end
 
   def handle_event("dismiss", _params, socket) do
-    {:noreply,
-     assign(socket, done: [], skipped: 0, unreadable: 0, truncated: false, waiting: 0, queued: [])}
+    {:noreply, socket |> clear_results() |> assign(:hide_token, nil)}
   end
 
-  # From the hook: files were picked or dropped (and how many were left out of a
-  # folder). In a public library these wait for Upload again, so the flag resets.
+  # From the hook: files were picked, dropped or pasted (and how many were left out). In
+  # a public library these wait for Upload again, so the flag resets. A new run shrinks
+  # to its summary when done; its files are not entries yet, so no countdown starts
+  # until they have come and gone (unless none came at all).
   def handle_event("dropped", params, socket) do
-    {:noreply,
-     assign(socket,
-       open: true,
-       started: false,
-       skipped: socket.assigns.skipped + count(params["skipped"]),
-       unreadable: socket.assigns.unreadable + count(params["unreadable"]),
-       truncated: params["truncated"] == true
-     )}
+    socket =
+      assign(socket,
+        open: true,
+        expanded: false,
+        hide_token: nil,
+        started: false,
+        skipped: socket.assigns.skipped + count(params["skipped"]),
+        unreadable: socket.assigns.unreadable + count(params["unreadable"]),
+        truncated: params["truncated"] == true
+      )
+
+    {:noreply, if(count(params["files"]) == 0, do: settle(socket), else: socket)}
   end
 
   # The hook asks before it sends more of a big drop, and how much room it has: how
@@ -503,7 +594,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       |> Enum.take(@max_queued_names)
       |> Enum.map(&String.slice(to_string(&1), 0, 255))
 
-    {:noreply, assign(socket, waiting: count(params["count"]), queued: names)}
+    {:noreply, socket |> assign(waiting: count(params["count"]), queued: names) |> settle()}
   end
 
   defp count(n) when is_integer(n) and n >= 0, do: n
@@ -537,6 +628,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       |> assign(:duplicates, count_outcome(assigns.done, :duplicate))
       |> assign(:elsewhere, count_outcome(assigns.done, :elsewhere))
       |> assign(:failed, count_outcome(assigns.done, :error))
+      |> assign(
+        :compact?,
+        assigns.open and not assigns.expanded and assigns.done != [] and idle?(assigns)
+      )
 
     ~H"""
     <div
@@ -584,8 +679,36 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
           <span :if={@busy > 0} class="badge badge-neutral badge-sm absolute -top-1 -right-1">{@busy}</span>
         </button>
 
+        <%!-- A finished run, in one line: what became of the files, and the way back to
+             the whole panel. It goes by itself (`settle/1`) unless something failed. --%>
         <section
-          :if={@open}
+          :if={@compact?}
+          id={"#{@id}-summary"}
+          role="status"
+          aria-label={gettext("Upload finished")}
+          class="card fixed inset-x-3 bottom-3 z-50 border border-base-300 bg-base-100 shadow-xl sm:inset-x-auto sm:right-6 sm:bottom-6 sm:max-w-sm"
+        >
+          <div class="flex items-center gap-2 py-2 pr-2 pl-4">
+            <div class="min-w-0 flex-1">
+              <.outcomes added={@added} duplicates={@duplicates} elsewhere={@elsewhere} failed={@failed} />
+              <p :if={@skipped > 0 || @unreadable > 0} class="mt-0.5 flex flex-wrap gap-x-3 text-xs text-base-content/60">
+                <span :if={@skipped > 0}>{ngettext("%{count} left out", "%{count} left out", @skipped)}</span>
+                <span :if={@unreadable > 0} class="text-warning">
+                  {ngettext("%{count} folder not read", "%{count} folders not read", @unreadable)}
+                </span>
+              </p>
+            </div>
+            <button type="button" phx-click="expand" phx-target={@myself} class="btn btn-ghost btn-xs">
+              {gettext("Details")}
+            </button>
+            <button type="button" phx-click="hide" phx-target={@myself} class="btn btn-ghost btn-sm btn-circle" aria-label={gettext("Close")}>
+              <.icon name="hero-x-mark" class="h-5 w-5" />
+            </button>
+          </div>
+        </section>
+
+        <section
+          :if={@open && !@compact?}
           id={"#{@id}-panel"}
           aria-label={gettext("Add photos")}
           class="card fixed inset-x-3 bottom-3 z-50 max-h-[80vh] border border-base-300 bg-base-100 shadow-2xl sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-96"
@@ -721,12 +844,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
             </div>
 
             <div :if={@done != [] || @skipped > 0 || @unreadable > 0} class="flex flex-col gap-1 border-t border-base-300 pt-2 text-sm" aria-live="polite">
-              <p class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span :if={@added > 0} class="flex items-center gap-1 text-success"><.icon name="hero-check-circle" class="h-4 w-4" />{gettext("%{count} added", count: @added)}</span>
-                <span :if={@duplicates > 0} class="flex items-center gap-1 text-base-content/70"><.icon name="hero-document-duplicate" class="h-4 w-4" />{gettext("%{count} already in this library", count: @duplicates)}</span>
-                <span :if={@elsewhere > 0} class="flex items-center gap-1 text-warning"><.icon name="hero-arrow-uturn-right" class="h-4 w-4" />{gettext("%{count} in another library", count: @elsewhere)}</span>
-                <span :if={@failed > 0} class="flex items-center gap-1 text-error"><.icon name="hero-exclamation-triangle" class="h-4 w-4" />{gettext("%{count} failed", count: @failed)}</span>
-              </p>
+              <.outcomes added={@added} duplicates={@duplicates} elsewhere={@elsewhere} failed={@failed} />
               <p :if={@skipped > 0} class="text-xs text-base-content/60">
                 {ngettext("%{count} file was left out (not a photo or video)", "%{count} files were left out (not photos or videos)", @skipped)}
               </p>
@@ -754,6 +872,23 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
         </section>
       </form>
     </div>
+    """
+  end
+
+  attr :added, :integer, required: true
+  attr :duplicates, :integer, required: true
+  attr :elsewhere, :integer, required: true
+  attr :failed, :integer, required: true
+
+  # What became of the files: the panel's results and the summary's one line.
+  defp outcomes(assigns) do
+    ~H"""
+    <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+      <span :if={@added > 0} class="flex items-center gap-1 text-success"><.icon name="hero-check-circle" class="h-4 w-4" />{gettext("%{count} added", count: @added)}</span>
+      <span :if={@duplicates > 0} class="flex items-center gap-1 text-base-content/70"><.icon name="hero-document-duplicate" class="h-4 w-4" />{gettext("%{count} already in this library", count: @duplicates)}</span>
+      <span :if={@elsewhere > 0} class="flex items-center gap-1 text-warning"><.icon name="hero-arrow-uturn-right" class="h-4 w-4" />{gettext("%{count} in another library", count: @elsewhere)}</span>
+      <span :if={@failed > 0} class="flex items-center gap-1 text-error"><.icon name="hero-exclamation-triangle" class="h-4 w-4" />{gettext("%{count} failed", count: @failed)}</span>
+    </p>
     """
   end
 

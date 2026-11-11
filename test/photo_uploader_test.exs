@@ -448,6 +448,101 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
     end
   end
 
+  describe "when a run is done" do
+    setup do
+      Application.put_env(:phoenix_kit_photos, :added_tile_ms, 0)
+      Application.put_env(:phoenix_kit_photos, :summary_hide_ms, 100)
+
+      on_exit(fn ->
+        Application.delete_env(:phoenix_kit_photos, :added_tile_ms)
+        Application.delete_env(:phoenix_kit_photos, :summary_hide_ms)
+      end)
+    end
+
+    # Files dropped (or pasted, or picked: the hook says so the same way), uploaded, and
+    # their previews made: nothing is on its way any more.
+    defp finish_run(view) do
+      view |> element("#test-uploader") |> render_hook("dropped", %{"files" => 1})
+      assert view |> upload("holiday.png") |> render_upload("holiday.png") =~ "Making previews…"
+      assert has_element?(view, "#test-uploader-panel")
+
+      [file] = Storage.list_files()
+      file |> Ecto.Changeset.change(status: "failed") |> TestRepo.update!()
+
+      # One check finds it can be shown (its tile says Added), the next takes the tile away.
+      for _ <- 1..2 do
+        Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+          id: "test-uploader",
+          preparing_check: true
+        )
+
+        render(view)
+      end
+    end
+
+    test "the panel shrinks to its summary, which then goes by itself", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      finish_run(view)
+
+      assert has_element?(view, "#test-uploader-summary", "1 added")
+      refute has_element?(view, "#test-uploader-panel")
+      refute has_element?(view, "button[aria-label='Add photos']")
+
+      Process.sleep(200)
+      refute has_element?(view, "#test-uploader-summary")
+      assert has_element?(view, "button[aria-label='Add photos']")
+
+      # Opened again, the panel starts clean.
+      html = view |> element("button[aria-label='Add photos']") |> render_click()
+      assert html =~ "Choose files"
+      refute html =~ "1 added"
+    end
+
+    test "Details opens the whole panel again, and it stays", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      finish_run(view)
+
+      html = view |> element("#test-uploader-summary button", "Details") |> render_click()
+      assert html =~ "Choose files"
+      assert html =~ "1 added"
+
+      Process.sleep(200)
+      assert has_element?(view, "#test-uploader-panel", "1 added")
+    end
+
+    test "the summary's x closes it and forgets it", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      finish_run(view)
+
+      view |> element("#test-uploader-summary button[aria-label='Close']") |> render_click()
+      refute has_element?(view, "#test-uploader-summary")
+      refute view |> element("button[aria-label='Add photos']") |> render_click() =~ "1 added"
+    end
+
+    test "a summary with a failure stays until it is closed", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("#test-uploader") |> render_hook("dropped", %{"files" => 1})
+
+      input = upload(view, "page.html", "<script></script>", "text/html")
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(input, "page.html")
+      view |> element("#test-uploader") |> render_hook("validate", %{})
+
+      assert has_element?(view, "#test-uploader-summary", "1 failed")
+      Process.sleep(200)
+      assert has_element?(view, "#test-uploader-summary", "1 failed")
+    end
+
+    test "a panel opened with + is not shrunk", ctx do
+      {view, _} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+      view |> upload("a.png") |> render_upload("a.png")
+      html = view |> upload("copy.png") |> render_upload("copy.png")
+
+      assert html =~ "1 already in this library"
+      refute has_element?(view, "#test-uploader-summary")
+    end
+  end
+
   describe "telling the page" do
     test "on_stored sends each result to the parent, and only then", ctx do
       {view, _} = mount!(scope_for(ctx.owner), ctx.library, %{"on_stored" => :stored})

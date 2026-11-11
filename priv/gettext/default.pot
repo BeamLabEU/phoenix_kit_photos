@@ -76,151 +76,152 @@ msgstr ""
 msgid "Unknown"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:462
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:887
 #, elixir-autogen, elixir-format
 msgid "%{count} added"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:465
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:890
 #, elixir-autogen, elixir-format
 msgid "%{count} failed"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:468
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:849
 #, elixir-autogen, elixir-format
 msgid "%{count} file was left out (not a photo or video)"
 msgid_plural "%{count} files were left out (not photos or videos)"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:464
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:889
 #, elixir-autogen, elixir-format
 msgid "%{count} in another library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:438
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:824
 #, elixir-autogen, elixir-format
 msgid "%{count} more file is waiting"
 msgid_plural "%{count} more files are waiting"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:344
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:345
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:355
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:361
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:674
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:675
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:713
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:719
 #, elixir-autogen, elixir-format
 msgid "Add photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1118
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:419
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1140
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:792
 #, elixir-autogen, elixir-format
 msgid "Cancel"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:386
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:744
 #, elixir-autogen, elixir-format
 msgid "Choose files"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:487
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:868
 #, elixir-autogen, elixir-format
 msgid "Clear"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1118
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1142
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1221
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:368
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1140
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1164
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1243
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:704
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:726
 #, elixir-autogen, elixir-format
 msgid "Close"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:329
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:659
 #, elixir-autogen, elixir-format
 msgid "Drop to add to %{name}"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:330
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:660
 #, elixir-autogen, elixir-format
 msgid "Photos, videos or whole folders"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:477
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:858
 #, elixir-autogen, elixir-format
 msgid "That folder is very large; only the first part was taken. Drop the rest again."
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:332
+#: lib/phoenix_kit_photos/uploads.ex:388
 #, elixir-autogen, elixir-format
 msgid "The server could not save it"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:327
+#: lib/phoenix_kit_photos/uploads.ex:383
 #, elixir-autogen, elixir-format
 msgid "The upload was lost on the way"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:320
+#: lib/phoenix_kit_photos/uploads.ex:376
 #, elixir-autogen, elixir-format
 msgid "This file could not be uploaded"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:326
+#: lib/phoenix_kit_photos/uploads.ex:382
 #, elixir-autogen, elixir-format
 msgid "This kind of file is not supported"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:317
+#: lib/phoenix_kit_photos/uploads.ex:373
 #, elixir-autogen, elixir-format
 msgid "This kind of file is not supported (photos and videos only)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:375
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:733
 #, elixir-autogen, elixir-format
 msgid "This library is public. Everything you add to it can be seen by anyone."
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:314
+#: lib/phoenix_kit_photos/uploads.ex:370
 #, elixir-autogen, elixir-format
 msgid "Too large (the limit is %{mb} MB)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:319
+#: lib/phoenix_kit_photos/uploads.ex:375
 #, elixir-autogen, elixir-format
 msgid "Too many files at once"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:447
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:833
 #, elixir-autogen, elixir-format
 msgid "Upload %{count} file"
 msgid_plural "Upload %{count} files"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/uploads.ex:325
+#: lib/phoenix_kit_photos/uploads.ex:381
 #, elixir-autogen, elixir-format
 msgid "You may not add to this library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:510
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:956
 #, elixir-autogen, elixir-format
 msgid "already in another of your libraries"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:387
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:745
 #, elixir-autogen, elixir-format
 msgid "or drop or paste photos, videos or folders anywhere on the page"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:418
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:433
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:819
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:940
 #, elixir-autogen, elixir-format
 msgid "waiting"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:471
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:852
 #, elixir-autogen, elixir-format
 msgid "%{count} folder could not be read. Use Choose files to pick its photos instead."
 msgid_plural "%{count} folders could not be read. Use Choose files to pick their photos instead."
@@ -237,406 +238,458 @@ msgstr ""
 msgid "Classic viewer"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/viewer_picker.ex:77
+#: lib/phoenix_kit_photos/components/viewer_picker.ex:78
 #, elixir-autogen
 msgid "Default (%{name})"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/viewer_picker.ex:73
+#: lib/phoenix_kit_photos/components/viewer_picker.ex:74
 #, elixir-autogen
 msgid "Viewer"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/viewer_picker.ex:74
+#: lib/phoenix_kit_photos/components/viewer_picker.ex:75
 #, elixir-autogen
 msgid "How this library's photos open"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/viewer_picker.ex:58
+#: lib/phoenix_kit_photos/components/viewer_picker.ex:59
 #, elixir-autogen
 msgid "Could not save the viewer"
 msgstr ""
 
-#: lib/phoenix_kit_photos/uploads.ex:330
+#: lib/phoenix_kit_photos/uploads.ex:386
 #, elixir-autogen, elixir-format
 msgid "There is no room left: this library's storage is full"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:463
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:888
 #, elixir-autogen, elixir-format
 msgid "%{count} already in this library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1174
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1196
 #, elixir-autogen, elixir-format
 msgid "Add"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1158
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1180
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a library"
 msgid_plural "Add %{count} items to a library"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1076
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1096
 #, elixir-autogen, elixir-format
 msgid "Add tags (separate with commas)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1021
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1041
 #, elixir-autogen, elixir-format
 msgid "Add to library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:995
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1015
 #, elixir-autogen, elixir-format
 msgid "All photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:994
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1014
 #, elixir-autogen, elixir-format
 msgid "All videos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:456
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:842
 #, elixir-autogen, elixir-format
 msgid "Cancel all"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:812
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:832
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:813
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:833
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown (V)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/viewer_picker.ex:84
+#: lib/phoenix_kit_photos/components/viewer_picker.ex:85
 #, elixir-autogen, elixir-format
 msgid "Changes are saved automatically."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:975
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:995
 #, elixir-autogen, elixir-format
 msgid "Clear selection"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:976
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:996
 #, elixir-autogen, elixir-format
 msgid "Clear selection (Esc)"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:338
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:341
 #, elixir-autogen, elixir-format
 msgid "Columns"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1124
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1146
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:727
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:746
 #, elixir-autogen, elixir-format
 msgid "Copied 1 item"
 msgid_plural "Copied %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1127
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1149
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1020
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1040
 #, elixir-autogen, elixir-format
 msgid "Copy links"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:345
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:348
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:702
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1019
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1039
 #, elixir-autogen, elixir-format
 msgid "Download"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:996
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1016
 #, elixir-autogen, elixir-format
 msgid "Everything"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:341
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:344
 #, elixir-autogen, elixir-format
 msgid "Feed"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:343
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:346
 #, elixir-autogen, elixir-format
 msgid "Film"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:336
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:339
 #, elixir-autogen, elixir-format
 msgid "Grid"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:344
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:347
 #, elixir-autogen, elixir-format
 msgid "Honeycomb"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1059
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1079
 #, elixir-autogen, elixir-format
 msgid "Library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1166
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1188
 #, elixir-autogen, elixir-format
 msgid "Link to 1 photo"
 msgid_plural "Links to %{count} photos"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:339
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:342
 #, elixir-autogen, elixir-format
 msgid "Mosaic"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1022
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1175
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1042
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1197
 #, elixir-autogen, elixir-format
 msgid "Move"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1161
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1183
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to a library"
 msgid_plural "Move %{count} items to a library"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1155
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1177
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to the trash?"
 msgid_plural "Move %{count} items to the trash?"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1173
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1195
 #, elixir-autogen, elixir-format
 msgid "Move to trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:730
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:749
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item"
 msgid_plural "Moved %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:721
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:740
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item to the trash"
 msgid_plural "Moved %{count} items to the trash"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1170
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1192
 #, elixir-autogen, elixir-format
 msgid "Only people who may see the library can open them."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:342
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:345
 #, elixir-autogen, elixir-format
 msgid "Prints"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1086
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1107
 #, elixir-autogen, elixir-format
 msgid "Remove tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:724
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:743
 #, elixir-autogen, elixir-format
 msgid "Restored 1 item"
 msgid_plural "Restored %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:337
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:340
 #, elixir-autogen, elixir-format
 msgid "Rows"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1176
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1198
 #, elixir-autogen, elixir-format
 msgid "Save tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:803
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:989
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:823
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1009
 #, elixir-autogen, elixir-format
 msgid "Select"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:800
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:820
 #, elixir-autogen, elixir-format
 msgid "Select photos"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:781
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:801
 #, elixir-autogen, elixir-format
 msgid "Select this month"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1163
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1185
 #, elixir-autogen, elixir-format
 msgid "Tag 1 item"
 msgid_plural "Tag %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:733
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:752
 #, elixir-autogen, elixir-format
 msgid "Tagged 1 item"
 msgid_plural "Tagged %{count} items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1023
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1043
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1169
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1191
 #, elixir-autogen, elixir-format
 msgid "The originals go to the trash of this library."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:993
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1013
 #, elixir-autogen, elixir-format
 msgid "This day"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:377
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:735
 #, elixir-autogen, elixir-format
 msgid "This library is shared with signed-in users. Every active account on this site can see what you add."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:992
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1012
 #, elixir-autogen, elixir-format
 msgid "This moment"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1024
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1044
 #, elixir-autogen, elixir-format
 msgid "Trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:340
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:343
 #, elixir-autogen, elixir-format
 msgid "Uncropped"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1216
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1238
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:393
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:397
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:751
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:755
 #, elixir-autogen, elixir-format
 msgid "Uploads at once"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1168
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1190
 #, elixir-autogen, elixir-format
 msgid "You can bring them back from the trash."
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1071
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1091
 #, elixir-autogen, elixir-format
 msgid "You have no other library to add these to."
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:504
+#: lib/phoenix_kit_photos/bulk.ex:606
 #, elixir-autogen, elixir-format
 msgid "already in that library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:503
-#: lib/phoenix_kit_photos/components/photo_uploader.ex:509
+#: lib/phoenix_kit_photos/bulk.ex:605
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:955
 #, elixir-autogen, elixir-format
 msgid "already in this library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:512
+#: lib/phoenix_kit_photos/bulk.ex:614
 #, elixir-autogen, elixir-format
 msgid "could not be done"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:506
+#: lib/phoenix_kit_photos/bulk.ex:608
 #, elixir-autogen, elixir-format
 msgid "in the trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:507
+#: lib/phoenix_kit_photos/bulk.ex:609
 #, elixir-autogen, elixir-format
 msgid "no library chosen"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:501
+#: lib/phoenix_kit_photos/bulk.ex:603
 #, elixir-autogen, elixir-format
 msgid "no longer there"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:510
+#: lib/phoenix_kit_photos/bulk.ex:612
 #, elixir-autogen, elixir-format
 msgid "no room left in that library"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:505
+#: lib/phoenix_kit_photos/bulk.ex:607
 #, elixir-autogen, elixir-format
 msgid "not in the trash"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:502
+#: lib/phoenix_kit_photos/bulk.ex:604
 #, elixir-autogen, elixir-format
 msgid "not yours to change"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:982
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1002
 #, elixir-autogen, elixir-format
 msgid "selected"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:511
+#: lib/phoenix_kit_photos/bulk.ex:613
 #, elixir-autogen, elixir-format
 msgid "that library keeps its files elsewhere"
 msgstr ""
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:984
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1004
 #, elixir-autogen, elixir-format
 msgid "the most at once"
 msgstr ""
 
-#: lib/phoenix_kit_photos/web/download.ex:139
+#: lib/phoenix_kit_photos/web/download.ex:148
 #, elixir-autogen, elixir-format
 msgid "These files could not be read just now, and are not in this archive:"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:508
+#: lib/phoenix_kit_photos/bulk.ex:610
 #, elixir-autogen, elixir-format
 msgid "edited here, so it can be copied but not moved"
 msgstr ""
 
-#: lib/phoenix_kit_photos/bulk.ex:509
+#: lib/phoenix_kit_photos/bulk.ex:611
 #, elixir-autogen, elixir-format
 msgid "in use elsewhere on the site"
 msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:697
+#, elixir-autogen, elixir-format
+msgid "%{count} folder not read"
+msgid_plural "%{count} folders not read"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:695
+#, elixir-autogen, elixir-format
+msgid "%{count} left out"
+msgid_plural "%{count} left out"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:936
+#, elixir-autogen, elixir-format
+msgid "Added"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:349
+#, elixir-autogen, elixir-format
+msgid "Calendar"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:937
+#, elixir-autogen, elixir-format
+msgid "Making previews…"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:939
+#, elixir-autogen, elixir-format
+msgid "Saving…"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:938
+#, elixir-autogen, elixir-format
+msgid "Saving… trying again"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:688
+#, elixir-autogen, elixir-format
+msgid "Upload finished"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/photo_uploader.ex:813
+#, elixir-autogen, elixir-format
+msgid "and %{count} more on its way"
+msgid_plural "and %{count} more on their way"
+msgstr[0] ""
+msgstr[1] ""

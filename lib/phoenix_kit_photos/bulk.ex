@@ -18,6 +18,13 @@ defmodule PhoenixKitPhotos.Bulk do
   | `:tag` | edit | adds tags to `metadata["tags"]`, or removes them |
   | `:trash` | edit | `Storage.trash_file/1`, which `:restore` undoes |
   | `:restore` | edit | `Storage.restore_file/1` |
+  | `:stack` | edit | one stack of them all (`Stacks.create/4`), titled by `"title"` |
+  | `:unstack` | edit | takes apart the stacks they are in (`Stacks.unstack/2`) |
+
+  **Stacks.** The timeline shows a stack as one tile, its cover, and a person who chooses it
+  means the whole stack: `whole_stacks/2` turns each cover into all of its files before a
+  plan is made. A copy or a move of a stack's files makes a stack of the copies in the
+  target library, in the same order and with the same title and description.
 
   Nothing here deletes for good: a trashed file comes back with `:restore` until the site's
   trash retention empties it. A move leaves the original in the trash, and the new file has
@@ -40,16 +47,18 @@ defmodule PhoenixKitPhotos.Bulk do
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Modules.Storage.Library
   alias PhoenixKit.Modules.Storage.Quotas
+  alias PhoenixKit.Modules.Storage.Stacks
   alias PhoenixKit.RepoHelper
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Uploads
 
   @limit 5_000
-  @actions ~w(download links copy move tag trash restore)a
+  @actions ~w(download links copy move tag trash restore stack unstack)a
   @max_tags 20
   @max_tag_length 60
 
-  @type action :: :download | :links | :copy | :move | :tag | :trash | :restore
+  @type action ::
+          :download | :links | :copy | :move | :tag | :trash | :restore | :stack | :unstack
   @type reason ::
           :not_found
           | :not_allowed
@@ -60,6 +69,7 @@ defmodule PhoenixKitPhotos.Bulk do
           | :no_target
           | :edited
           | :in_use
+          | :not_stacked
 
   @type refusal :: %{id: String.t(), name: String.t() | nil, reason: reason()}
 
@@ -70,7 +80,8 @@ defmodule PhoenixKitPhotos.Bulk do
           refused: [refusal()],
           target: Library.t() | nil,
           add: [String.t()],
-          remove: [String.t()]
+          remove: [String.t()],
+          title: String.t() | nil
         }
 
   @doc "The most files one action takes."
@@ -86,7 +97,7 @@ defmodule PhoenixKitPhotos.Bulk do
   Checks `ids` for `action` by `auth`.
 
   `params` holds what the action needs: `"library"` (a uuid) for `:copy` and `:move`, `"add"` and
-  `"remove"` (lists of tags, or text with commas) for `:tag`.
+  `"remove"` (lists of tags, or text with commas) for `:tag`, `"title"` for `:stack`.
   """
   @spec plan(action(), [String.t()], Scope.t() | nil, map()) :: plan()
   def plan(action, ids, auth, params \\ %{}) when action in @actions do
@@ -114,8 +125,68 @@ defmodule PhoenixKitPhotos.Bulk do
       refused: Enum.reverse(refused),
       target: target,
       add: add,
-      remove: remove
+      remove: remove,
+      title: if(action == :stack, do: title(params["title"]))
     }
+  end
+
+  defp title(text) when is_binary(text) do
+    case String.trim(text) do
+      "" -> nil
+      title -> title
+    end
+  end
+
+  defp title(_text), do: nil
+
+  @doc """
+  `ids` with every file of the stacks among them in place of the one that stands for its stack,
+  in the stack's order, for `action`: what a person means who chose a stack's tile. Only files
+  `auth` may read come along, and only those out of the trash unless the action is `:restore`.
+  `:links` gives each stack's one address, and `:stack` and `:unstack` take stacks as they are,
+  so for those `ids` are left alone.
+  """
+  @spec whole_stacks([String.t()], action(), Scope.t() | nil) :: [String.t()]
+  def whole_stacks(ids, action, _auth) when action in [:links, :stack, :unstack],
+    do: clean_ids(ids)
+
+  def whole_stacks(ids, action, auth) do
+    ids = clean_ids(ids)
+
+    stacked =
+      StorageFile
+      |> where([f], f.uuid in ^ids and not is_nil(f.stack_uuid))
+      |> select([f], {f.uuid, f.stack_uuid})
+      |> repo().all()
+      |> Map.new()
+
+    if stacked == %{},
+      do: ids,
+      else: expand(ids, stacked, members(Enum.uniq(Map.values(stacked)), action, auth))
+  end
+
+  # Each stack's files the person may read, in its order.
+  defp members(stack_uuids, action, auth) do
+    StorageFile
+    |> where([f], f.stack_uuid in ^stack_uuids)
+    |> where([f], f.system_managed == false and is_nil(f.parent_file_uuid))
+    |> then(&if(action == :restore, do: &1, else: where(&1, [f], is_nil(f.trashed_at))))
+    |> order_by([f], asc: f.stack_position, asc: f.uuid)
+    |> repo().all()
+    |> Enum.filter(&Libraries.can?(auth, &1, :read))
+    |> Enum.group_by(& &1.stack_uuid, & &1.uuid)
+  end
+
+  defp expand(ids, stacked, members) do
+    ids
+    |> Enum.flat_map(fn id ->
+      case stacked[id] do
+        nil -> [id]
+        stack -> Map.get(members, stack, [id])
+      end
+    end)
+    |> Enum.uniq()
+    |> Enum.take(@limit)
   end
 
   defp refusal(id, nil, reason), do: %{id: id, name: nil, reason: reason}
@@ -282,6 +353,18 @@ defmodule PhoenixKitPhotos.Bulk do
   defp check_action(_action, %{trashed_at: at}, _rights, _target, _present) when not is_nil(at),
     do: {:refused, :trashed}
 
+  defp check_action(:stack, file, rights, _target, _present) do
+    if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
+  end
+
+  defp check_action(:unstack, file, rights, _target, _present) do
+    cond do
+      is_nil(file.stack_uuid) -> {:refused, :not_stacked}
+      may?(rights, file, :edit) -> :ok
+      true -> {:refused, :not_allowed}
+    end
+  end
+
   defp check_action(:tag, file, rights, _target, _present) do
     if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
   end
@@ -410,19 +493,68 @@ defmodule PhoenixKitPhotos.Bulk do
           failed: [refusal()],
           created: [String.t()]
         }
-  def run(%{action: action, files: files} = plan, opts \\ []) do
+  def run(plan, opts \\ [])
+
+  # One stack of all the plan's files: it is made whole or not at all.
+  def run(%{action: :stack, files: files, auth: auth} = plan, opts) do
+    uuids = Enum.map(files, & &1.uuid)
+
+    result =
+      case files != [] && Stacks.create(uuids, auth, %{title: plan[:title]}) do
+        {:ok, _stack} ->
+          %{action: :stack, done: uuids, failed: [], created: []}
+
+        {:error, reason} ->
+          failed = Enum.map(files, &refusal(&1.uuid, &1, stack_failure(reason)))
+          %{action: :stack, done: [], failed: failed, created: []}
+
+        false ->
+          %{action: :stack, done: [], failed: [], created: []}
+      end
+
+    log(plan, result, opts)
+    result
+  end
+
+  # Each stack among the files, taken apart once.
+  def run(%{action: :unstack, files: files, auth: auth} = plan, opts) do
+    result =
+      files
+      |> Enum.group_by(& &1.stack_uuid)
+      |> Enum.reduce(%{action: :unstack, done: [], failed: [], created: []}, fn {stack, chosen},
+                                                                                acc ->
+        case Stacks.unstack(stack, auth) do
+          {:ok, uuids} ->
+            %{acc | done: acc.done ++ uuids}
+
+          {:error, reason} ->
+            failed = Enum.map(chosen, &refusal(&1.uuid, &1, stack_failure(reason)))
+            %{acc | failed: acc.failed ++ failed}
+        end
+      end)
+
+    log(plan, result, opts)
+    result
+  end
+
+  def run(%{action: action, files: files} = plan, opts) do
     progress = Keyword.get(opts, :on_progress, fn _done, _total -> :ok end)
     total = length(files)
 
     result =
       files
       |> Enum.with_index(1)
-      |> Enum.reduce(%{action: action, done: [], failed: [], created: []}, fn {file, at}, acc ->
+      |> Enum.reduce(%{action: action, done: [], failed: [], created: [], pairs: []}, fn {file,
+                                                                                          at},
+                                                                                         acc ->
         acc = record(acc, file, apply_safely(plan, file))
         progress.(at, total)
         acc
       end)
 
+    if action in [:copy, :move], do: restack(plan, files, Map.new(result.pairs))
+
+    result = Map.delete(result, :pairs)
     log(plan, result, opts)
 
     %{
@@ -433,9 +565,51 @@ defmodule PhoenixKitPhotos.Bulk do
     }
   end
 
+  defp stack_failure(:forbidden), do: :not_allowed
+  defp stack_failure(:not_found), do: :not_found
+  defp stack_failure(:not_stackable), do: :trashed
+  defp stack_failure(reason) when reason in [:too_few, :too_many, :mixed_libraries], do: reason
+  defp stack_failure(_other), do: :failed
+
+  # Copies of a stack's files are a stack in the target library too: in the order of the
+  # original, with its title and description. A stack of which fewer than two files were
+  # copied has nothing to stack. Failing to stack leaves the copies as single files.
+  # `copies` maps a file's uuid to its copy's.
+  @doc false
+  def restack(%{auth: auth}, files, copies) do
+    files
+    |> Enum.reject(&is_nil(&1.stack_uuid))
+    |> Enum.group_by(& &1.stack_uuid)
+    |> Enum.each(fn {stack_uuid, members} ->
+      copied =
+        members
+        |> Enum.sort_by(&{&1.stack_position, &1.uuid})
+        |> Enum.map(&copies[&1.uuid])
+        |> Enum.reject(&is_nil/1)
+
+      with [_, _ | _] <- copied,
+           %{} = stack <- Stacks.get(stack_uuid),
+           {:error, reason} <-
+             Stacks.create(copied, auth, %{title: stack.title, description: stack.description},
+               keep_order: true
+             ) do
+        Logger.warning("Photos: could not stack the copies of #{stack_uuid}: #{inspect(reason)}")
+      end
+    end)
+  rescue
+    error ->
+      Logger.warning("Photos: could not stack copies: #{Exception.message(error)}")
+      :ok
+  end
+
   defp record(acc, file, {:ok, %StorageFile{uuid: created}})
        when created != file.uuid do
-    %{acc | done: [file.uuid | acc.done], created: [created | acc.created]}
+    %{
+      acc
+      | done: [file.uuid | acc.done],
+        created: [created | acc.created],
+        pairs: [{file.uuid, created} | acc.pairs]
+    }
   end
 
   defp record(acc, file, {:ok, _result}), do: %{acc | done: [file.uuid | acc.done]}
@@ -611,6 +785,10 @@ defmodule PhoenixKitPhotos.Bulk do
   def reason_text(:in_use), do: gettext("in use elsewhere on the site")
   def reason_text(:quota_exceeded), do: gettext("no room left in that library")
   def reason_text(:incompatible), do: gettext("that library keeps its files elsewhere")
+  def reason_text(:not_stacked), do: gettext("not in a stack")
+  def reason_text(:too_few), do: gettext("a stack needs at least two photos")
+  def reason_text(:too_many), do: gettext("too many photos for one stack")
+  def reason_text(:mixed_libraries), do: gettext("not all in one library")
   def reason_text(_other), do: gettext("could not be done")
 
   defp repo, do: RepoHelper.repo()

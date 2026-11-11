@@ -314,6 +314,99 @@ defmodule PhoenixKitPhotos.BulkTest do
     end
   end
 
+  describe "stacks" do
+    alias PhoenixKit.Modules.Storage.Stacks
+
+    defp pages(ctx, n) do
+      for i <- 1..n do
+        photo(ctx, %{
+          original_file_name: "page #{i}.jpg",
+          taken_at: DateTime.add(~U[2018-07-14 10:00:00Z], i, :minute)
+        })
+      end
+    end
+
+    test "a chosen stack means all of its files, in its order, out of the trash", ctx do
+      [p1, p2, p3] = pages(ctx, 3)
+      single = photo(ctx)
+      {:ok, _} = Stacks.create([p3.uuid, p1.uuid, p2.uuid], ctx.scope)
+      {:ok, _} = Storage.trash_file(p2)
+
+      assert Bulk.whole_stacks([single.uuid, p1.uuid], :trash, ctx.scope) ==
+               [single.uuid, p1.uuid, p3.uuid]
+
+      assert Bulk.whole_stacks([p1.uuid], :restore, ctx.scope) == [p1.uuid, p2.uuid, p3.uuid]
+
+      # A stack's one address; stacking and unstacking take stacks as they are.
+      for action <- [:links, :stack, :unstack] do
+        assert Bulk.whole_stacks([p1.uuid], action, ctx.scope) == [p1.uuid]
+      end
+
+      # Only what the person may read comes along.
+      assert Bulk.whole_stacks([p1.uuid], :download, scope_for(ctx.stranger)) == [p1.uuid]
+    end
+
+    test "stack and unstack, for someone who may change the files", ctx do
+      [p1, p2, p3] = pages(ctx, 3)
+      ids = [p2.uuid, p1.uuid, p3.uuid]
+
+      refused = Bulk.plan(:stack, ids, scope_for(ctx.stranger), %{"title" => "x"})
+      assert refused.files == []
+
+      plan = Bulk.plan(:stack, ids, ctx.scope, %{"title" => "  Lease  "})
+      assert plan.title == "Lease"
+      assert %{done: done, failed: []} = Bulk.run(plan)
+      assert length(done) == 3
+
+      stack = Stacks.get(reload(p1).stack_uuid)
+      assert stack.title == "Lease"
+      assert Enum.map(Stacks.files(stack.uuid), & &1.uuid) == [p1.uuid, p2.uuid, p3.uuid]
+
+      single = photo(ctx)
+      plan = Bulk.plan(:unstack, [p1.uuid, single.uuid], ctx.scope)
+      assert [%{reason: :not_stacked}] = plan.refused
+      assert %{done: undone} = Bulk.run(plan)
+      assert Enum.sort(undone) == Enum.sort([p1.uuid, p2.uuid, p3.uuid])
+      assert is_nil(reload(p2).stack_uuid)
+    end
+
+    test "a stack of one is refused, and says why", ctx do
+      [p1] = pages(ctx, 1)
+      plan = Bulk.plan(:stack, [p1.uuid], ctx.scope)
+      assert %{done: [], failed: [%{reason: :too_few}]} = Bulk.run(plan)
+      assert Bulk.reason_text(:too_few) =~ "two"
+    end
+
+    test "copies of a stack are a stack in the target, in the same order, with its text", ctx do
+      [p1, p2, p3] = pages(ctx, 3)
+      {:ok, _} = Stacks.create([p1.uuid, p2.uuid, p3.uuid], ctx.scope, %{title: "Lease"})
+      {:ok, _} = Stacks.make_cover(p3.uuid, ctx.scope)
+      other = library_fixture(ctx.owner)
+
+      copies =
+        Map.new([p1, p2, p3], fn file ->
+          {file.uuid, file_fixture(ctx.owner, %{library_uuid: other.uuid}).uuid}
+        end)
+
+      files = Enum.map([p1, p2, p3], &reload/1)
+      Bulk.restack(%{auth: ctx.scope}, files, copies)
+
+      stack = Stacks.get(TestRepo.get!(StorageFile, copies[p1.uuid]).stack_uuid)
+      assert stack.title == "Lease"
+      assert stack.library_uuid == other.uuid
+
+      assert Enum.map(Stacks.files(stack.uuid), & &1.uuid) ==
+               [copies[p3.uuid], copies[p1.uuid], copies[p2.uuid]]
+
+      # One copy of a stack is no stack.
+      [q1, q2] = pages(ctx, 2)
+      {:ok, _} = Stacks.create([q1.uuid, q2.uuid], ctx.scope)
+      lone = file_fixture(ctx.owner, %{library_uuid: other.uuid})
+      Bulk.restack(%{auth: ctx.scope}, [reload(q1), reload(q2)], %{q1.uuid => lone.uuid})
+      assert is_nil(TestRepo.get!(StorageFile, lone.uuid).stack_uuid)
+    end
+  end
+
   test "tags/1 cleans what a person typed" do
     assert Bulk.tags(" a, b ,, a ") == ["a", "b"]
     assert Bulk.tags(["x", 1, nil]) == ["x"]

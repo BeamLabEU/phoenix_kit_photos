@@ -69,3 +69,56 @@ test("a pending file's tile is marked, and shows only the picture offered for it
   withdrawPreviews("blob:mine")
   assert.equal(pickSource(item, 200, 200, {}), undefined)
 })
+
+// A tile with what markStack touches: its badge and name, its label and title.
+function stackTile() {
+  globalThis.document = { createElement: element, documentElement: { lang: "en" } }
+  const node = element("button")
+  node.attributes = {}
+  node.setAttribute = (name, value) => { node.attributes[name] = value }
+  node.removeAttribute = name => { delete node.attributes[name] }
+  const find = (n, cls) => {
+    if (n.className === cls) return n
+    for (const child of n.children || []) {
+      const found = find(child, cls)
+      if (found) return found
+    }
+    return null
+  }
+  node.querySelector = selector => find(node, selector.replace(/^\./, ""))
+  fillTile(node, { id: "f1", kind: "image", name: "page 1.jpg" })
+  return node
+}
+
+test("a stack's tile wears its count and says what it is; unstacked, it is a photo again", async () => {
+  const { markStack } = await import("../js/tiles.js")
+  try {
+    const node = stackTile()
+    const item = { id: "f1", kind: "image", name: "page 1.jpg", stack: { id: "s1", count: 8, title: "Lease" } }
+
+    markStack(node, item, "Stack of %{count} photos")
+    assert.equal(node.dataset.stack, "s1")
+    assert.equal(node.querySelector(".pkt-stack").textContent, "8")
+    assert.equal(node.attributes["aria-label"], "Lease · Stack of 8 photos")
+    assert.equal(node.title, "Lease")
+    assert.equal(node.querySelector(".pkt-name").textContent, "Lease")
+
+    // No title: the label says what it is, the name stays the photo's.
+    markStack(node, { ...item, stack: { id: "s1", count: 3, title: null } }, "Stack of %{count} photos")
+    assert.equal(node.attributes["aria-label"], "Stack of 3 photos")
+    assert.equal(node.querySelector(".pkt-name").textContent, "page 1.jpg")
+
+    // The same tile, reused for the photo once unstacked (or left alone in its stack).
+    markStack(node, { id: "f1", kind: "image", name: "page 1.jpg", stack: null })
+    assert.equal(node.dataset.stack, undefined)
+    assert.equal(node.querySelector(".pkt-stack").textContent, "")
+    assert.equal(node.attributes["aria-label"], "Open photo")
+    assert.equal(node.attributes.title, undefined)
+
+    // A stack of one is a photo.
+    markStack(node, { ...item, stack: { id: "s1", count: 1, title: "x" } })
+    assert.equal(node.dataset.stack, undefined)
+  } finally {
+    delete globalThis.document
+  }
+})

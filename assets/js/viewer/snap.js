@@ -147,6 +147,26 @@ export class SnapEngine {
     }
   }
 
+  /** Turn to `index` at once, with no scrolling. */
+  goTo(index) {
+    if (!this.root || index < 0 || index >= this.store.total || index === this.current) return
+    this.pauseIn(this.pages[1])
+    this.current = index
+    this.fill()
+    this.center()
+    this.showCount()
+    this.activate()
+    this.host.onChange(this.current)
+  }
+
+  /** The pages beside the current one may be others now: draw them again. */
+  redraw() {
+    if (!this.root) return
+    this.draw(this.pages[0], this.current - 1)
+    this.draw(this.pages[2], this.current + 1)
+    this.showCount()
+  }
+
   // --- pages -----------------------------------------------------------
 
   fill() {

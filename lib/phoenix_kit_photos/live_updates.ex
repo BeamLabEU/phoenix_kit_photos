@@ -60,6 +60,7 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   def on_mount(ids, _params, _session, socket) do
     if Phoenix.LiveView.connected?(socket) do
       Storage.subscribe_to_file_events()
+      subscribe_file_changes()
       subscribe_uploads()
     end
 
@@ -67,6 +68,18 @@ defmodule PhoenixKitPhotos.LiveUpdates do
       Phoenix.LiveView.attach_hook(socket, __MODULE__, :handle_info, fn
         {:phoenix_kit_photos_upload, component, ref, event}, socket when is_binary(component) ->
           Phoenix.LiveView.send_update(PhotoUploader, id: component, upload_event: {ref, event})
+          {:halt, socket}
+
+        # Stacked, unstacked, dated by hand: the timeline is read again, like for an upload.
+        {:phoenix_kit_files_changed, file_ids}, socket ->
+          for id <- List.wrap(ids) do
+            Phoenix.LiveView.send_update(PhotoTimeline,
+              id: id,
+              refresh: true,
+              file_uuids: List.wrap(file_ids)
+            )
+          end
+
           {:halt, socket}
 
         {event, file_ids}, socket when event in @events ->
@@ -110,6 +123,10 @@ defmodule PhoenixKitPhotos.LiveUpdates do
 
   # One topic per page, so a result reaches only the page whose uploader staged the file.
   # A page mounted twice in one process (a nested LiveView has its own) keeps its first.
+  # Stacks and dates set by hand are announced on a topic of their own
+  # (`Storage.subscribe_to_file_changes/0`).
+  defp subscribe_file_changes, do: Storage.subscribe_to_file_changes()
+
   defp subscribe_uploads do
     if is_nil(upload_topic()) do
       topic = "phoenix_kit_photos:uploads:" <> Base.url_encode64(:crypto.strong_rand_bytes(12))

@@ -21,6 +21,8 @@
 //   open(index)         show the viewer on `index`
 //   close()             close it (animated if the engine animates)
 //   goTo(index)         (optional) turn to `index`, when the address names another photo
+//   redraw()            (optional) the slides beside the current one may be others now
+//                       (a stack's pages opened in line): draw them again
 //   destroy()           remove it at once, no callbacks needed
 //   refresh(indices)    slides at these indices arrived: draw them where a
 //                       placeholder was

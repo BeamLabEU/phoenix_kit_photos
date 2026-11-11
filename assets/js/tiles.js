@@ -74,7 +74,41 @@ export function fillTile(node, item) {
   // Shown only while the file's sizes are being made (`markPending`).
   paper.appendChild(span("pkt-pending"))
 
-  node.append(paper, caption, meta, span("pkt-badge", formatDuration(item.duration)), span("pkt-check"))
+  node.append(
+    paper,
+    caption,
+    meta,
+    span("pkt-badge", formatDuration(item.duration)),
+    span("pkt-stack"),
+    span("pkt-check")
+  )
+}
+
+/**
+ * A tile that stands for a stack (`item.stack`: its id, how many photos, its title) wears
+ * a badge with the count, says so in its label, and in the styles that list names shows
+ * the stack's title. Called on every placement: a tile is reused when its photo is
+ * stacked or unstacked. `label` is the translated "Stack of %{count} photos".
+ */
+export function markStack(node, item, label = "Stack of %{count} photos") {
+  const stack = item.stack && item.stack.count >= 2 ? item.stack : null
+  const badge = node.querySelector(".pkt-stack")
+  const name = node.querySelector(".pkt-name")
+
+  if (stack) {
+    node.dataset.stack = stack.id
+    if (badge) badge.textContent = String(stack.count)
+    const what = label.replace("%{count}", String(stack.count))
+    node.setAttribute("aria-label", stack.title ? `${stack.title} · ${what}` : what)
+    node.title = stack.title || ""
+    if (name) name.textContent = stack.title || item.name || name.textContent
+  } else if (node.dataset.stack !== undefined) {
+    delete node.dataset.stack
+    if (badge) badge.textContent = ""
+    node.setAttribute("aria-label", item.kind === "video" ? "Open video" : "Open photo")
+    node.removeAttribute("title")
+    if (name && item.name) name.textContent = item.name
+  }
 }
 
 /**

@@ -8,12 +8,14 @@ import {
 import { STYLES, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
 import { installTimelineCss } from "./timeline_css.js"
 import { drawCalendar, today, weekLocale, weekStartFor } from "./calendar.js"
-import { fillTile, markPending, pickSource, swapImage } from "./tiles.js"
+import { fillTile, markPending, markStack, pickSource, swapImage } from "./tiles.js"
 import { onPreviewOffered } from "./upload_previews.js"
 import { morph } from "./morph.js"
 import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
-import { engineFor, loadEngine } from "./viewer/engine.js"
+import { StackedList } from "./stack_list.js"
+import { StackStrip } from "./stack_strip.js"
+import { dialogOpen, engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
 import { VideoController } from "./viewer/video.js"
 
@@ -183,6 +185,7 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:jump`, ({ id }) => this.jumpTo(id))
     this.handleEvent(`${prefix}:view`, (payload) => this.applyView(payload))
     this.handleEvent(`${prefix}:slides`, (payload) => this.setSlides(payload))
+    this.handleEvent(`${prefix}:stack`, (payload) => this.setStack(payload))
     this.handleEvent(`${prefix}:aspects`, (payload) => this.setAspects(payload))
     this.handleEvent(`${prefix}:range`, (payload) => this.applyRange(payload))
     this.handleEvent(`${prefix}:selection`, (payload) => this.applySelection(payload))
@@ -240,6 +243,8 @@ export const PhotoTimeline = {
     // The page is going: the viewer's closing must not touch the address.
     this.addressClosing = true
     if (this.pager && this.pager.destroy) this.pager.destroy()
+    if (this.strip) this.strip.destroy()
+    this.stopStackKeys()
     this.pool.clear()
   },
 
@@ -1001,18 +1006,24 @@ export const PhotoTimeline = {
     this.slideRevision = payload.revision
     const open = this.pager !== true && this.pager.isOpen
     const index = open ? this.pager.index : -1
-    const slide = open ? this.slides.get(index) : null
-    const at = this.slides.rebase(payload.sections, open ? { index, slide } : null)
+    // The viewer's position is in the list with stacks opened; the timeline's is the cover's.
+    const where = open ? this.stacked().fromView(index) : null
+    const shown = open ? this.stacked().get(index) : null
+    const slide = open ? this.slides.get(where.at) : null
+    const at = this.slides.rebase(payload.sections, open ? { index: where.at, slide } : null)
+    // A stack's pages may have changed (a photo taken out, a new cover): asked for again.
+    this.stacked().asked.clear()
     if (!open) return
 
-    if (at >= 0 && at !== index && this.pager.goTo) {
-      this.turningTo = at
-      this.pager.goTo(at)
+    const to = at >= 0 ? this.stacked().toView(at, where.page) : -1
+    if (to >= 0 && to !== index && this.pager.goTo) {
+      this.turningTo = to
+      this.pager.goTo(to)
     }
     // A photo added earlier in the same day moves the one on screen along: once that day's
     // slides arrive, `setSlides` turns to where it went.
-    this.following = slide ? slide.id : null
-    this.prefetchSlides(at >= 0 ? at : index)
+    this.following = shown ? shown.id : null
+    this.prefetchSlides(at >= 0 ? at : where.at)
   },
 
   prefetchSlides(center, radius = 8) {
@@ -1029,6 +1040,38 @@ export const PhotoTimeline = {
     }
   },
 
+  /** Ask for the pages of the stacks within `radius` of timeline position `center`. */
+  prefetchStacks(center, radius = 3) {
+    if (!this.pagerEnabled() || !Number.isFinite(center)) return
+    for (const { id, cover } of this.stacked().wanted(center - radius, center + radius)) {
+      this.send("timeline:stack", { stack: id, cover, want: wantWidth(window), revision: this.slideRevision })
+    }
+  },
+
+  /** A stack's pages arrived: they open in line, and the viewer stays on the photo it shows. */
+  setStack({ stack, cover, pages, error, revision }) {
+    if (revision !== this.slideRevision) return
+    if (error) {
+      this.stacked().forget(stack)
+      return
+    }
+
+    const open = this.pager && this.pager !== true && this.pager.isOpen
+    const shown = open ? this.stacked().get(this.pager.index) : null
+    this.stacked().expand(stack, cover, pages || [])
+    if (!open) return
+
+    const want = this.following ? this.stacked().indexOf(this.following) : -1
+    const at = want >= 0 ? want : shown ? this.stacked().indexOf(shown.id) : -1
+    if (want >= 0) this.following = null
+    if (at >= 0 && at !== this.pager.index && this.pager.goTo) {
+      this.turningTo = at
+      this.pager.goTo(at)
+    }
+    if (this.pager.redraw) this.pager.redraw()
+    this.showStrip(this.pager.index)
+  },
+
   setSlides({ window: day, from, items, error, revision }) {
     if (revision !== this.slideRevision) return
     if (error) {
@@ -1038,7 +1081,7 @@ export const PhotoTimeline = {
 
     const added = this.slides.put(day, from, items || [])
     if (this.following && this.pager && this.pager !== true && this.pager.isOpen) {
-      const at = this.slides.indexOf(this.following)
+      const at = this.stacked().indexOf(this.following)
       if (at >= 0) {
         this.following = null
         if (at !== this.pager.index && this.pager.goTo) {
@@ -1047,13 +1090,16 @@ export const PhotoTimeline = {
         }
       }
     }
-    if (this.pager && this.pager.isOpen) this.pager.refresh(added)
+    if (this.pager && this.pager.isOpen) {
+      this.pager.refresh(added.map((at) => this.stacked().toView(at)))
+      this.prefetchStacks(this.stacked().fromView(this.pager.index).at)
+    }
 
     if (this.pendingOpen !== null && this.slides.has(this.pendingOpen)) {
       const index = this.pendingOpen
       this.pendingOpen = null
       clearTimeout(this.openTimer)
-      this.openPager(index)
+      this.openPager(this.stacked().toView(index))
     }
   },
 
@@ -1065,7 +1111,7 @@ export const PhotoTimeline = {
     }
 
     if (this.slides.has(global)) {
-      this.openPager(global)
+      this.openPager(this.stacked().toView(global))
       return
     }
 
@@ -1084,11 +1130,12 @@ export const PhotoTimeline = {
 
   // The engine is loaded when first used; esbuild keeps it in the one bundle, and
   // the import keeps this file loadable without a bundler (the unit tests).
+  // `index` is a position in the viewer's list (`this.list`: the timeline with stacks opened).
   async openPager(index) {
     if (this.pager) return
     const id = this.pagerEngine()
     if (!id) return
-    this.prefetchSlides(index)
+    this.prefetchSlides(this.stacked().fromView(index).at)
 
     this.pager = true // taken while the engine loads, so a second click does not open another
     let Engine
@@ -1098,14 +1145,14 @@ export const PhotoTimeline = {
       this.pager = null
       console.error("PhotoTimeline: the viewer engine did not load", id, error)
       this.applyDeferred()
-      const slide = this.slides.get(index)
+      const slide = this.stacked().get(index)
       if (slide) this.send("timeline:open", { id: slide.id })
       return
     }
 
     this.video = this.video || new VideoController()
     this.pager = new Engine({
-      store: this.slides,
+      store: this.stacked(),
       video: this.video,
       thumbOf: (slideId) => this.thumbOf(slideId),
       tileImage: (i) => this.tileImage(i),
@@ -1114,19 +1161,102 @@ export const PhotoTimeline = {
         // The person turned the page: stop following a photo an upload moved.
         if (i !== this.turningTo) this.following = null
         this.turningTo = null
-        this.prefetchSlides(i)
-        this.reveal(i)
+        const at = this.stacked().fromView(i).at
+        this.prefetchSlides(at)
+        this.prefetchStacks(at)
+        this.reveal(at)
         this.syncAddress(i)
+        this.showStrip(i)
       },
       onClose: () => {
         this.pager = null
         this.following = null
+        if (this.strip) this.strip.hide()
+        this.stopStackKeys()
         this.applyDeferred()
         this.leaveAddress()
       }
     })
     this.pager.open(index)
     this.syncAddress(index)
+    this.startStackKeys()
+    this.prefetchStacks(this.stacked().fromView(index).at)
+    this.showStrip(index)
+  },
+
+  // --- a stack's pages in the viewer ---------------------------------------
+
+  /**
+   * The viewer's list: the timeline's slides with each stack whose pages are here opened in
+   * line (`stack_list.js`). Made again whenever the slides are (a new index).
+   */
+  stacked() {
+    if (!this.list || this.list.store !== this.slides) this.list = new StackedList(this.slides)
+    return this.list
+  },
+
+  /** The strip over a stack's photo (`stack_strip.js`), or nothing off a stack. */
+  showStrip(index) {
+    const info = this.pager && this.pager !== true && this.pager.isOpen ? this.stacked().pageInfo(index) : null
+    if (!info) {
+      if (this.strip) this.strip.hide()
+      return
+    }
+    if (!this.strip) {
+      const root = this.root()
+      let strings = {}
+      try {
+        strings = JSON.parse(root?.dataset.stackStrings || "{}")
+      } catch (_error) {
+        strings = {}
+      }
+      this.strip = new StackStrip({
+        strings,
+        editable: root?.dataset.stackEdit === "true",
+        onGo: (to) => this.turnTo(to),
+        onSkip: (direction) => this.skipStack(direction),
+        onEdit: (shown) => {
+          const slide = this.pager && this.pager !== true ? this.stacked().get(this.pager.index) : null
+          if (slide) this.send("timeline:stack_edit", { stack: shown.id, file: slide.id })
+        }
+      })
+    }
+    this.strip.update(info)
+  },
+
+  turnTo(index) {
+    if (!this.pager || this.pager === true || !this.pager.goTo) return
+    if (index < 0 || index >= this.stacked().total || index === this.pager.index) return
+    this.pager.goTo(index)
+  },
+
+  /** Past the stack on screen: to the photo after it (1) or before it (-1). */
+  skipStack(direction) {
+    if (!this.pager || this.pager === true) return
+    const info = this.stacked().pageInfo(this.pager.index)
+    if (!info) return
+    this.turnTo(direction > 0 ? info.last + 1 : info.first - 1)
+  },
+
+  // ↓ and ↑ (and Page Down, Page Up) skip a stack while the viewer is on one; the engine's own
+  // keys turn single pages. A dialog over the viewer has the keys to itself.
+  startStackKeys() {
+    if (this.onStackKey) return
+    this.onStackKey = (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || dialogOpen()) return
+      const direction = { ArrowDown: 1, PageDown: 1, ArrowUp: -1, PageUp: -1 }[event.key]
+      if (!direction || !this.pager || this.pager === true || !this.stacked().pageInfo(this.pager.index)) return
+      event.preventDefault()
+      event.stopPropagation()
+      this.skipStack(direction)
+    }
+    document.addEventListener("keydown", this.onStackKey, true)
+  },
+
+  stopStackKeys() {
+    if (!this.onStackKey) return
+    document.removeEventListener("keydown", this.onStackKey, true)
+    this.onStackKey = null
   },
 
   // --- addresses: the page's address follows the swipe viewer -------------
@@ -1160,7 +1290,7 @@ export const PhotoTimeline = {
    */
   syncAddress(index) {
     const paths = this.addresses()
-    const slide = this.slides.get(index)
+    const slide = this.stacked().get(index)
     if (!paths || !slide || !slide.code) return
 
     const to = paths.photo.replace(":code", encodeURIComponent(slide.code))
@@ -1213,7 +1343,7 @@ export const PhotoTimeline = {
   /** The host says which photo its address names: `{ id, global }`, or `{ id: null }` for none. */
   applyView(payload) {
     if (!this.addresses()) return
-    const { id, global } = payload || {}
+    const { id, global, page } = payload || {}
 
     if (!id) {
       this.view = null
@@ -1228,7 +1358,7 @@ export const PhotoTimeline = {
     const at = this.addressSent && this.addressSent.get(id)
     if (this.pager && at && Date.now() - at < ECHO_MS) return
 
-    this.view = { id, global }
+    this.view = { id, global, page: Number.isInteger(page) ? page : 0 }
     this.openFromAddress()
   },
 
@@ -1243,16 +1373,22 @@ export const PhotoTimeline = {
     if (this.pager === true) return
     this.view = null
 
+    // A page of a stack is where its stack is; until the stack's pages are here the viewer
+    // opens on its cover and follows on to the page when they arrive (`setStack`).
+    const known = this.stacked().indexOf(view.id)
+    const at = known >= 0 ? known : this.stacked().toView(view.global, view.page)
+    if (known < 0 && view.page > 0) this.following = view.id
+
     if (this.pager) {
-      const slide = this.slides.get(this.pager.index)
+      const slide = this.stacked().get(this.pager.index)
       if (slide && slide.id === view.id) return
-      if (this.pager.goTo) this.pager.goTo(view.global)
+      if (this.pager.goTo) this.pager.goTo(at)
       return
     }
 
     // The address already names it: opening the viewer must not add another entry.
     this.addressOpen = true
-    this.openPager(view.global)
+    this.openPager(at)
   },
 
   thumbOf(id) {
@@ -1261,8 +1397,9 @@ export const PhotoTimeline = {
     return img ? img.currentSrc || img.src : undefined
   },
 
+  // The tile the viewer flies back to: a stack's page goes back to the stack's tile.
   tileImage(index) {
-    const slide = this.slides.get(index)
+    const slide = this.slides.get(this.stacked().fromView(index).at)
     const node = slide && this.pool.get(slide.id)
     return node ? node.querySelector("img") : null
   },
@@ -1417,6 +1554,7 @@ export const PhotoTimeline = {
 
     node.dataset.global = String(global)
     markPending(node, item)
+    markStack(node, item, this.root()?.dataset.stackLabel)
     node.toggleAttribute("data-selected", this.isSelected(item.id))
     node.style.position = "absolute"
     node.style.left = `${x}px`

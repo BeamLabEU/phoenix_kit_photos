@@ -40,6 +40,15 @@ defmodule PhoenixKitPhotos.Timeline do
   `state` is `:ready` when the index has photos. An empty library is
   `:empty`, `:processing` (an upload is not active yet), or `:backfill`
   (capture dates are still being filled in).
+
+  ## Stacks
+
+  A stack (core's `PhoenixKit.Modules.Storage.Stacks`) takes one place in the timeline:
+  the index, the windows, the slides, the positions and the ranges a selection asks for
+  count only its **cover**, the first of its files this reader may see (`listed/2`).
+  An item or a slide that is a cover with at least one more file says so in `stack`
+  (`%{id, count, title}`); `stack_slides/4` gives all of a stack's files for the viewer.
+  `viewer_file/3` and `files_query/2` still see every file.
   """
 
   use Gettext, backend: PhoenixKitPhotos.Gettext
@@ -48,8 +57,10 @@ defmodule PhoenixKitPhotos.Timeline do
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
   alias PhoenixKit.Modules.Storage.FileInstance
+  alias PhoenixKit.Modules.Storage.FileStack
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Modules.Storage.Shape
+  alias PhoenixKit.Modules.Storage.Stacks
   alias PhoenixKit.Modules.Storage.URLSigner
   alias PhoenixKit.RepoHelper
   alias PhoenixKit.Users.Auth.Scope
@@ -98,8 +109,15 @@ defmodule PhoenixKitPhotos.Timeline do
           code: String.t() | nil,
           name: String.t() | nil,
           size: non_neg_integer() | nil,
-          duration: non_neg_integer() | nil
+          duration: non_neg_integer() | nil,
+          stack: stack() | nil
         }
+
+  @typedoc """
+  The stack an item or a slide stands for: its id, how many of its files this reader may
+  see (two or more), and its title.
+  """
+  @type stack :: %{id: String.t(), count: pos_integer(), title: String.t() | nil}
 
   @type window :: %{section: window_id(), items: [item()]}
 
@@ -249,7 +267,7 @@ defmodule PhoenixKitPhotos.Timeline do
     with :ok <- capture_dates(),
          :ok <- known_library(library_uuid),
          :ok <- reader(auth, library_uuid) do
-      days = library_uuid |> visible(auth) |> day_rows()
+      days = library_uuid |> listed(auth) |> day_rows()
       sections = group_days(days)
       total = Enum.reduce(sections, 0, &(&1.count + &2))
 
@@ -281,7 +299,7 @@ defmodule PhoenixKitPhotos.Timeline do
          :ok <- reader(auth, library_uuid) do
       rows =
         library_uuid
-        |> visible(auth)
+        |> listed(auth)
         |> where([f], not is_nil(f.taken_on))
         |> group_by([f], f.taken_on)
         |> order_by([f], asc: f.taken_on)
@@ -331,7 +349,7 @@ defmodule PhoenixKitPhotos.Timeline do
          {:ok, date, offset} <- parse_window(day) do
       items =
         library_uuid
-        |> visible(auth)
+        |> listed(auth)
         |> where([f], f.taken_on == ^date)
         |> order_by([f], asc: f.taken_at, asc: f.uuid)
         |> offset(^offset)
@@ -366,9 +384,9 @@ defmodule PhoenixKitPhotos.Timeline do
          true <- from >= 0 and from < @window_limit do
       want = want |> max(200) |> min(4096)
 
-      items =
+      files =
         library_uuid
-        |> visible(auth)
+        |> listed(auth)
         |> where([f], f.taken_on == ^date)
         |> order_by([f], asc: f.taken_at, asc: f.uuid)
         |> offset(^(offset + from))
@@ -376,7 +394,11 @@ defmodule PhoenixKitPhotos.Timeline do
         |> preload(instances: ^completed_instances())
         |> repo().all()
         |> Enum.filter(&Libraries.can?(auth, &1, :read))
-        |> Enum.map(&to_slide(&1, auth, want))
+
+      stacks = stacks_of(files, library_uuid, auth)
+
+      items =
+        Enum.map(files, &(&1 |> to_slide(auth, want) |> Map.put(:stack, stacks[&1.stack_uuid])))
 
       {:ok, items}
     else
@@ -405,6 +427,7 @@ defmodule PhoenixKitPhotos.Timeline do
     with {:ok, query} <- files_query(scope, auth) do
       ids =
         query
+        |> covers_only(scope, auth)
         |> where([f], not is_nil(f.taken_on))
         |> of_kind(Keyword.get(opts, :kind))
         |> order_by([f], asc: f.taken_on, asc: f.taken_at, asc: f.uuid)
@@ -417,6 +440,9 @@ defmodule PhoenixKitPhotos.Timeline do
        wanted > limit or (is_nil(to) and length(ids) > limit)}
     end
   end
+
+  defp covers_only(query, {:library, library_uuid}, auth),
+    do: covers(query, library_uuid, auth)
 
   defp of_kind(query, kind) when kind in ["image", "video"],
     do: where(query, [f], f.file_type == ^kind)
@@ -505,6 +531,9 @@ defmodule PhoenixKitPhotos.Timeline do
   the order the timeline shows them (by day, then `taken_at`, then uuid). The browser
   opens the swipe viewer at that position, so an address that names a photo can open on it.
 
+  A file in a stack is where its stack is: the position of the stack's cover. Which of
+  the stack's files it is, is `stack_page/3`.
+
   `{:error, :not_found}` for a file that is not in the library or that `auth` may not read.
   """
   @spec position(scope(), String.t(), Scope.t() | nil) ::
@@ -516,11 +545,12 @@ defmodule PhoenixKitPhotos.Timeline do
          {:ok, uuid} <- Ecto.UUID.cast(uuid),
          %StorageFile{} = file <-
            library_uuid |> visible(auth) |> where([f], f.uuid == ^uuid) |> repo().one(),
-         true <- Libraries.can?(auth, file, :read) do
+         true <- Libraries.can?(auth, file, :read),
+         %StorageFile{} = cover <- cover_of(file, library_uuid, auth) do
       before =
         library_uuid
-        |> visible(auth)
-        |> where(^before_condition(file))
+        |> listed(auth)
+        |> where(^before_condition(cover))
         |> repo().aggregate(:count)
 
       {:ok, before}
@@ -552,6 +582,72 @@ defmodule PhoenixKitPhotos.Timeline do
            (f.taken_at < ^file.taken_at or (f.taken_at == ^file.taken_at and f.uuid < ^file.uuid)))
     )
   end
+
+  @doc """
+  Which of its stack's files a photo is, counting from 0 at the cover, among those `auth`
+  may see: what the viewer opens on when an address names a page of a stack. A file in no
+  stack is page 0.
+  """
+  @spec stack_page(scope(), String.t(), Scope.t() | nil) ::
+          {:ok, non_neg_integer()} | {:error, error()}
+  def stack_page({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
+    with :ok <- reader(auth, library_uuid),
+         {:ok, uuid} <- Ecto.UUID.cast(uuid),
+         %StorageFile{} = file <-
+           library_uuid |> visible(auth) |> where([f], f.uuid == ^uuid) |> repo().one() do
+      {:ok, page_of(file, library_uuid, auth)}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def stack_page(_scope, _uuid, _auth), do: {:error, :not_found}
+
+  @doc """
+  Every file of a stack that `auth` may see, in the stack's order, as slides for the
+  viewer (at most `Stacks.max_files/0`), each with a small `thumb` for the viewer's strip
+  of pages. `{:error, :not_found}` for a stack that is not in the library.
+  """
+  @spec stack_slides(scope(), String.t(), integer(), Scope.t() | nil) ::
+          {:ok, %{stack: stack() | nil, slides: [slide()]}} | {:error, error()}
+  def stack_slides({:library, library_uuid}, stack_uuid, want, auth)
+      when is_binary(library_uuid) and is_integer(want) do
+    with :ok <- known_library(library_uuid),
+         :ok <- reader(auth, library_uuid),
+         {:ok, stack_uuid} <- cast_uuid(stack_uuid),
+         %FileStack{library_uuid: ^library_uuid} = stack <- Stacks.get(stack_uuid) do
+      want = want |> max(200) |> min(4096)
+
+      files =
+        library_uuid
+        |> visible(auth)
+        |> where([f], f.stack_uuid == ^stack_uuid)
+        |> order_by([f], asc: f.stack_position, asc: f.uuid)
+        |> limit(^Stacks.max_files())
+        |> preload(instances: ^completed_instances())
+        |> repo().all()
+        |> Enum.filter(&Libraries.can?(auth, &1, :read))
+
+      slides =
+        Enum.map(files, fn file ->
+          file
+          |> to_slide(auth, want)
+          |> Map.put(:thumb, variant_url(auth, file, min_width: @thumb_min_width, aspect: :crop))
+        end)
+
+      summary =
+        if length(files) >= 2,
+          do: %{id: stack.uuid, count: length(files), title: stack.title}
+
+      {:ok, %{stack: summary, slides: slides}}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def stack_slides(_scope, _stack_uuid, _want, _auth), do: {:error, :not_found}
 
   @doc "Most files `slides/6` returns at once."
   @spec slide_limit() :: pos_integer()
@@ -732,11 +828,90 @@ defmodule PhoenixKitPhotos.Timeline do
     |> repo().exists?()
   end
 
+  # Every file of the library `auth` may see. The binding is named, for `covers/3`.
   defp visible(library_uuid, auth) do
-    StorageFile
+    from(f in StorageFile, as: :file)
     |> where([f], f.library_uuid == ^library_uuid)
     |> apply_base()
     |> restrict(library_uuid, auth)
+  end
+
+  # What a timeline lists: every file in no stack, and of each stack only its cover.
+  defp listed(library_uuid, auth), do: library_uuid |> visible(auth) |> covers(library_uuid, auth)
+
+  # A stack's cover is not stored: it is the first of its files (by `stack_position`) that
+  # this reader may see, so a trashed cover hands over to the next file and is back when
+  # restored, and someone who sees only their own uploads in a shared library gets a cover
+  # and a count from those. Uses `phoenix_kit_files_stack_index`.
+  defp covers(query, library_uuid, auth) do
+    earlier =
+      from(m in StorageFile,
+        where:
+          m.library_uuid == ^library_uuid and m.stack_uuid == parent_as(:file).stack_uuid and
+            (m.stack_position < parent_as(:file).stack_position or
+               (m.stack_position == parent_as(:file).stack_position and
+                  m.uuid < parent_as(:file).uuid)),
+        select: 1
+      )
+      |> apply_base()
+      |> restrict(library_uuid, auth)
+
+    where(query, [file: f], is_nil(f.stack_uuid) or not exists(subquery(earlier)))
+  end
+
+  # The file that stands for `file` in the timeline: itself, or its stack's cover.
+  defp cover_of(%StorageFile{stack_uuid: nil} = file, _library_uuid, _auth), do: file
+
+  defp cover_of(%StorageFile{} = file, library_uuid, auth) do
+    library_uuid
+    |> listed(auth)
+    |> where([f], f.stack_uuid == ^file.stack_uuid)
+    |> limit(1)
+    |> repo().one()
+    |> Kernel.||(file)
+  end
+
+  defp page_of(%StorageFile{stack_uuid: nil}, _library_uuid, _auth), do: 0
+
+  defp page_of(%StorageFile{} = file, library_uuid, auth) do
+    library_uuid
+    |> visible(auth)
+    |> where([f], f.stack_uuid == ^file.stack_uuid)
+    |> where(
+      [f],
+      f.stack_position < ^file.stack_position or
+        (f.stack_position == ^file.stack_position and f.uuid < ^file.uuid)
+    )
+    |> repo().aggregate(:count)
+  end
+
+  # For the covers among `files`: the stack each stands for, when this reader sees two or
+  # more of its files (a stack whose other files are trashed, or not theirs to see, is a
+  # single photo to them).
+  defp stacks_of(files, library_uuid, auth) do
+    case files |> Enum.map(& &1.stack_uuid) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        %{}
+
+      ids ->
+        counts =
+          library_uuid
+          |> visible(auth)
+          |> where([f], f.stack_uuid in ^ids)
+          |> group_by([f], f.stack_uuid)
+          |> select([f], {f.stack_uuid, count(f.uuid)})
+          |> repo().all()
+          |> Map.new()
+
+        titles =
+          from(s in FileStack, where: s.uuid in ^ids, select: {s.uuid, s.title})
+          |> repo().all()
+          |> Map.new()
+
+        for {id, count} <- counts, count >= 2, into: %{} do
+          {id, %{id: id, count: count, title: titles[id]}}
+        end
+    end
   end
 
   defp apply_base(query) do
@@ -812,13 +987,14 @@ defmodule PhoenixKitPhotos.Timeline do
          Libraries.can?(auth, %{library_uuid: library_uuid, user_uuid: uploader}, :read)}
       end)
 
+    files = Enum.filter(files, &readable[&1.user_uuid])
+    stacks = stacks_of(files, library_uuid, auth)
+
     {items, _sizes} =
-      files
-      |> Enum.filter(&readable[&1.user_uuid])
-      |> Enum.map_reduce(%{}, fn file, sizes ->
+      Enum.map_reduce(files, %{}, fn file, sizes ->
         key = {file.file_type, Shape.classify(file)}
         sizes = Map.put_new_lazy(sizes, key, fn -> size_names(file) end)
-        {to_item(file, sizes[key], private?), sizes}
+        {file |> to_item(sizes[key], private?) |> Map.put(:stack, stacks[file.stack_uuid]), sizes}
       end)
 
     items

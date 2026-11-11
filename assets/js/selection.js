@@ -221,7 +221,10 @@ export const selection = {
     const counter = root.querySelector("[data-selection-count]")
     if (counter) counter.textContent = count.toLocaleString(document.documentElement.lang || undefined)
     if (count === 0) this.noteCapped(false)
-    for (const button of root.querySelectorAll("[data-bulk]")) button.disabled = count === 0
+    // Most actions take one item; making a stack takes two (`data-min`).
+    for (const button of root.querySelectorAll("[data-bulk]")) {
+      button.disabled = count < Math.max(1, Number(button.dataset?.min) || 1)
+    }
   },
 
   /** A tile was clicked. */

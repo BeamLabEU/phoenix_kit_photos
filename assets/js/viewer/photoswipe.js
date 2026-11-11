@@ -130,6 +130,18 @@ export class PhotoSwipeEngine {
     }
   }
 
+  /**
+   * The slides beside the current one may be others now (a stack's pages opened in line next
+   * to it): draw them again. The current one is left alone, so it does not blink.
+   */
+  redraw() {
+    if (!this.pswp) return
+    const here = this.pswp.currIndex
+    for (const index of [here - 2, here - 1, here + 1, here + 2]) {
+      if (index >= 0 && index < this.store.total) this.pswp.refreshSlideContent(index)
+    }
+  }
+
   destroy() {
     if (this.pswp) this.pswp.destroy()
   }

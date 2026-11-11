@@ -50,7 +50,7 @@ defmodule PhoenixKitPhotos.Web.Download do
     ids = if signed_in?, do: ids, else: Enum.take(ids, @visitor_files)
 
     if signed_in? or allowed?(conn) do
-      answer(conn, Bulk.plan(:download, ids, scope).files)
+      answer(conn, Bulk.plan(:download, Bulk.whole_stacks(ids, :download, scope), scope).files)
     else
       conn |> send_resp(429, "") |> halt()
     end

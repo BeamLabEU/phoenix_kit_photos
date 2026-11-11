@@ -775,6 +775,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             code: item.code,
             fit: item.fit,
             large: item.large,
+            pending: item[:pending] == true,
             name: item.name,
             size: item.size,
             duration: item.duration

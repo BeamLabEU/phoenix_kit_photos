@@ -228,6 +228,8 @@ export const selection = {
   tileClick(event, node, id) {
     // The click that ends a drag or a hold is not a click.
     if (Date.now() - (this.dragEndedAt || 0) < 60) return
+    // A file whose sizes are still being made has nothing to open or act on yet.
+    if (node.dataset?.pending !== undefined) return
     const global = Number(node.dataset.global)
     if (!this.selectable()) return this.openTile(id, global)
 

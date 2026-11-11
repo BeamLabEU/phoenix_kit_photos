@@ -1,5 +1,5 @@
 import { carriesFiles, filesFromDrop } from "./drop_files.js"
-import { makePreview } from "./upload_previews.js"
+import { makePreview, offerPreview, withdrawPreviews } from "./upload_previews.js"
 
 /**
  * The uploader's hook: the whole window is a drop zone while the hook is mounted.
@@ -26,6 +26,9 @@ import { makePreview } from "./upload_previews.js"
  * tile is for is told by `data-previews` (`[[ref, name, size], …]` for the entries
  * uploading), and `data-refs` lists every file still on its way (uploading, saving,
  * previews being made), so a picture is kept exactly that long and then released.
+ * While a stored file's own sizes are being made (`data-preparing`, `[[ref, file id], …]`)
+ * its picture is also offered to the timeline under the file's id (`upload_previews.js`,
+ * `offerPreview`), which draws the file's tile with it until the real one is ready.
  *
  * Nothing here knows about Elixir, Ecto or PhoenixKit: the contract is the element's
  * data attributes (`data-upload-name`, `data-accept`, `data-batch`,
@@ -220,10 +223,21 @@ export const PhotoUploader = {
     for (const [ref, url] of this.previews) {
       if (live.has(ref)) continue
       this.previews.delete(ref)
+      withdrawPreviews(url)
       revoke(url)
     }
 
+    this.offerPreviews()
+
     this.paintPreviews()
+  },
+
+  // A stored file's picture, under the file's id, for the timeline's tile of it.
+  offerPreviews() {
+    for (const [ref, fileId] of parsePairs(this.el.dataset.preparing)) {
+      const url = this.previews.get(ref)
+      if (url) offerPreview(fileId, url)
+    }
   },
 
   takeHanded(name, size) {
@@ -241,6 +255,7 @@ export const PhotoUploader = {
         if (this.gone || !this.previews.has(ref)) return revoke(url)
         this.previews.set(ref, url)
         this.paintPreviews()
+        this.offerPreviews()
       })
       .catch(() => {})
     return this.previewWork
@@ -260,7 +275,10 @@ export const PhotoUploader = {
 
   releasePreviews() {
     if (!this.previews) return
-    for (const url of this.previews.values()) revoke(url)
+    for (const url of this.previews.values()) {
+      withdrawPreviews(url)
+      revoke(url)
+    }
     this.previews.clear()
     this.handed = []
   },
@@ -385,6 +403,17 @@ function parseRows(json) {
     const rows = JSON.parse(json || "[]")
     if (!Array.isArray(rows)) return []
     return rows.filter(row => Array.isArray(row) && row.length === 3).map(([ref, name, size]) => [String(ref), String(name), size])
+  } catch (_error) {
+    return []
+  }
+}
+
+// `[[ref, file id], …]`.
+function parsePairs(json) {
+  try {
+    const rows = JSON.parse(json || "[]")
+    if (!Array.isArray(rows)) return []
+    return rows.filter(row => Array.isArray(row) && row.length === 2).map(([ref, id]) => [String(ref), String(id)])
   } catch (_error) {
     return []
   }

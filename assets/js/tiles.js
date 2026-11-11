@@ -1,5 +1,7 @@
 // What is inside a tile: the picture and the little things around it.
 
+import { offeredPreview } from "./upload_previews.js"
+
 const SHARP_ENOUGH = 0.75
 
 /** A tilt for a paper print, the same each time for the same photo. */
@@ -69,7 +71,20 @@ export function fillTile(node, item) {
   const meta = span("pkt-meta")
   meta.append(span("pkt-name", item.name || date), span("pkt-sub", facts.filter(Boolean).join(" · ")))
 
+  // Shown only while the file's sizes are being made (`markPending`).
+  paper.appendChild(span("pkt-pending"))
+
   node.append(paper, caption, meta, span("pkt-badge", formatDuration(item.duration)), span("pkt-check"))
+}
+
+/**
+ * A file whose sizes are still being made has a tile and no picture of its own: the tile is
+ * marked (the sheet draws it as being prepared) and shows the picture the uploader made in
+ * this browser, when this is the page that uploaded it.
+ */
+export function markPending(node, item) {
+  if (item.pending === true) node.dataset.pending = ""
+  else delete node.dataset.pending
 }
 
 /**
@@ -78,6 +93,7 @@ export function fillTile(node, item) {
  * that is sharp enough at this screen's density.
  */
 export function pickSource(item, w, h, style, density = 1) {
+  if (item.pending) return offeredPreview(item.id)
   const need = Math.max(w, h) * density * SHARP_ENOUGH
   const square = Math.abs(w - h) < 2 || style.crop && Math.max(w, h) / Math.min(w, h) < 1.25
   if (square && need <= 340 && item.thumb) return item.thumb

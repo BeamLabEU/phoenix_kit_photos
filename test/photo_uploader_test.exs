@@ -59,6 +59,27 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
     |> file_input("#test-uploader-form", :photos, [%{name: name, content: content, type: type}])
   end
 
+  # One of a file's sizes, as stored when it has been made.
+  defp small_size!(file) do
+    original = Storage.get_file_instance_by_name(file.uuid, "original")
+
+    {:ok, _} =
+      Storage.create_file_instance(%{
+        file_uuid: file.uuid,
+        variant_name: "small",
+        file_name: original.file_name <> "_small",
+        mime_type: "image/png",
+        ext: "png",
+        checksum: original.checksum,
+        size: 1,
+        width: 1,
+        height: 1,
+        processing_status: "completed"
+      })
+
+    :ok
+  end
+
   defp make_public(library) do
     library |> Ecto.Changeset.change(visibility: "site") |> TestRepo.update!()
   end
@@ -156,6 +177,19 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
 
       view |> element("button[aria-label='Add photos']") |> render_click()
       assert render(view) =~ "Making previews…"
+
+      # The first news of it is that its date was read: it has a place in the timeline
+      # now, and still no picture.
+      file = file |> Ecto.Changeset.change(status: "active") |> TestRepo.update!()
+
+      Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
+        id: "test-uploader",
+        files_processed: [file.uuid]
+      )
+
+      assert render(view) =~ "Making previews…"
+
+      small_size!(file)
 
       Phoenix.LiveView.send_update(view.pid, PhoenixKitPhotos.Components.PhotoUploader,
         id: "test-uploader",

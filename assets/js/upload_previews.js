@@ -7,6 +7,34 @@
  *
  * The caller revokes the URL (`URL.revokeObjectURL`) when the tile is gone.
  */
+// Pictures of files that are in the library but whose own sizes are not made yet, by file
+// id: the uploader offers them, the timeline draws a tile that is being prepared with one.
+// Only this page's own uploads are here; anyone else sees the plain tile.
+const offered = new Map()
+const listeners = new Set()
+
+export function offerPreview(fileId, url) {
+  if (!fileId || !url || offered.get(fileId) === url) return
+  offered.set(fileId, url)
+  for (const listener of listeners) listener(fileId)
+}
+
+/** The picture offered for a file, or undefined. */
+export function offeredPreview(fileId) {
+  return offered.get(fileId)
+}
+
+/** Takes back every offer of `url`, before it is revoked. */
+export function withdrawPreviews(url) {
+  for (const [fileId, offer] of offered) if (offer === url) offered.delete(fileId)
+}
+
+/** Calls `listener(fileId)` when a picture is offered; returns the way to stop. */
+export function onPreviewOffered(listener) {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 const SIDE = 256
 const VIDEO_TIMEOUT_MS = 5000
 

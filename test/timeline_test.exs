@@ -183,9 +183,16 @@ defmodule PhoenixKitPhotos.TimelineTest do
     test "private libraries receive expiring variant URLs", %{owner: owner, scope: scope} do
       alias PhoenixKit.Modules.Storage.URLSigner
       library = owner |> library_fixture() |> variants_fixture()
-      file_fixture(owner, %{library_uuid: library.uuid})
+      file = file_fixture(owner, %{library_uuid: library.uuid})
 
-      assert {:ok, %{items: [item]}} =
+      # A file just added, none of its sizes made, is on its way: a tile with no picture.
+      assert {:ok, %{items: [%{pending: true, thumb: nil, preview: nil, fit: nil, large: nil}]}} =
+               Timeline.window({:library, library.uuid}, "2018-07-14", scope)
+
+      # Once a run of making them has finished it is an ordinary file again.
+      file |> Ecto.Changeset.change(placed_variant_revision: 1) |> TestRepo.update!()
+
+      assert {:ok, %{items: [%{pending: false} = item]}} =
                Timeline.window({:library, library.uuid}, "2018-07-14", scope)
 
       for url <- [item.thumb, item.preview] do

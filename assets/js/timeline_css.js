@@ -86,7 +86,16 @@ const CSS = `
 .pkt-section-check::after{content:"";position:absolute;left:4.5px;top:1.5px;width:6px;height:10px;border:solid color-mix(in oklab,var(--color-base-content,#000) 55%,transparent);border-width:0 2px 2px 0;transform:rotate(42deg)}
 @media (hover:hover){.pkt-header:hover .pkt-section-check,.pkt-section-check:focus-visible{opacity:1}}
 [data-selecting="true"] .pkt-section-check{opacity:1}
-@media (prefers-reduced-motion:reduce){.pkt-paper,.pkt-paper img,.pkt-meta,.pkt-caption,.pkt-check{transition:none}.pkt-cal{animation:none}}
+.pkt-pending{display:none}
+.pkt-tile[data-pending]{cursor:progress}
+.pkt-tile[data-pending] .pkt-paper{background-image:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--color-base-100,#fff) 70%,transparent) 50%,transparent 70%);background-size:200% 100%;animation:pkt-shimmer 1.6s linear infinite}
+.pkt-tile[data-pending] .pkt-paper img:not([src]){display:none}
+.pkt-tile[data-pending] .pkt-paper img{filter:blur(1.5px) saturate(.85);opacity:.8}
+.pkt-tile[data-pending] .pkt-pending{display:block;position:absolute;left:50%;top:50%;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;border:3px solid #fff;border-top-color:transparent;filter:drop-shadow(0 0 2px #0009);animation:pkt-spin .8s linear infinite;z-index:1}
+.pkt-tile[data-pending] .pkt-check{display:none}
+@keyframes pkt-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+@keyframes pkt-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.pkt-paper,.pkt-paper img,.pkt-meta,.pkt-caption,.pkt-check{transition:none}.pkt-cal{animation:none}.pkt-tile[data-pending] .pkt-paper{animation:none}.pkt-tile[data-pending] .pkt-pending{animation-duration:2.4s}}
 `
 
 let installed = false

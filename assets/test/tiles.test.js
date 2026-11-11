@@ -39,3 +39,33 @@ test("a tile's picture loads at once: the grid only builds tiles that are on scr
     delete globalThis.document
   }
 })
+
+// --- a file whose sizes are still being made ---------------------------------------
+
+test("a pending file's tile is marked, and shows only the picture offered for it", async () => {
+  const { markPending, pickSource } = await import("../js/tiles.js")
+  const { offerPreview, withdrawPreviews, onPreviewOffered } = await import("../js/upload_previews.js")
+  const node = { dataset: {} }
+  const item = { id: "file-1", pending: true, thumb: null, fit: null, preview: null, large: null }
+
+  markPending(node, item)
+  assert.equal(node.dataset.pending, "")
+  assert.equal(pickSource(item, 200, 200, {}), undefined)
+
+  const heard = []
+  const stop = onPreviewOffered(id => heard.push(id))
+  offerPreview("file-1", "blob:mine")
+  offerPreview("file-1", "blob:mine") // told once
+  assert.deepEqual(heard, ["file-1"])
+  assert.equal(pickSource(item, 200, 200, {}), "blob:mine")
+  stop()
+
+  // The real picture wins as soon as the file has one.
+  const ready = { ...item, pending: false, thumb: "/file/1/small_square" }
+  markPending(node, ready)
+  assert.equal("pending" in node.dataset, false)
+  assert.equal(pickSource(ready, 200, 200, {}), "/file/1/small_square")
+
+  withdrawPreviews("blob:mine")
+  assert.equal(pickSource(item, 200, 200, {}), undefined)
+})

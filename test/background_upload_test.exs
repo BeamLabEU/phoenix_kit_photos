@@ -136,7 +136,24 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
       assert has_element?(view, "#bg-uploader-tiles li[data-state=preparing]", "holiday.png")
       assert [file] = library_files(ctx.library)
 
-      # What core says when a file's sizes are ready, relayed by `LiveUpdates`.
+      # What core says when one of a file's sizes is ready, relayed by `LiveUpdates`.
+      original = Storage.get_file_instance_by_name(file.uuid, "original")
+
+      {:ok, _} =
+        Storage.create_file_instance(%{
+          file_uuid: file.uuid,
+          variant_name: "small",
+          file_name: original.file_name <> "_small",
+          mime_type: "image/png",
+          ext: "png",
+          checksum: original.checksum,
+          size: 1,
+          width: 1,
+          height: 1,
+          processing_status: "completed"
+        })
+
+      file |> Ecto.Changeset.change(status: "active") |> TestRepo.update!()
       Storage.broadcast_file_processed(file.uuid)
       # The page hears it, then tells the component: two messages to get through.
       render(view)

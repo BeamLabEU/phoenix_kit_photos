@@ -127,8 +127,15 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # waiting for can be shown now. Their tiles say *Added* for a moment and then go (the
   # next check below), which covers the instant the timeline takes to draw them.
   def update(%{files_processed: uuids}, socket) do
-    uuids = MapSet.new(uuids, &to_string/1)
-    {:ok, mark_shown(socket, &MapSet.member?(uuids, &1.uuid))}
+    # The first news of a file is that its date was read: it has a place in the timeline
+    # then, and no picture yet. Only a file with a size made is shown.
+    uuids = Enum.map(uuids, &to_string/1)
+
+    ours =
+      for item <- socket.assigns.preparing, is_nil(item.shown), item.uuid in uuids, do: item.uuid
+
+    ready = MapSet.new(ours -- Uploads.still_preparing(ours))
+    {:ok, mark_shown(socket, &MapSet.member?(ready, &1.uuid))}
   end
 
   # The same question asked of the database, for a message that was missed; and the
@@ -539,6 +546,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       data-concurrency-max={PhoenixKitPhotos.Uploads.max_concurrency_choice()}
       data-auto={to_string(@upload_auto)}
       data-previews={Jason.encode!(for e <- @entries, do: [e.ref, e.client_name, e.client_size])}
+      data-preparing={Jason.encode!(for item <- @preparing, do: [item.ref, item.uuid])}
       data-refs={Jason.encode!(Enum.map(@entries, & &1.ref) ++ Enum.map(@saving ++ @preparing, & &1.ref))}
     >
       <%!-- Shown while files are dragged over the page; it never takes a click. --%>

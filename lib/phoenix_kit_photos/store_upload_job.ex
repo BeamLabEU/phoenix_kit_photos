@@ -30,6 +30,10 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
   `{:stored, outcome}` or `{:retrying, attempt}`. A page that is gone misses it, and
   nothing else depends on it: the file is in the library either way, and the timeline
   shows it when its renditions are ready.
+
+  A new file's date and shape are read here, from the staged copy
+  (`PhoenixKit.Modules.Storage.ProcessFileJob.read_metadata/2`), so the timeline has a
+  place for it straight away and draws it as being prepared until its sizes are made.
   """
 
   use Oban.Worker,
@@ -43,6 +47,7 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
 
   require Logger
 
+  alias PhoenixKit.Modules.Storage.ProcessFileJob
   alias PhoenixKit.PubSub.Manager
   alias PhoenixKit.Users.Auth
   alias PhoenixKit.Users.Auth.SessionRef
@@ -132,11 +137,29 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
     with %User{} = user <- Auth.get_user(args["user_uuid"]),
          {:ok, scope} <- SessionRef.scope_for_user(user) do
       entry = %{client_name: args["name"], client_type: args["type"]}
-      Uploads.store(staged, entry, scope, args["library_uuid"])
+
+      staged
+      |> Uploads.store(entry, scope, args["library_uuid"])
+      |> tap(&read_now(&1, staged))
     else
       _ -> {:error, :not_allowed}
     end
   end
+
+  # The new file's date and shape are read from the staged copy while it is still here,
+  # so the timeline gives it its place at once (a tile being prepared) instead of when
+  # the processing job has fetched the file back from storage. A core without
+  # `read_metadata/2` leaves it to that job, as before.
+  defp read_now({:added, %{uuid: uuid, status: "processing"}}, staged) do
+    if Code.ensure_loaded?(ProcessFileJob) and
+         function_exported?(ProcessFileJob, :read_metadata, 2),
+       do: ProcessFileJob.read_metadata(to_string(uuid), staged)
+  rescue
+    error ->
+      Logger.warning("[StoreUploadJob] reading metadata failed: #{Exception.message(error)}")
+  end
+
+  defp read_now(_outcome, _staged), do: :ok
 
   defp retry?({:error, reason}), do: reason not in @final
   defp retry?(_outcome), do: false

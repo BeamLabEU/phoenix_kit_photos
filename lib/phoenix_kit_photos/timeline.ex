@@ -834,6 +834,10 @@ defmodule PhoenixKitPhotos.Timeline do
   end
 
   defp to_item(%StorageFile{} = file, sizes, private?) do
+    # A new file has its place (its date and shape are read first) before any of its sizes
+    # is made: it is drawn as a tile that is being prepared, with no picture to ask for.
+    pending? = pending?(file)
+
     %{
       id: file.uuid,
       code: file.short_code,
@@ -841,11 +845,12 @@ defmodule PhoenixKitPhotos.Timeline do
       w: file.width,
       h: file.height,
       ar: file.width * 1.0 / file.height,
-      thumb: signed_url(file, sizes.thumb, private?),
+      pending: pending?,
+      thumb: unless(pending?, do: signed_url(file, sizes.thumb, private?)),
       # The styles that show whole photos: a small picture of the right shape, and a big one
       # for tiles that fill the page. Only what has been made: the file may be new.
       fit: made_url(file, sizes.fit, private?),
-      preview: signed_url(file, sizes.preview, private?),
+      preview: unless(pending?, do: signed_url(file, sizes.preview, private?)),
       large: made_url(file, sizes.large, private?),
       kind: if(file.file_type == "video", do: :video, else: :image),
       name: file.original_file_name || file.file_name,
@@ -853,6 +858,21 @@ defmodule PhoenixKitPhotos.Timeline do
       duration: file.duration
     }
   end
+
+  # How long a file with no sizes is taken to be on its way to having them. Past this it
+  # is an ordinary file without sizes (its processing died, or its set makes none).
+  @pending_for_s 900
+
+  # New, none of its sizes stored, and no run of making them finished yet (core stamps
+  # `placed_variant_revision` when one does, whatever came of it).
+  defp pending?(%StorageFile{} = file) do
+    is_nil(file.placed_variant_revision) and
+      not Enum.any?(instances(file), &(&1.variant_name != "original")) and
+      recent?(file.inserted_at)
+  end
+
+  defp recent?(%DateTime{} = at), do: DateTime.diff(DateTime.utc_now(), at) < @pending_for_s
+  defp recent?(_at), do: false
 
   # The caller has checked the reader (`to_items/3`).
   defp signed_url(_file, "original", _private?), do: nil

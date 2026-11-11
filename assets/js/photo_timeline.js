@@ -8,7 +8,8 @@ import {
 import { STYLES, DEFAULT_STYLE, buildLayout, decodeAspects } from "./layouts.js"
 import { installTimelineCss } from "./timeline_css.js"
 import { drawCalendar, today, weekLocale, weekStartFor } from "./calendar.js"
-import { fillTile, pickSource, swapImage } from "./tiles.js"
+import { fillTile, markPending, pickSource, swapImage } from "./tiles.js"
+import { onPreviewOffered } from "./upload_previews.js"
 import { morph } from "./morph.js"
 import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
@@ -80,6 +81,17 @@ export const PhotoTimeline = {
   aspects: null,
 
   mounted() {
+    // A tile being prepared takes the uploader's picture of its file the moment there is one.
+    this.stopPreviewOffers = onPreviewOffered((fileId) => {
+      const node = this.pool?.get(fileId)
+      const img = node?.querySelector("img:last-of-type")
+      const item = node?.dataset.pending !== undefined && { id: fileId, pending: true }
+      const src = item && pickSource(item, 0, 0, this.style())
+      if (img && src && img.dataset.src !== src) {
+        img.dataset.src = src
+        img.src = src
+      }
+    })
     // The virtual grid owns scroll restoration. Browser anchoring must not
     // compensate again when recycled tiles or the spacer change.
     this.el.style.overflowAnchor = "none"
@@ -204,6 +216,7 @@ export const PhotoTimeline = {
   },
 
   destroyed() {
+    this.stopPreviewOffers?.()
     for (const event of this.positionInputs) this.el.removeEventListener(event, this.onPositionInput)
     this.bookmarkMark?.remove()
     window.removeEventListener("pagehide", this.onPageHide)
@@ -1403,6 +1416,7 @@ export const PhotoTimeline = {
     }
 
     node.dataset.global = String(global)
+    markPending(node, item)
     node.toggleAttribute("data-selected", this.isSelected(item.id))
     node.style.position = "absolute"
     node.style.left = `${x}px`
@@ -1413,8 +1427,10 @@ export const PhotoTimeline = {
     const img = node.querySelector("img:last-of-type")
     const src = pickSource(item, w, h, this.style(), devicePixels())
     if (img && src && img.dataset.src !== src) {
-      // A tile on screen keeps its picture until the better one is ready.
-      if (!created && img.dataset.src && this.sharpening(img.dataset.src, item)) swapImage(node, img, src)
+      // A tile on screen keeps its picture until the better one is ready; so does one that
+      // showed the uploader's picture while its own was being made.
+      const old = img.dataset.src
+      if (!created && old && (this.sharpening(old, item) || old.startsWith("blob:"))) swapImage(node, img, src)
       else {
         img.dataset.src = src
         img.src = src

@@ -474,7 +474,7 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
         |> render_hook("dropped", %{"files" => 10, "skipped" => 3, "truncated" => false})
 
       assert html =~ "Choose files"
-      assert html =~ "3 files in the folder were left out"
+      assert html =~ "3 files were left out"
     end
 
     test "a folder the browser would not open is said so, not silently ignored", ctx do

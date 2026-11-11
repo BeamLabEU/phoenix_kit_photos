@@ -1,7 +1,7 @@
 defmodule PhoenixKitPhotos.Components.PhotoUploader do
   @moduledoc """
   Adds photos and videos to one library: a floating **+** button, a panel with the
-  queue, and the whole page as a place to drop files or folders.
+  queue, and the whole page as a place to drop or paste files or folders.
 
   ## Usage
 
@@ -25,6 +25,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       `PhotoUploader` hook in a sliding window: at most as many files in flight as the
       panel's "Uploads at once" control says (`Uploads.max_concurrent_uploads/0` unless
       the person changed it), never more than one batch (`Uploads.max_entries/0`).
+    * **Paste.** A paste anywhere on the page but in a text field adds what it carries
+      the same way: files copied in a file manager (all of them, in a browser that passes
+      several on), or an image copied from a page, an app or a screenshot tool, named
+      `Pasted_<local time>.png` so core dates it by when it was pasted (`paste_files.js`).
     * **Straight in.** In a private library files start uploading as soon as they are
       chosen. In a **public** library (`Libraries.public?/1`: anyone can see what is
       in it) they wait for *Upload*, with the warning in front of them.
@@ -615,7 +619,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
             >
               <.icon name="hero-arrow-up-tray" class="h-6 w-6 text-primary" />
               <span class="font-medium">{gettext("Choose files")}</span>
-              <span class="text-xs text-base-content/60">{gettext("or drop photos, videos or folders anywhere on the page")}</span>
+              <span class="text-xs text-base-content/60">{gettext("or drop or paste photos, videos or folders anywhere on the page")}</span>
             </label>
 
             <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept
@@ -724,7 +728,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
                 <span :if={@failed > 0} class="flex items-center gap-1 text-error"><.icon name="hero-exclamation-triangle" class="h-4 w-4" />{gettext("%{count} failed", count: @failed)}</span>
               </p>
               <p :if={@skipped > 0} class="text-xs text-base-content/60">
-                {ngettext("%{count} file in the folder was left out (not a photo or video)", "%{count} files in the folder were left out (not photos or videos)", @skipped)}
+                {ngettext("%{count} file was left out (not a photo or video)", "%{count} files were left out (not photos or videos)", @skipped)}
               </p>
               <p :if={@unreadable > 0} class="text-xs text-warning" role="alert">
                 {ngettext(

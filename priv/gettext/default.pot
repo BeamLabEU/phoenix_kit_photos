@@ -88,8 +88,8 @@ msgstr ""
 
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:468
 #, elixir-autogen, elixir-format
-msgid "%{count} file in the folder was left out (not a photo or video)"
-msgid_plural "%{count} files in the folder were left out (not photos or videos)"
+msgid "%{count} file was left out (not a photo or video)"
+msgid_plural "%{count} files were left out (not photos or videos)"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -211,7 +211,7 @@ msgstr ""
 
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:387
 #, elixir-autogen, elixir-format
-msgid "or drop photos, videos or folders anywhere on the page"
+msgid "or drop or paste photos, videos or folders anywhere on the page"
 msgstr ""
 
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:418

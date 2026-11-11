@@ -1,8 +1,10 @@
 import { carriesFiles, filesFromDrop } from "./drop_files.js"
+import { carriesPastedFiles, filesFromPaste, isEditable } from "./paste_files.js"
 import { makePreview, offerPreview, withdrawPreviews } from "./upload_previews.js"
 
 /**
- * The uploader's hook: the whole window is a drop zone while the hook is mounted.
+ * The uploader's hook: the whole window is a drop zone while the hook is mounted, and a
+ * paste anywhere outside a text field adds what it carries (`paste_files.js`).
  *
  * Division of labour: LiveView owns permissions, the upload itself and what is stored;
  * this hook owns the drag-and-drop part LiveView does not do. It shows the overlay while
@@ -142,10 +144,21 @@ export const PhotoUploader = {
       this.take(event.dataTransfer)
     }
 
+    // A paste anywhere on the page adds what it carries, like a drop: files copied in a
+    // file manager, or an image copied from somewhere else (`paste_files.js`). A paste
+    // into a text field is that field's, and a paste of text alone is left alone.
+    this.onPaste = event => {
+      if (event.defaultPrevented || isEditable(event.target)) return
+      if (!carriesPastedFiles(event.clipboardData)) return
+      event.preventDefault()
+      this.takePaste(event.clipboardData)
+    }
+
     window.addEventListener("dragenter", this.onEnter)
     window.addEventListener("dragover", this.onOver)
     window.addEventListener("dragleave", this.onLeave)
     window.addEventListener("drop", this.onDrop)
+    window.addEventListener("paste", this.onPaste)
   },
 
   // LiveView patches the element back to what the server rendered, which has no
@@ -169,6 +182,7 @@ export const PhotoUploader = {
     window.removeEventListener("dragover", this.onOver)
     window.removeEventListener("dragleave", this.onLeave)
     window.removeEventListener("drop", this.onDrop)
+    window.removeEventListener("paste", this.onPaste)
     this.el.removeEventListener("change", this.onConcurrencyChange)
     this.el.removeEventListener("input", this.onInputChange, true)
     this.el.removeEventListener("change", this.onInputChange, true)
@@ -299,6 +313,13 @@ export const PhotoUploader = {
   // first await, which is the only moment the browser lets it.
   take(dataTransfer) {
     filesFromDrop(dataTransfer, { accept: this.accept }).then(({ files, skipped, unreadable, truncated }) => {
+      this.takeFiles(files, { skipped, unreadable, truncated })
+    })
+  },
+
+  // Called inside the paste event, for the same reason.
+  takePaste(clipboardData) {
+    return filesFromPaste(clipboardData, { accept: this.accept }).then(({ files, skipped, unreadable, truncated }) => {
       this.takeFiles(files, { skipped, unreadable, truncated })
     })
   },

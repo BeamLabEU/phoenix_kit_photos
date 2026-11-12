@@ -1,7 +1,15 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 
-import { carriesPastedFiles, isEditable, madeUp, pastedName, filesFromPaste } from "../js/paste_files.js"
+import {
+  canReadClipboard,
+  carriesPastedFiles,
+  filesFromClipboard,
+  isEditable,
+  madeUp,
+  pastedName,
+  filesFromPaste
+} from "../js/paste_files.js"
 import { PhotoUploader } from "../js/photo_uploader.js"
 
 const ACCEPT = [".jpg", ".png", ".heic", ".mov"]
@@ -143,4 +151,83 @@ test("a paste into a text field, or of text alone, is left to the browser", asyn
   assert.equal(inField.defaultPrevented, false)
   assert.equal(textOnly.defaultPrevented, false)
   assert.deepEqual(hook.taken, [])
+})
+
+// A ClipboardItem as `navigator.clipboard.read()` gives it: its types, and each as a Blob.
+const clipItem = (blobs, { failing = [] } = {}) => ({
+  types: Object.keys(blobs),
+  getType: type => (failing.includes(type) ? Promise.reject(new Error("gone")) : Promise.resolve(blobs[type]))
+})
+
+test("the clipboard can be read on request only where clipboard.read exists", () => {
+  assert.equal(canReadClipboard({ clipboard: { read: async () => [] } }), true)
+  assert.equal(canReadClipboard({ clipboard: { readText: async () => "" } }), false)
+  assert.equal(canReadClipboard({}), false)
+  assert.equal(canReadClipboard(null), false)
+})
+
+test("each clipboard image becomes one pasted file, text items are left alone", async () => {
+  const png = new Blob(["png-bytes"], { type: "image/png" })
+  const jpeg = new Blob(["jpeg-bytes"], { type: "image/jpeg" })
+  const items = [
+    clipItem({ "text/plain": new Blob(["hi"]) }),
+    clipItem({ "image/png": png, "text/html": new Blob(["<img>"]) }),
+    clipItem({ "image/jpeg": jpeg })
+  ]
+  const result = await filesFromClipboard(items, { accept: ACCEPT, now: NOW })
+  assert.deepEqual(result.files.map(f => f.name), ["Pasted_20261111_143005.png", "Pasted_20261111_143005_2.jpg"])
+  assert.deepEqual(result.files.map(f => f.type), ["image/png", "image/jpeg"])
+  assert.equal(await result.files[0].text(), "png-bytes")
+  assert.equal(result.files[0].lastModified, NOW.getTime())
+  assert.equal(result.skipped, 0)
+})
+
+test("an image of a kind not taken, or one that cannot be read, is counted; nothing at all is empty", async () => {
+  const gif = new Blob(["gif"], { type: "image/gif" })
+  const png = new Blob(["png"], { type: "image/png" })
+  // The first type the page takes wins: the gif is passed over for the png.
+  const both = await filesFromClipboard([clipItem({ "image/gif": gif, "image/png": png })], { accept: ACCEPT, now: NOW })
+  assert.deepEqual(both.files.map(f => f.type), ["image/png"])
+
+  const refused = await filesFromClipboard(
+    [clipItem({ "image/gif": gif }), clipItem({ "image/png": png }, { failing: ["image/png"] })],
+    { accept: ACCEPT, now: NOW }
+  )
+  assert.deepEqual(refused.files, [])
+  assert.equal(refused.skipped, 2)
+
+  const empty = await filesFromClipboard([clipItem({ "text/plain": new Blob(["x"]) })], { accept: ACCEPT, now: NOW })
+  assert.deepEqual(empty, { files: [], skipped: 0, unreadable: 0, truncated: false })
+})
+
+// The Paste button through the hook: what it hands on, and what it tells the component.
+const pasteButtonHook = () => {
+  const { hook } = mountHook()
+  hook.pushed = []
+  hook.pushEventTo = (_el, name, payload) => hook.pushed.push([name, payload])
+  return hook
+}
+
+test("the Paste button hands the clipboard's images on, or says why there were none", async () => {
+  const png = new Blob(["png"], { type: "image/png" })
+
+  const taking = pasteButtonHook()
+  await taking.pasteClipboard({ clipboard: { read: async () => [clipItem({ "image/png": png })] } })
+  assert.equal(taking.taken.length, 1)
+  assert.match(taking.taken[0][0], /^Pasted_\d{8}_\d{6}\.png$/)
+  assert.deepEqual(taking.pushed, [])
+
+  const empty = pasteButtonHook()
+  await empty.pasteClipboard({ clipboard: { read: async () => [clipItem({ "text/plain": new Blob(["x"]) })] } })
+  assert.deepEqual(empty.pushed, [["clipboard", { result: "empty" }]])
+
+  const denied = pasteButtonHook()
+  const notAllowed = Object.assign(new Error("dismissed"), { name: "NotAllowedError" })
+  await denied.pasteClipboard({ clipboard: { read: async () => Promise.reject(notAllowed) } })
+  assert.deepEqual(denied.pushed, [["clipboard", { result: "denied" }]])
+
+  const failed = pasteButtonHook()
+  await failed.pasteClipboard({ clipboard: { read: async () => Promise.reject(new Error("odd")) } })
+  assert.deepEqual(failed.pushed, [["clipboard", { result: "failed" }]])
+  assert.deepEqual(failed.taken, [])
 })

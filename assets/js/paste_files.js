@@ -10,7 +10,7 @@
 // told apart in the library and core dates it from the name (a pasted image carries no
 // EXIF, and a name's date is read as the local wall-clock time).
 
-import { filesFromDrop } from "./drop_files.js"
+import { acceptable, filesFromDrop } from "./drop_files.js"
 
 /** Whether a paste carries files (not only text). */
 export function carriesPastedFiles(clipboardData) {
@@ -92,4 +92,51 @@ export async function filesFromPaste(clipboardData, { accept = null, limit = 200
   let made = 0
   const files = result.files.map(file => (madeUp(file, now.getTime()) ? renamed(file, pastedName(file, now, made++)) : file))
   return { ...result, files }
+}
+
+// The uploader's Paste button. A paste event never reaches a page on an iPad without a
+// keyboard: iOS offers Paste only on something one types into. So the button asks for
+// the clipboard itself (`navigator.clipboard.read()`, inside the tap: Safari then shows
+// its own Paste bubble, Chrome asks for permission once, Firefox shows a Paste menu).
+// What comes back is a list of ClipboardItems, each with its types; only images can be
+// read this way (files copied in a file manager are not offered), and each becomes one
+// file named like a pasted image.
+
+/** Whether this browser can read the clipboard when asked, outside a paste event. */
+export function canReadClipboard(nav = globalThis.navigator) {
+  return Boolean(nav && nav.clipboard && typeof nav.clipboard.read === "function")
+}
+
+/**
+ * The images of a clipboard read (`navigator.clipboard.read()`), as `filesFromDrop`
+ * gives files: `{ files, skipped, unreadable, truncated }`. An item is one image in the
+ * first of its types this page takes; an image of a kind it does not take, or one that
+ * cannot be read, is counted as skipped, and an item with no image (text, a link) is
+ * left alone.
+ */
+export async function filesFromClipboard(items, { accept = null, now = new Date() } = {}) {
+  const files = []
+  let skipped = 0
+
+  for (const item of items || []) {
+    const images = Array.from((item && item.types) || []).filter(type => TYPE_EXTENSIONS[String(type).toLowerCase()])
+    if (images.length === 0) continue
+
+    const index = files.length
+    const type = images.find(type => acceptable(pastedName({ type }, now, index), accept))
+    if (!type) {
+      skipped += 1
+      continue
+    }
+
+    try {
+      const blob = await item.getType(type)
+      const name = pastedName({ type }, now, index)
+      files.push(new File([blob], name, { type: blob.type || type, lastModified: now.getTime() }))
+    } catch (_error) {
+      skipped += 1
+    }
+  }
+
+  return { files, skipped, unreadable: 0, truncated: false }
 }

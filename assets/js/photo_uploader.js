@@ -1,5 +1,5 @@
 import { carriesFiles, filesFromDrop } from "./drop_files.js"
-import { carriesPastedFiles, filesFromPaste, isEditable } from "./paste_files.js"
+import { canReadClipboard, carriesPastedFiles, filesFromClipboard, filesFromPaste, isEditable } from "./paste_files.js"
 import { makePreview, offerPreview, withdrawPreviews } from "./upload_previews.js"
 
 /**
@@ -105,12 +105,21 @@ export const PhotoUploader = {
     this.el.addEventListener("input", this.onInputChange, true)
     this.el.addEventListener("change", this.onInputChange, true)
 
-    // Cancel all also empties the hook's own queue of not-yet-sent files.
+    // Cancel all also empties the hook's own queue of not-yet-sent files. The Paste
+    // button (`data-paste-button`) reads the clipboard, which must start in the click.
     this.onClick = event => {
       const target = event.target
-      if (target && target.closest && target.closest("[data-cancel-all]")) this.queue = []
+      if (!target || !target.closest) return
+      if (target.closest("[data-cancel-all]")) this.queue = []
+      if (target.closest("[data-paste-button]")) this.pasteClipboard()
     }
     this.el.addEventListener("click", this.onClick)
+
+    // The Paste button shows only where the clipboard can be read on request. The mark
+    // is on <html>, which LiveView never patches, so it survives the panel's re-renders.
+    if (canReadClipboard() && typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-clipboard-read", "")
+    }
 
     // A drop on the file input itself is the browser's own business (it sets the
     // input's files and LiveView hears the change); doing it twice would add every
@@ -322,6 +331,27 @@ export const PhotoUploader = {
     return filesFromPaste(clipboardData, { accept: this.accept }).then(({ files, skipped, unreadable, truncated }) => {
       this.takeFiles(files, { skipped, unreadable, truncated })
     })
+  },
+
+  // The Paste button: the clipboard's images, read on request (`paste_files.js`). Called
+  // inside the click, because Safari reads the clipboard only during the tap. Nothing
+  // usable on it, or the reading refused (the person dismissed Safari's Paste bubble, or
+  // said no to Chrome's prompt), is told to the component, which says so in the panel.
+  async pasteClipboard(nav = globalThis.navigator) {
+    if (!canReadClipboard(nav)) return
+    let items
+    try {
+      items = await nav.clipboard.read()
+    } catch (error) {
+      this.pushEventTo(this.el, "clipboard", { result: error && error.name === "NotAllowedError" ? "denied" : "failed" })
+      return
+    }
+    const { files, skipped, unreadable, truncated } = await filesFromClipboard(items, { accept: this.accept })
+    if (files.length === 0 && skipped === 0) {
+      this.pushEventTo(this.el, "clipboard", { result: "empty" })
+      return
+    }
+    return this.takeFiles(files, { skipped, unreadable, truncated })
   },
 
   // Files from a drop or the picker: told to the component (it opens the panel and says

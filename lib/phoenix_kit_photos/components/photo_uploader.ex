@@ -35,6 +35,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       the same way: files copied in a file manager (all of them, in a browser that passes
       several on), or an image copied from a page, an app or a screenshot tool, named
       `Pasted_<local time>.png` so core dates it by when it was pasted (`paste_files.js`).
+      Where the browser can read the clipboard on request, the panel also has a
+      **Paste** button: an iPad without a keyboard never sends the page a paste (iOS
+      offers Paste only in a text field), so the button asks for the clipboard's images
+      itself, and Safari shows its own Paste bubble to confirm.
     * **Straight in.** In a private library files start uploading as soon as they are
       chosen. In a **public** library (`Libraries.public?/1`: anyone can see what is
       in it) they wait for *Upload*, with the warning in front of them.
@@ -133,7 +137,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        public?: false,
        upload_auto: nil,
        expanded: false,
-       hide_token: nil
+       hide_token: nil,
+       clipboard: nil
      )}
   end
 
@@ -537,7 +542,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   @impl true
   # The **+** button and *Details*: the whole panel, and no countdown while it is read.
   def handle_event("open", _params, socket),
-    do: {:noreply, assign(socket, open: true, expanded: true, hide_token: nil)}
+    do: {:noreply, assign(socket, open: true, expanded: true, hide_token: nil, clipboard: nil)}
 
   def handle_event("expand", _params, socket),
     do: {:noreply, assign(socket, expanded: true, hide_token: nil)}
@@ -595,6 +600,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
         open: true,
         expanded: false,
         hide_token: nil,
+        clipboard: nil,
         started: false,
         skipped: socket.assigns.skipped + count(params["skipped"]),
         unreadable: socket.assigns.unreadable + count(params["unreadable"]),
@@ -603,6 +609,16 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
     {:noreply, if(count(params["files"]) == 0, do: settle(socket), else: socket)}
   end
+
+  # From the hook, after the Paste button: the clipboard held no image, or the browser
+  # did not let the page read it. Said in the panel until the next files or opening.
+  def handle_event("clipboard", %{"result" => result}, socket)
+      when result in ["empty", "denied", "failed"] do
+    {:noreply,
+     assign(socket, open: true, expanded: true, clipboard: String.to_existing_atom(result))}
+  end
+
+  def handle_event("clipboard", _params, socket), do: {:noreply, socket}
 
   # The hook asks before it sends more of a big drop, and how much room it has: how
   # many entries are still in flight (uploading, waiting for a click in a public
@@ -806,6 +822,22 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               <span class="text-xs text-base-content/60">{gettext("or drop or paste photos, videos or folders anywhere on the page")}</span>
             </label>
 
+            <%!-- The hook reads the clipboard on this click (`data-paste-button`). Hidden
+                 until the hook marks <html> as able to (`data-clipboard-read`). --%>
+            <button
+              :if={!@blocked}
+              type="button"
+              id={"#{@id}-paste"}
+              data-paste-button
+              class="btn btn-ghost btn-sm hidden self-center [html[data-clipboard-read]_&]:inline-flex"
+            >
+              <.icon name="hero-clipboard-document" class="h-4 w-4" />
+              {gettext("Paste from clipboard")}
+            </button>
+            <p :if={@clipboard && !@blocked} id={"#{@id}-clipboard-note"} role="status" class="text-center text-xs text-base-content/70">
+              {clipboard_note(@clipboard)}
+            </p>
+
             <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept
                  in the browser (localStorage), so no event goes to the server. --%>
             <label :if={!@blocked} class="flex items-center justify-between gap-2 text-xs text-base-content/60">
@@ -1003,6 +1035,15 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   defp library_name(%{name: name}), do: name
   defp library_name(_library), do: ""
+
+  # What the panel says after the Paste button found nothing it could take.
+  defp clipboard_note(:empty),
+    do: gettext("There is no photo on the clipboard. Copy one first, then paste.")
+
+  defp clipboard_note(:denied),
+    do: gettext("The clipboard was not read. Tap Paste when your browser asks, or allow it.")
+
+  defp clipboard_note(:failed), do: gettext("The clipboard could not be read.")
 
   defp count_outcome(done, kind), do: Enum.count(done, &match?(%{outcome: {^kind, _}}, &1))
 

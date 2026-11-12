@@ -120,6 +120,33 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       html = view |> element("button[aria-label='Close']") |> render_click()
       refute html =~ "Choose files"
     end
+
+    test "the panel has a Paste button, and says why a paste from it brought nothing", ctx do
+      {view, _html} = mount!(scope_for(ctx.owner), ctx.library)
+      view |> element("button[aria-label='Add photos']") |> render_click()
+
+      assert has_element?(view, "#test-uploader-paste[data-paste-button]", "Paste from clipboard")
+
+      html =
+        view |> element("#test-uploader") |> render_hook("clipboard", %{"result" => "empty"})
+
+      assert html =~ "no photo on the clipboard"
+
+      html =
+        view |> element("#test-uploader") |> render_hook("clipboard", %{"result" => "denied"})
+
+      assert html =~ "The clipboard was not read"
+
+      # Anything else from the hook is ignored; files arriving clear the note.
+      view |> element("#test-uploader") |> render_hook("clipboard", %{"result" => "nope"})
+      assert has_element?(view, "#test-uploader-clipboard-note")
+
+      view
+      |> element("#test-uploader")
+      |> render_hook("dropped", %{"files" => 1, "skipped" => 0, "truncated" => false})
+
+      refute has_element?(view, "#test-uploader-clipboard-note")
+    end
   end
 
   describe "an account whose email is not confirmed" do

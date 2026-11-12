@@ -28,6 +28,8 @@ export class PhotoSwipeEngine {
     this.tileImage = host.tileImage
     this.video = host.video
     this.onInfo = host.onInfo
+    this.actions = host.actions || []
+    this.actionSyncs = []
     this.onChange = host.onChange
     this.onClose = host.onClose
     this.pswp = null
@@ -75,6 +77,26 @@ export class PhotoSwipeEngine {
     pswp.addFilter("useContentPlaceholder", (use, content) => use || content.data.type === "video")
 
     pswp.on("uiRegister", () => {
+      for (const action of this.actions) {
+        pswp.ui.registerElement({
+          name: action.name,
+          order: 7,
+          isButton: true,
+          appendTo: "bar",
+          html: action.icon,
+          title: action.label,
+          ariaLabel: action.label,
+          onClick: () => action.run(pswp.currIndex),
+          onInit: (el) => {
+            const sync = () => {
+              el.style.display = action.shown(pswp.currIndex) ? "" : "none"
+            }
+            this.actionSyncs.push(sync)
+            pswp.on("change", sync)
+            sync()
+          }
+        })
+      }
       pswp.ui.registerElement({
         name: "info",
         order: 8,
@@ -106,6 +128,7 @@ export class PhotoSwipeEngine {
     pswp.on("change", () => this.onChange(pswp.currIndex))
     pswp.on("destroy", () => {
       this.pswp = null
+      this.actionSyncs = []
       this.onClose()
     })
 
@@ -140,6 +163,10 @@ export class PhotoSwipeEngine {
     for (const index of [here - 2, here - 1, here + 1, here + 2]) {
       if (index >= 0 && index < this.store.total) this.pswp.refreshSlideContent(index)
     }
+  }
+
+  syncActions() {
+    for (const sync of this.actionSyncs) sync()
   }
 
   destroy() {

@@ -11,7 +11,8 @@ defmodule PhoenixKitPhotos.Components.StackEdit do
   goes to its new place in the timeline. *Use the photos' own dates* is the way back.
 
   The dialog is a modal `<dialog>` (the `PhotoStackDialog` hook opens it), so it sits above
-  the viewer and has the keys while it is open.
+  the viewer and has the keys while it is open. Its `open` attribute is the browser's: a
+  re-render (an error shown) must not take it away, which would close the dialog.
   """
 
   use Phoenix.Component
@@ -147,6 +148,7 @@ defmodule PhoenixKitPhotos.Components.StackEdit do
     ~H"""
     <dialog
       id={"#{@id}-stack-edit"}
+      phx-mounted={Phoenix.LiveView.JS.ignore_attributes(["open"])}
       phx-hook="PhotoStackDialog"
       phx-target={@myself}
       class="modal"

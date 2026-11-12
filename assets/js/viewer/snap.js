@@ -23,6 +23,7 @@ const CSS = `
 .pk-snap__bar > * { pointer-events: auto; }
 .pk-snap__count { margin-right: auto; font: 14px system-ui, sans-serif; text-shadow: 0 0 4px #000; }
 .pk-snap__button { width: 44px; height: 44px; display: grid; place-items: center; border: 0; background: none; color: #fff; cursor: pointer; }
+.pk-snap__button[hidden] { display: none; }
 `
 
 const INFO_ICON =
@@ -85,6 +86,19 @@ export class SnapEngine {
     this.pages = [...this.track.children]
 
     root.querySelector(".pk-snap__close").addEventListener("click", () => this.close())
+    // The host's own buttons, before Details.
+    const info = root.querySelector(".pk-snap__info")
+    this.actionButtons = (this.host.actions || []).map((action) => {
+      const button = document.createElement("button")
+      button.type = "button"
+      button.className = "pk-snap__button"
+      button.setAttribute("aria-label", action.label)
+      button.title = action.label
+      button.innerHTML = action.icon
+      button.addEventListener("click", () => action.run(this.current))
+      info.before(button)
+      return { action, button }
+    })
     root.querySelector(".pk-snap__info").addEventListener("click", () => {
       const slide = this.store.get(this.current)
       if (slide) this.host.onInfo(slide.id)
@@ -212,6 +226,11 @@ export class SnapEngine {
 
   showCount() {
     this.count.textContent = `${this.current + 1} / ${this.store.total}`
+    this.syncActions()
+  }
+
+  syncActions() {
+    for (const { action, button } of this.actionButtons || []) button.hidden = !action.shown(this.current)
   }
 
   // --- paging ----------------------------------------------------------

@@ -10,6 +10,8 @@ defmodule PhoenixKitPhotos.TimelineStacksTest do
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.Stacks
 
+  import Ecto.Query, only: [from: 2]
+
   setup do
     start_supervised!(PhoenixKit.PubSub.Manager)
 
@@ -167,5 +169,45 @@ defmodule PhoenixKitPhotos.TimelineStacksTest do
 
     {:ok, _} = Stacks.unstack(stack.uuid, ctx.scope)
     assert window_names(ctx) == ["page 1.jpg", "page 2.jpg"]
+  end
+
+  test "the stacks to add to: the latest changed first, found by title, one put first", ctx do
+    [a1, a2, b1, b2, c1] =
+      for {name, at} <- [
+            {"a1.jpg", "08:00"},
+            {"a2.jpg", "08:01"},
+            {"b1.jpg", "09:00"},
+            {"b2.jpg", "09:01"},
+            {"c1.jpg", "10:00"}
+          ],
+          do: photo(ctx, name, at)
+
+    lease = stack!(ctx, [a1, a2], %{title: "Lease 100%"})
+    receipts = stack!(ctx, [b1, b2])
+    # The lease was changed last (times to the second, so set apart here).
+    for {stack, at} <- [{receipts, ~N[2026-01-01 10:00:00]}, {lease, ~N[2026-01-02 10:00:00]}] do
+      TestRepo.update_all(
+        from(s in PhoenixKit.Modules.Storage.FileStack, where: s.uuid == ^stack.uuid),
+        set: [updated_at: at]
+      )
+    end
+
+    _single = c1
+
+    {:ok, stacks} = Timeline.stacks(ctx.lib, ctx.scope)
+    assert Enum.map(stacks, & &1.id) == [lease.uuid, receipts.uuid]
+    assert [%{title: "Lease 100%", count: 2, cover: cover, taken_at: %DateTime{}} | _] = stacks
+    assert cover == a1.uuid
+
+    # A title search, with % taken as itself.
+    assert {:ok, [%{id: id}]} = Timeline.stacks(ctx.lib, ctx.scope, query: "100%")
+    assert id == lease.uuid
+    assert {:ok, []} = Timeline.stacks(ctx.lib, ctx.scope, query: "0%x")
+
+    assert {:ok, [%{id: first} | _]} = Timeline.stacks(ctx.lib, ctx.scope, first: receipts.uuid)
+    assert first == receipts.uuid
+
+    stranger = user_fixture("stacks-stranger-#{System.unique_integer([:positive])}@example.com")
+    assert {:error, _} = Timeline.stacks(ctx.lib, scope_for(stranger))
   end
 end

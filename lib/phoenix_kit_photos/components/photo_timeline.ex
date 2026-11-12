@@ -123,6 +123,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Bulk
   alias PhoenixKitPhotos.Components.StackEdit
+  alias PhoenixKitPhotos.Components.StackPick
   alias PhoenixKitPhotos.Timeline
   alias PhoenixKitPhotos.Uploads
 
@@ -137,6 +138,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
      |> assign(:aspects_sent, %{})
      |> assign(:bulk, nil)
      |> assign(:stack_edit, nil)
+     |> assign(:stack_pick, nil)
      |> assign(:running, nil)
      |> assign(:notice, nil)
      |> assign(:index, nil)
@@ -538,6 +540,50 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   def handle_event("timeline:stack_edit_close", _params, socket),
     do: {:noreply, assign(socket, :stack_edit, nil)}
 
+  # The viewer's Add to stack, for the photo `file` (nil when it is not this person's to change).
+  def handle_event("timeline:pick_stack", %{"file" => file}, socket) do
+    {:noreply, assign(socket, :stack_pick, StackPick.open(socket, file))}
+  end
+
+  def handle_event("timeline:pick_stack", _params, socket), do: {:noreply, socket}
+
+  def handle_event("timeline:pick_stack_close", _params, socket),
+    do: {:noreply, assign(socket, :stack_pick, nil)}
+
+  def handle_event("timeline:pick_stack_search", params, socket) do
+    case socket.assigns.stack_pick do
+      %{} = pick ->
+        {:noreply, assign(socket, :stack_pick, StackPick.search(socket, pick, params))}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:pick_stack_add", %{"stack" => stack} = params, socket)
+      when is_binary(stack) do
+    case socket.assigns.stack_pick do
+      %{file: file} = pick ->
+        case StackPick.add(pick, stack, socket.assigns.auth) do
+          :ok ->
+            {:noreply,
+             socket
+             |> assign(:stack_pick, nil)
+             |> load_index()
+             |> push_view(socket.assigns.id, socket.assigns.scope, socket.assigns.auth, file)}
+
+          {:error, message} ->
+            pick = StackPick.search(socket, pick, params)
+            {:noreply, assign(socket, :stack_pick, %{pick | error: message})}
+        end
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:pick_stack_add", _params, socket), do: {:noreply, socket}
+
   def handle_event("timeline:stack_" <> action, params, socket)
       when action in ~w(save reset_dates cover remove unstack) do
     case socket.assigns.stack_edit do
@@ -615,7 +661,13 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     case socket.assigns.bulk do
       %{action: action, ids: ids} = bulk ->
         plan = Bulk.plan(action, ids, socket.assigns.auth, params)
-        {:noreply, assign(socket, :bulk, %{bulk | plan: plan, params: params})}
+
+        targets =
+          if action == :stack_add and params["q"] != bulk.params["q"],
+            do: StackPick.stacks(socket.assigns.scope, socket.assigns.auth, params["q"]),
+            else: bulk.targets
+
+        {:noreply, assign(socket, :bulk, %{bulk | plan: plan, params: params, targets: targets})}
 
       nil ->
         {:noreply, socket}
@@ -686,7 +738,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     Enum.filter(
       [assigns.download_path && :download, assigns.photo_path && :links, signed_in && :copy],
       & &1
-    ) ++ if(editor, do: [:move, :tag, :stack, :unstack, :trash], else: [])
+    ) ++ if(editor, do: [:move, :tag, :stack, :stack_add, :unstack, :trash], else: [])
   end
 
   defp open_bulk(socket, :links, ids) do
@@ -701,6 +753,26 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     socket
     |> assign(:bulk, %{action: :links, ids: ids, plan: plan, params: %{}, targets: []})
     |> push_event(event(socket, "links"), %{paths: paths})
+  end
+
+  # Adding to a stack: when what is chosen holds files of one stack, that is the stack meant,
+  # and it leads the list.
+  defp open_bulk(socket, :stack_add, ids) do
+    params =
+      case StackPick.stack_among(ids) do
+        nil -> %{"q" => ""}
+        stack -> %{"q" => "", "stack" => stack}
+      end
+
+    targets = StackPick.stacks(socket.assigns.scope, socket.assigns.auth, nil, params["stack"])
+
+    assign(socket, :bulk, %{
+      action: :stack_add,
+      ids: ids,
+      plan: Bulk.plan(:stack_add, ids, socket.assigns.auth, params),
+      params: params,
+      targets: targets
+    })
   end
 
   defp open_bulk(socket, action, ids) do
@@ -818,12 +890,18 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp outcome_text(:stack, count),
     do: ngettext("Stacked 1 photo", "Stacked %{count} photos", count)
 
+  defp outcome_text(:stack_add, count),
+    do: ngettext("Added 1 item to the stack", "Added %{count} items to the stack", count)
+
   defp outcome_text(:unstack, count),
     do: ngettext("Unstacked 1 photo", "Unstacked %{count} photos", count)
 
   # A line for each reason something was left out: nobody reads a list of two hundred files.
+  # Something already in the stack it is added to needs no word, nor a stack not chosen yet (the
+  # button waits for one).
   defp problems(failed) do
     failed
+    |> Enum.reject(&(&1.reason in [:in_stack, :no_stack]))
     |> Enum.frequencies_by(& &1.reason)
     |> Enum.map(fn {reason, count} -> "#{count}: #{Bulk.reason_text(reason)}" end)
   end
@@ -877,6 +955,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           of: gettext("%{page} of %{count}", page: "%{page}", count: "%{count}"),
           skip: gettext("Skip"),
           edit: gettext("Edit stack"),
+          add: gettext("Add to stack"),
           page: gettext("Page %{page}", page: "%{page}")
         })
       }
@@ -1050,6 +1129,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       />
       <.bulk_dialog :if={@bulk} bulk={@bulk} myself={@myself} id={@id} />
       <StackEdit.dialog :if={@stack_edit} edit={@stack_edit} myself={@myself} id={@id} />
+      <StackPick.dialog :if={@stack_pick} pick={@stack_pick} myself={@myself} id={@id} />
       <.bulk_progress :if={@running} running={@running} />
       <.bulk_notice :if={@notice && !@running} notice={@notice} myself={@myself} />
     </div>
@@ -1099,21 +1179,46 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           </ul>
         </details>
         <span class="mx-0.5 h-5 w-px bg-base-content/15" aria-hidden="true"></span>
-        <button
-          :for={action <- @actions}
-          type="button"
-          data-bulk={action}
-          data-min={if(action == :stack, do: 2, else: 1)}
-          disabled
-          title={bulk_label(action)}
-          class={[
-            "btn btn-ghost btn-sm gap-1.5 px-2 font-normal",
-            action == :trash && "text-error"
-          ]}
-        >
-          <span class={[bulk_icon(action), "size-5"]} aria-hidden="true"></span>
-          <span class="hidden lg:inline">{bulk_label(action)}</span>
-        </button>
+        <%= for action <- @actions, action != :stack_add do %>
+          <details :if={action == :stack} class="dropdown dropdown-top" data-bulk-menu>
+            <summary
+              title={bulk_label(:stack)}
+              class="btn btn-ghost btn-sm gap-1.5 px-2 font-normal"
+              data-min="1"
+            >
+              <span class={[bulk_icon(:stack), "size-5"]} aria-hidden="true"></span>
+              <span class="hidden lg:inline">{bulk_label(:stack)}</span>
+              <span class="hero-chevron-up size-3.5" aria-hidden="true"></span>
+            </summary>
+            <ul class="menu dropdown-content z-40 mb-2 w-56 rounded-box border border-base-content/10 bg-base-100 p-1 shadow-xl">
+              <li>
+                <button type="button" data-bulk="stack" data-min="2" disabled>
+                  {gettext("New stack")}
+                </button>
+              </li>
+              <li :if={:stack_add in @actions}>
+                <button type="button" data-bulk="stack_add" data-min="1" disabled>
+                  {gettext("Add to a stack…")}
+                </button>
+              </li>
+            </ul>
+          </details>
+          <button
+            :if={action != :stack}
+            type="button"
+            data-bulk={action}
+            data-min="1"
+            disabled
+            title={bulk_label(action)}
+            class={[
+              "btn btn-ghost btn-sm gap-1.5 px-2 font-normal",
+              action == :trash && "text-error"
+            ]}
+          >
+            <span class={[bulk_icon(action), "size-5"]} aria-hidden="true"></span>
+            <span class="hidden lg:inline">{bulk_label(action)}</span>
+          </button>
+        <% end %>
       </div>
     </div>
     """
@@ -1143,9 +1248,16 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   # What is about to happen, for the person to agree to.
   defp bulk_dialog(assigns) do
+    # Adding to a stack before one is chosen: what was chosen, not what may go yet.
+    count =
+      case assigns.bulk do
+        %{action: :stack_add, plan: %{stack: nil}, ids: ids} -> length(ids)
+        %{plan: plan} -> length(plan.files)
+      end
+
     assigns =
       assigns
-      |> assign(:count, length(assigns.bulk.plan.files))
+      |> assign(:count, count)
       |> assign(:refused, problems(assigns.bulk.plan.refused))
 
     ~H"""
@@ -1215,6 +1327,13 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           />
         </label>
 
+        <StackPick.choices
+          :if={@bulk.action == :stack_add}
+          stacks={@bulk.targets}
+          chosen={@bulk.params["stack"]}
+          query={@bulk.params["q"]}
+        />
+
         <textarea
           :if={@bulk.action == :links}
           id={"#{@id}-links"}
@@ -1271,6 +1390,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   defp ready?(%{action: :tag, plan: plan}), do: plan.add != [] or plan.remove != []
   defp ready?(%{action: :stack, plan: plan}), do: length(plan.files) >= 2
+  defp ready?(%{action: :stack_add, plan: plan}), do: plan.stack != nil
   defp ready?(_bulk), do: true
 
   defp dialog_title(:trash, count),
@@ -1286,6 +1406,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   defp dialog_title(:stack, count),
     do: ngettext("Stack 1 photo", "Stack %{count} photos", count)
+
+  defp dialog_title(:stack_add, count),
+    do: ngettext("Add 1 item to a stack", "Add %{count} items to a stack", count)
 
   defp dialog_title(:unstack, count),
     do: ngettext("Unstack 1 photo", "Unstack %{count} photos", count)
@@ -1303,6 +1426,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         "They become one tile in the timeline, in order of when they were taken. Stacks among them are joined."
       )
 
+  defp dialog_hint(:stack_add),
+    do:
+      gettext(
+        "They go in among its photos by when they were taken; its cover stays. A stack among them is joined."
+      )
+
   defp dialog_hint(:unstack),
     do: gettext("Each photo goes back to its own place in the timeline.")
 
@@ -1313,6 +1442,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp dialog_confirm(:move), do: gettext("Move")
   defp dialog_confirm(:tag), do: gettext("Save tags")
   defp dialog_confirm(:stack), do: gettext("Stack")
+  defp dialog_confirm(:stack_add), do: gettext("Add")
   defp dialog_confirm(:unstack), do: gettext("Unstack")
 
   attr :running, :map, required: true

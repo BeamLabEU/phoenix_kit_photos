@@ -19,6 +19,7 @@ defmodule PhoenixKitPhotos.Bulk do
   | `:trash` | edit | `Storage.trash_file/1`, which `:restore` undoes |
   | `:restore` | edit | `Storage.restore_file/1` |
   | `:stack` | edit | one stack of them all (`Stacks.create/4`), titled by `"title"` |
+  | `:stack_add` | edit | into the stack `"stack"` of the same library (`Stacks.add/3`) |
   | `:unstack` | edit | takes apart the stacks they are in (`Stacks.unstack/2`) |
 
   **Stacks.** The timeline shows a stack as one tile, its cover, and a person who chooses it
@@ -44,6 +45,7 @@ defmodule PhoenixKitPhotos.Bulk do
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.CaptureDate
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
+  alias PhoenixKit.Modules.Storage.FileStack
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Modules.Storage.Library
   alias PhoenixKit.Modules.Storage.Quotas
@@ -53,12 +55,21 @@ defmodule PhoenixKitPhotos.Bulk do
   alias PhoenixKitPhotos.Uploads
 
   @limit 5_000
-  @actions ~w(download links copy move tag trash restore stack unstack)a
+  @actions ~w(download links copy move tag trash restore stack stack_add unstack)a
   @max_tags 20
   @max_tag_length 60
 
   @type action ::
-          :download | :links | :copy | :move | :tag | :trash | :restore | :stack | :unstack
+          :download
+          | :links
+          | :copy
+          | :move
+          | :tag
+          | :trash
+          | :restore
+          | :stack
+          | :stack_add
+          | :unstack
   @type reason ::
           :not_found
           | :not_allowed
@@ -70,6 +81,9 @@ defmodule PhoenixKitPhotos.Bulk do
           | :edited
           | :in_use
           | :not_stacked
+          | :no_stack
+          | :in_stack
+          | :mixed_libraries
 
   @type refusal :: %{id: String.t(), name: String.t() | nil, reason: reason()}
 
@@ -79,6 +93,7 @@ defmodule PhoenixKitPhotos.Bulk do
           files: [StorageFile.t()],
           refused: [refusal()],
           target: Library.t() | nil,
+          stack: FileStack.t() | nil,
           add: [String.t()],
           remove: [String.t()],
           title: String.t() | nil
@@ -97,7 +112,8 @@ defmodule PhoenixKitPhotos.Bulk do
   Checks `ids` for `action` by `auth`.
 
   `params` holds what the action needs: `"library"` (a uuid) for `:copy` and `:move`, `"add"` and
-  `"remove"` (lists of tags, or text with commas) for `:tag`, `"title"` for `:stack`.
+  `"remove"` (lists of tags, or text with commas) for `:tag`, `"title"` for `:stack`, and
+  `"stack"` (a stack's uuid) for `:stack_add`.
   """
   @spec plan(action(), [String.t()], Scope.t() | nil, map()) :: plan()
   def plan(action, ids, auth, params \\ %{}) when action in @actions do
@@ -105,12 +121,14 @@ defmodule PhoenixKitPhotos.Bulk do
     found = load(ids)
     by_id = Map.new(found, &{&1.uuid, &1})
     target = target(action, params, auth)
+    stack = target_stack(action, params)
     present = existing_checksums(action, target, found)
     rights = found |> rights(auth) |> Map.put(:in_use, in_use(action, found, auth))
+    against = if action == :stack_add, do: stack, else: target
 
     {files, refused} =
       Enum.reduce(ids, {[], []}, fn id, {files, refused} ->
-        case check(action, Map.get(by_id, id), rights, target, present) do
+        case check(action, Map.get(by_id, id), rights, against, present) do
           :ok -> {[by_id[id] | files], refused}
           {:refused, reason} -> {files, [refusal(id, by_id[id], reason) | refused]}
         end
@@ -124,6 +142,7 @@ defmodule PhoenixKitPhotos.Bulk do
       files: Enum.reverse(files),
       refused: Enum.reverse(refused),
       target: target,
+      stack: stack,
       add: add,
       remove: remove,
       title: if(action == :stack, do: title(params["title"]))
@@ -139,15 +158,18 @@ defmodule PhoenixKitPhotos.Bulk do
 
   defp title(_text), do: nil
 
+  defp target_stack(:stack_add, params), do: Stacks.get(params["stack"])
+  defp target_stack(_action, _params), do: nil
+
   @doc """
   `ids` with every file of the stacks among them in place of the one that stands for its stack,
   in the stack's order, for `action`: what a person means who chose a stack's tile. Only files
   `auth` may read come along, and only those out of the trash unless the action is `:restore`.
-  `:links` gives each stack's one address, and `:stack` and `:unstack` take stacks as they are,
-  so for those `ids` are left alone.
+  `:links` gives each stack's one address, and `:stack`, `:stack_add` and `:unstack` take
+  stacks as they are (core brings a stack's files along), so for those `ids` are left alone.
   """
   @spec whole_stacks([String.t()], action(), Scope.t() | nil) :: [String.t()]
-  def whole_stacks(ids, action, _auth) when action in [:links, :stack, :unstack],
+  def whole_stacks(ids, action, _auth) when action in [:links, :stack, :stack_add, :unstack],
     do: clean_ids(ids)
 
   def whole_stacks(ids, action, auth) do
@@ -357,6 +379,17 @@ defmodule PhoenixKitPhotos.Bulk do
     if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
   end
 
+  defp check_action(:stack_add, _file, _rights, nil, _present), do: {:refused, :no_stack}
+
+  defp check_action(:stack_add, file, rights, %FileStack{} = stack, _present) do
+    cond do
+      file.stack_uuid == stack.uuid -> {:refused, :in_stack}
+      file.library_uuid != stack.library_uuid -> {:refused, :mixed_libraries}
+      may?(rights, file, :edit) -> :ok
+      true -> {:refused, :not_allowed}
+    end
+  end
+
   defp check_action(:unstack, file, rights, _target, _present) do
     cond do
       is_nil(file.stack_uuid) -> {:refused, :not_stacked}
@@ -467,7 +500,7 @@ defmodule PhoenixKitPhotos.Bulk do
   @spec fingerprint(plan()) :: String.t()
   def fingerprint(%{action: action, files: files} = plan) do
     rows = files |> Enum.map(&touched(action, &1)) |> Enum.sort() |> Enum.join("\n")
-    target = plan.target && plan.target.uuid
+    target = (plan.target || plan[:stack]) && (plan.target || plan.stack).uuid
     head = Enum.join([action, target, Enum.join(plan.add, ","), Enum.join(plan.remove, ",")], "|")
 
     :sha256
@@ -510,6 +543,27 @@ defmodule PhoenixKitPhotos.Bulk do
 
         false ->
           %{action: :stack, done: [], failed: [], created: []}
+      end
+
+    log(plan, result, opts)
+    result
+  end
+
+  # Into the chosen stack, all at once.
+  def run(%{action: :stack_add, files: files, stack: stack, auth: auth} = plan, opts) do
+    uuids = Enum.map(files, & &1.uuid)
+
+    result =
+      case files != [] && stack && Stacks.add(stack.uuid, uuids, auth) do
+        {:ok, _stack} ->
+          %{action: :stack_add, done: uuids, failed: [], created: []}
+
+        {:error, reason} ->
+          failed = Enum.map(files, &refusal(&1.uuid, &1, stack_failure(reason)))
+          %{action: :stack_add, done: [], failed: failed, created: []}
+
+        _nothing ->
+          %{action: :stack_add, done: [], failed: [], created: []}
       end
 
     log(plan, result, opts)
@@ -765,6 +819,7 @@ defmodule PhoenixKitPhotos.Bulk do
           "via" => Keyword.get(opts, :via, "timeline")
         }
         |> maybe_put("library", plan.target && plan.target.uuid)
+        |> maybe_put("stack", plan[:stack] && plan.stack.uuid)
         |> maybe_put("approved_by", opts[:approved_by])
     )
   end
@@ -789,6 +844,8 @@ defmodule PhoenixKitPhotos.Bulk do
   def reason_text(:too_few), do: gettext("a stack needs at least two photos")
   def reason_text(:too_many), do: gettext("too many photos for one stack")
   def reason_text(:mixed_libraries), do: gettext("not all in one library")
+  def reason_text(:no_stack), do: gettext("no stack chosen")
+  def reason_text(:in_stack), do: gettext("already in that stack")
   def reason_text(_other), do: gettext("could not be done")
 
   defp repo, do: RepoHelper.repo()

@@ -649,6 +649,69 @@ defmodule PhoenixKitPhotos.Timeline do
 
   def stack_slides(_scope, _stack_uuid, _want, _auth), do: {:error, :not_found}
 
+  @doc """
+  The stacks of the library that `auth` sees as stacks (two or more of their files), the
+  most recently changed first, for choosing one to add photos to: `%{id, title, count,
+  cover, thumb, taken_at}`, `cover` being the file that stands for it. `query:` keeps
+  those whose title has it in; `first:` (a stack's uuid) puts that one first; `limit:`
+  (default 40) the most returned.
+  """
+  @spec stacks(scope(), Scope.t() | nil, keyword()) :: {:ok, [map()]} | {:error, error()}
+  def stacks(scope, auth, opts \\ [])
+
+  def stacks({:library, library_uuid}, auth, opts) when is_binary(library_uuid) do
+    with :ok <- reader(auth, library_uuid) do
+      files =
+        library_uuid
+        |> listed(auth)
+        |> where([f], not is_nil(f.stack_uuid))
+        |> join(:inner, [file: f], s in FileStack, on: s.uuid == f.stack_uuid, as: :stack)
+        |> titled(opts[:query])
+        |> first_stack(opts[:first])
+        |> order_by([stack: s], desc: s.updated_at, desc: s.uuid)
+        |> limit(^Keyword.get(opts, :limit, 40))
+        |> preload(instances: ^completed_instances())
+        |> repo().all()
+        |> Enum.filter(&Libraries.can?(auth, &1, :read))
+
+      stacks = stacks_of(files, library_uuid, auth)
+
+      {:ok,
+       for file <- files, stack = stacks[file.stack_uuid] do
+         Map.merge(stack, %{
+           cover: file.uuid,
+           thumb: variant_url(auth, file, min_width: @thumb_min_width, aspect: :crop),
+           taken_at: file.taken_at
+         })
+       end}
+    end
+  end
+
+  def stacks(_scope, _auth, _opts), do: {:error, :unauthorized}
+
+  defp titled(query, text) when is_binary(text) do
+    case String.trim(text) do
+      "" ->
+        query
+
+      text ->
+        pattern = "%" <> String.replace(text, ~r/[\\%_]/, "\\\\\\0") <> "%"
+        where(query, [stack: s], ilike(s.title, ^pattern))
+    end
+  end
+
+  defp titled(query, _text), do: query
+
+  defp first_stack(query, uuid) do
+    case cast_uuid(uuid) do
+      {:ok, uuid} ->
+        order_by(query, [stack: s], desc: fragment("? = ?", s.uuid, type(^uuid, :binary_id)))
+
+      _ ->
+        query
+    end
+  end
+
   @doc "Most files `slides/6` returns at once."
   @spec slide_limit() :: pos_integer()
   def slide_limit, do: @slide_limit

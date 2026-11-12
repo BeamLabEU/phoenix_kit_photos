@@ -19,6 +19,13 @@ import { dialogOpen, engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
 import { VideoController } from "./viewer/video.js"
 
+// The viewer's Add to stack: a stack with a plus on its front card.
+const STACK_ADD_ICON =
+  '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
+  '<path d="M11 8.5h11.5a1.5 1.5 0 0 1 1.5 1.5v11.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>' +
+  '<rect x="7" y="12" width="13" height="13" rx="1.5" fill="none" stroke="#fff" stroke-width="2"/>' +
+  '<path d="M13.5 15.5v6M10.5 18.5h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>'
+
 // Defaults; the server may override them through the index payload.
 const DEFAULTS = { cell: 160, gap: 4, header: 40 }
 
@@ -1011,8 +1018,9 @@ export const PhotoTimeline = {
     const shown = open ? this.stacked().get(index) : null
     const slide = open ? this.slides.get(where.at) : null
     const at = this.slides.rebase(payload.sections, open ? { index: where.at, slide } : null)
-    // A stack's pages may have changed (a photo taken out, a new cover): asked for again.
-    this.stacked().asked.clear()
+    // A stack's pages may have changed (a photo added or taken out, a new cover): asked for
+    // again, and the viewer follows the photo it shows if that went into a stack.
+    this.stacked().refreshAll()
     if (!open) return
 
     const to = at >= 0 ? this.stacked().toView(at, where.page) : -1
@@ -1023,7 +1031,9 @@ export const PhotoTimeline = {
     // A photo added earlier in the same day moves the one on screen along: once that day's
     // slides arrive, `setSlides` turns to where it went.
     this.following = shown ? shown.id : null
-    this.prefetchSlides(at >= 0 ? at : where.at)
+    const center = at >= 0 ? at : Math.min(where.at, Math.max(0, this.slides.total - 1))
+    this.prefetchSlides(center)
+    this.prefetchStacks(center)
   },
 
   prefetchSlides(center, radius = 8) {
@@ -1067,6 +1077,9 @@ export const PhotoTimeline = {
     if (at >= 0 && at !== this.pager.index && this.pager.goTo) {
       this.turningTo = at
       this.pager.goTo(at)
+    } else if (want >= 0 && at === this.pager.index) {
+      // Already at its place, but what was drawn there was something else.
+      this.pager.refresh([at])
     }
     if (this.pager.redraw) this.pager.redraw()
     this.showStrip(this.pager.index)
@@ -1157,6 +1170,7 @@ export const PhotoTimeline = {
       thumbOf: (slideId) => this.thumbOf(slideId),
       tileImage: (i) => this.tileImage(i),
       onInfo: (slideId) => this.send("timeline:open", { id: slideId }),
+      actions: this.viewerActions(),
       onChange: (i) => {
         // The person turned the page: stop following a photo an upload moved.
         if (i !== this.turningTo) this.following = null
@@ -1195,23 +1209,53 @@ export const PhotoTimeline = {
     return this.list
   },
 
+  /** The translated words of the stack strip and buttons (`data-stack-strings`). */
+  stackStrings() {
+    try {
+      return JSON.parse(this.root()?.dataset.stackStrings || "{}")
+    } catch (_error) {
+      return {}
+    }
+  },
+
+  /**
+   * The viewer's own buttons (`host.actions`): Add to stack, on a photo in no stack, for someone
+   * who may change the library. The photo goes into a stack picked in a dialog, and the viewer
+   * follows it there.
+   */
+  viewerActions() {
+    if (this.root()?.dataset.stackEdit !== "true") return []
+    const single = (i) => {
+      const slide = this.stacked().get(i)
+      return slide && !this.stacked().pageInfo(i) && !(slide.stack && slide.stack.count >= 2) ? slide : null
+    }
+    return [
+      {
+        name: "stack-add",
+        label: this.stackStrings().add || "Add to stack",
+        icon: STACK_ADD_ICON,
+        shown: (i) => single(i) !== null,
+        run: (i) => {
+          const slide = single(i)
+          if (slide) this.send("timeline:pick_stack", { file: slide.id })
+        }
+      }
+    ]
+  },
+
   /** The strip over a stack's photo (`stack_strip.js`), or nothing off a stack. */
   showStrip(index) {
-    const info = this.pager && this.pager !== true && this.pager.isOpen ? this.stacked().pageInfo(index) : null
+    const open = this.pager && this.pager !== true && this.pager.isOpen
+    if (open && this.pager.syncActions) this.pager.syncActions()
+    const info = open ? this.stacked().pageInfo(index) : null
     if (!info) {
       if (this.strip) this.strip.hide()
       return
     }
     if (!this.strip) {
       const root = this.root()
-      let strings = {}
-      try {
-        strings = JSON.parse(root?.dataset.stackStrings || "{}")
-      } catch (_error) {
-        strings = {}
-      }
       this.strip = new StackStrip({
-        strings,
+        strings: this.stackStrings(),
         editable: root?.dataset.stackEdit === "true",
         onGo: (to) => this.turnTo(to),
         onSkip: (direction) => this.skipStack(direction),

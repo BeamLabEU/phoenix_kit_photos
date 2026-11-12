@@ -370,6 +370,53 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert is_nil(reload(p2).stack_uuid)
     end
 
+    test "a stack with more photos and no title given keeps its title", ctx do
+      [p1, p2, p3] = pages(ctx, 3)
+      {:ok, _} = Stacks.create([p1.uuid, p2.uuid], ctx.scope, %{title: "Lease"})
+
+      # The dialog's title box left empty.
+      plan = Bulk.plan(:stack, [p1.uuid, p3.uuid], ctx.scope, %{"title" => ""})
+      assert %{failed: []} = Bulk.run(plan)
+      assert Stacks.get(reload(p3).stack_uuid).title == "Lease"
+    end
+
+    test "add to a stack: one photo or more, the stack chosen by its id", ctx do
+      [p1, p2, p3] = pages(ctx, 3)
+      {:ok, stack} = Stacks.create([p1.uuid, p3.uuid], ctx.scope, %{title: "Lease"})
+      single = photo(ctx, %{original_file_name: "late.jpg", taken_at: ~U[2018-07-15 10:00:00Z]})
+
+      assert Bulk.whole_stacks([p1.uuid], :stack_add, ctx.scope) == [p1.uuid]
+
+      # No stack chosen, or one that is not there: nothing can go.
+      assert [%{reason: :no_stack}] = Bulk.plan(:stack_add, [p2.uuid], ctx.scope).refused
+
+      assert [%{reason: :no_stack}] =
+               Bulk.plan(:stack_add, [p2.uuid], ctx.scope, %{"stack" => Ecto.UUID.generate()}).refused
+
+      # Someone who may not change the files.
+      refused =
+        Bulk.plan(:stack_add, [p2.uuid], scope_for(ctx.stranger), %{"stack" => stack.uuid})
+
+      assert refused.files == []
+
+      # The stack's own cover chosen with them is already there; the rest go in by date.
+      plan =
+        Bulk.plan(:stack_add, [p1.uuid, single.uuid, p2.uuid], ctx.scope, %{"stack" => stack.uuid})
+
+      assert [%{reason: :in_stack}] = plan.refused
+      assert %{done: done, failed: []} = Bulk.run(plan)
+      assert Enum.sort(done) == Enum.sort([p2.uuid, single.uuid])
+
+      assert Enum.map(Stacks.files(stack.uuid), & &1.uuid) ==
+               [p1.uuid, p2.uuid, p3.uuid, single.uuid]
+
+      # In another library: refused before anything is tried.
+      far = photo(%{ctx | library: library_fixture(ctx.owner)})
+
+      assert [%{reason: :mixed_libraries}] =
+               Bulk.plan(:stack_add, [far.uuid], ctx.scope, %{"stack" => stack.uuid}).refused
+    end
+
     test "a stack of one is refused, and says why", ctx do
       [p1] = pages(ctx, 1)
       plan = Bulk.plan(:stack, [p1.uuid], ctx.scope)

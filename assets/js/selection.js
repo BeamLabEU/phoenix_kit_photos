@@ -221,9 +221,15 @@ export const selection = {
     const counter = root.querySelector("[data-selection-count]")
     if (counter) counter.textContent = count.toLocaleString(document.documentElement.lang || undefined)
     if (count === 0) this.noteCapped(false)
-    // Most actions take one item; making a stack takes two (`data-min`).
+    // Most actions take one item; making a stack takes two (`data-min`). A menu of them (Stack)
+    // opens only with something chosen.
     for (const button of root.querySelectorAll("[data-bulk]")) {
       button.disabled = count < Math.max(1, Number(button.dataset?.min) || 1)
+    }
+    for (const menu of root.querySelectorAll("[data-bulk-menu]")) {
+      const off = count < 1
+      menu.querySelector("summary")?.classList?.toggle("btn-disabled", off)
+      if (off) menu.removeAttribute?.("open")
     }
   },
 
@@ -528,7 +534,10 @@ export const selection = {
   selectionClick(event) {
     const target = event.target
     const action = target.closest?.("[data-bulk]")
-    if (action) return this.bulk(action.dataset.bulk)
+    if (action) {
+      target.closest?.("details")?.removeAttribute("open")
+      return this.bulk(action.dataset.bulk)
+    }
     const copy = target.closest?.("[data-copy-links]")
     if (copy) {
       const box = this.root()?.querySelector("[data-links]")

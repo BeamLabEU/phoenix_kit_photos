@@ -183,4 +183,149 @@ defmodule PhoenixKitPhotos.PhotoTimelineStacksTest do
 
     refute has_element?(view, "#test-timeline-stack-edit")
   end
+
+  # The selection bar, on a library of the user's own that they may add to.
+  defp bar(ctx) do
+    library = library_fixture(ctx.user)
+
+    [a, b, c] =
+      for {name, at} <- [
+            {"a.jpg", ~U[2019-01-01 10:00:00Z]},
+            {"b.jpg", ~U[2019-01-01 10:01:00Z]},
+            {"c.jpg", ~U[2019-01-01 12:00:00Z]}
+          ],
+          do:
+            file_fixture(ctx.user, %{
+              original_file_name: name,
+              taken_at: at,
+              library_uuid: library.uuid
+            })
+
+    {:ok, stack} = Stacks.create([a.uuid, b.uuid], scope_for(ctx.user), %{title: "Receipts"})
+
+    {:ok, view, _html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), PhoenixKitPhotos.TestLive,
+        session: %{
+          "scope" => scope_for(ctx.user),
+          "library" => {:library, library.uuid},
+          "selectable" => true
+        }
+      )
+
+    %{view: view, a: a, b: b, c: c, stack: stack}
+  end
+
+  test "the bar's Stack is a menu: New stack, and Add to a stack", ctx do
+    %{view: view} = bar(ctx)
+    assert has_element?(view, "[data-bulk-menu] [data-bulk=stack][data-min='2']")
+    assert has_element?(view, "[data-bulk-menu] [data-bulk=stack_add][data-min='1']")
+    refute has_element?(view, "[data-selection-bar] > div > button[data-bulk=stack]")
+  end
+
+  test "Add to a stack from the bar: a stack among those chosen is the one meant", ctx do
+    %{view: view, a: a, c: c, stack: stack} = bar(ctx)
+
+    html =
+      view
+      |> element("#test-timeline-viewport")
+      |> render_hook("timeline:bulk", %{"action" => "stack_add", "ids" => [a.uuid, c.uuid]})
+
+    assert html =~ "Add 1 item to a stack"
+
+    assert has_element?(
+             view,
+             "#test-timeline-bulk input[name=stack][value='#{stack.uuid}'][checked]"
+           )
+
+    # With no stack among them, none is chosen yet: what was chosen is counted, Add waits.
+    html =
+      view
+      |> element("#test-timeline-viewport")
+      |> render_hook("timeline:bulk", %{"action" => "stack_add", "ids" => [c.uuid]})
+
+    assert html =~ "Add 1 item to a stack"
+    refute html =~ "no stack chosen"
+    assert has_element?(view, "#test-timeline-bulk button[type=submit][disabled]")
+
+    view |> element("#test-timeline-bulk") |> render_change(%{"stack" => stack.uuid, "q" => ""})
+    refute has_element?(view, "#test-timeline-bulk button[type=submit][disabled]")
+
+    # Back to what was chosen first.
+    view
+    |> element("#test-timeline-viewport")
+    |> render_hook("timeline:bulk", %{"action" => "stack_add", "ids" => [a.uuid, c.uuid]})
+
+    assert html =~ "Receipts"
+    # The stack's own cover chosen with it needs no word.
+    refute html =~ "already in that stack"
+
+    view |> element("#test-timeline-bulk") |> render_submit(%{"stack" => stack.uuid, "q" => ""})
+
+    assert eventually(fn -> length(Stacks.files(stack.uuid)) == 3 end)
+
+    assert Enum.map(Stacks.files(stack.uuid), & &1.original_file_name) == [
+             "a.jpg",
+             "b.jpg",
+             "c.jpg"
+           ]
+
+    assert Stacks.get(stack.uuid).title == "Receipts"
+  end
+
+  test "Add to stack in the viewer: one photo into a stack picked by title", ctx do
+    lone = ctx.after.uuid
+
+    html =
+      ctx.view
+      |> element("#test-timeline-viewport")
+      |> render_hook("timeline:pick_stack", %{"file" => lone})
+
+    assert html =~ "Add to a stack"
+
+    assert has_element?(
+             ctx.view,
+             "#test-timeline-stack-pick input[name=stack][value='#{ctx.stack.uuid}']"
+           )
+
+    # Found by its title, or not.
+    html =
+      ctx.view |> element("#test-timeline-stack-pick form") |> render_change(%{"q" => "nothing"})
+
+    assert html =~ "No stack has that in its title."
+    html = ctx.view |> element("#test-timeline-stack-pick form") |> render_change(%{"q" => "lea"})
+    assert html =~ "Lease"
+
+    ctx.view
+    |> element("#test-timeline-stack-pick form")
+    |> render_submit(%{"stack" => ctx.stack.uuid, "q" => "lea"})
+
+    refute has_element?(ctx.view, "#test-timeline-stack-pick")
+    assert Enum.map(Stacks.files(ctx.stack.uuid), & &1.uuid) == [ctx.p1.uuid, ctx.p2.uuid, lone]
+
+    # The viewer follows the photo: the stack's place, its third page.
+    assert_push_event(ctx.view, "timeline:test-timeline:view", %{id: ^lone, global: 0, page: 2})
+  end
+
+  test "no Add to stack dialog for someone who may not change the library", ctx do
+    stranger = user_fixture("pick-stranger-#{System.unique_integer([:positive])}@example.com")
+
+    {:ok, view, _html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), PhoenixKitPhotos.TestLive,
+        session: %{"scope" => scope_for(stranger), "library" => {:library, media_uuid()}}
+      )
+
+    view
+    |> element("#test-timeline-viewport")
+    |> render_hook("timeline:pick_stack", %{"file" => ctx.after.uuid})
+
+    refute has_element?(view, "#test-timeline-stack-pick")
+  end
+
+  defp eventually(check, tries \\ 40) do
+    cond do
+      check.() -> true
+      tries == 0 -> false
+      true -> Process.sleep(50) && eventually(check, tries - 1)
+    end
+  end
 end

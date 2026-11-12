@@ -21,6 +21,8 @@ export class StackedList {
     // stack id -> { cover: id of the slide that stands for it, pages: [slide, ...] }
     this.stacks = new Map()
     this.asked = new Set()
+    // Stacks whose pages may have changed (a new index): asked for again, open until then.
+    this.stale = new Set()
   }
 
   /** The stacks open in the list, by their timeline position: `[{ id, at, pages }]`. */
@@ -100,6 +102,7 @@ export class StackedList {
    */
   expand(id, cover, pages) {
     this.asked.delete(id)
+    this.stale.delete(id)
     if (!Array.isArray(pages) || pages.length === 0) {
       this.stacks.delete(id)
       return
@@ -119,13 +122,24 @@ export class StackedList {
       const stack = slide && slide.stack
       if (!stack || !(stack.count >= 2)) continue
       const known = this.stacks.get(stack.id)
-      if (this.asked.has(stack.id) || (known && known.cover === slide.id && known.pages.length === stack.count)) {
+      const current = known && !this.stale.has(stack.id) && known.cover === slide.id && known.pages.length === stack.count
+      if (this.asked.has(stack.id) || current) {
         continue
       }
       this.asked.add(stack.id)
       out.push({ id: stack.id, cover: slide.id })
     }
     return out
+  }
+
+  /**
+   * The index changed: any stack's pages may be others now (a photo added or taken out, a new
+   * cover), and a slide kept from before may carry an old count. Each is asked for again; it
+   * stays open as it was until the answer comes, so the viewer does not jump.
+   */
+  refreshAll() {
+    this.asked.clear()
+    this.stale = new Set(this.stacks.keys())
   }
 
   /** An answer that never came: the stack may be asked for again. */

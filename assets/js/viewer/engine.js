@@ -13,6 +13,8 @@
 //                       that can fly to a tile does; the others fade)
 //   host.video          a VideoController: build / play / pause for video slides
 //   host.onInfo(id)     the person asked for the host's own viewer (details)
+//   host.actions        (optional) more buttons for the bar: `[{ name, label, icon, shown(i),
+//                       run(i) }]`, `icon` an SVG string; each shows only where `shown(i)`
 //   host.onChange(i)    the page turned to index i
 //   host.onClose()      the viewer is gone (however it closed)
 //
@@ -23,6 +25,7 @@
 //   goTo(index)         (optional) turn to `index`, when the address names another photo
 //   redraw()            (optional) the slides beside the current one may be others now
 //                       (a stack's pages opened in line): draw them again
+//   syncActions()       (optional) ask each of `host.actions` again whether it shows here
 //   destroy()           remove it at once, no callbacks needed
 //   refresh(indices)    slides at these indices arrived: draw them where a
 //                       placeholder was

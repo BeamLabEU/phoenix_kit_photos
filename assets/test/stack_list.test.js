@@ -110,3 +110,21 @@ test("an empty answer opens nothing", () => {
   list.expand("s1", "p2", [{ id: "p2" }])
   assert.equal(list.total, 5)
 })
+
+test("after a new index every stack is asked for again, and stays open until the answer", () => {
+  const slides = [{ id: "c", stack: { id: "S", count: 2 } }, { id: "x" }]
+  const store = { total: 2, get: (i) => slides[i] || null, indexOf: (id) => slides.findIndex((s) => s.id === id) }
+  const list = new StackedList(store)
+  list.expand("S", "c", [{ id: "c" }, { id: "p" }])
+  assert.deepEqual(list.wanted(0, 1), [], "known, and the count agrees")
+
+  // A photo went into the stack; the kept cover slide still says 2.
+  list.refreshAll()
+  assert.equal(list.total, 3, "still open as it was")
+  assert.deepEqual(list.wanted(0, 1), [{ id: "S", cover: "c" }])
+  assert.deepEqual(list.wanted(0, 1), [], "asked once")
+  list.expand("S", "c", [{ id: "c" }, { id: "p" }, { id: "x" }])
+  assert.equal(list.indexOf("x"), 2, "the photo is found on its page")
+  slides[0] = { id: "c", stack: { id: "S", count: 3 } } // the cover's slide, fetched again
+  assert.deepEqual(list.wanted(0, 1), [])
+})

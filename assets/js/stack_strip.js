@@ -138,15 +138,15 @@ export class StackStrip {
 }
 
 /**
- * The hook of the viewer's Edit stack dialog: a modal `<dialog>`, so it is above the viewer and
- * the keys are its own while it is open (`dialogOpen()` in viewer/engine.js). Closing it with
- * Escape tells the component.
+ * The hook of the viewer's dialogs (Edit stack, Add to stack): a modal `<dialog>`, so it is above
+ * the viewer and the keys are its own while it is open (`dialogOpen()` in viewer/engine.js).
+ * Closing it with Escape tells the component (`data-close`, the event to send).
  */
 export const PhotoStackDialog = {
   mounted() {
     this.onCancel = (event) => {
       event.preventDefault()
-      this.pushEventTo(this.el, "timeline:stack_edit_close", {})
+      this.pushEventTo(this.el, this.el.dataset.close || "timeline:stack_edit_close", {})
     }
     this.el.addEventListener("cancel", this.onCancel)
     if (typeof this.el.showModal === "function" && !this.el.open) this.el.showModal()

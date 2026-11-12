@@ -936,3 +936,55 @@ test("the first index after the hello does not make every photo pop in", () => {
   h.setWindow({ section: "2020-01-01", revision: 2, items: [{ id: "x" }] })
   assert.deepEqual([...h.fresh], [])
 })
+
+test("Stack is a menu: New stack takes two, Add to a stack one, and choosing closes the menu", () => {
+  const { h, sent } = selecting()
+  const button = (bulk, min) => ({ dataset: { bulk, min }, disabled: true })
+  const buttons = [button("stack", "2"), button("stack_add", "1")]
+  const summary = { classList: { on: true, toggle(_name, on) { this.on = on } } }
+  const menu = { open: true, querySelector: () => summary, removeAttribute() { this.open = false } }
+  h.root = () => ({
+    dataset: {},
+    querySelector: () => null,
+    querySelectorAll: (selector) => (selector === "[data-bulk]" ? buttons : selector === "[data-bulk-menu]" ? [menu] : [])
+  })
+  h.selectionChanged()
+  assert.equal(summary.classList.on, true, "nothing chosen: the menu is off")
+  assert.equal(menu.open, false)
+  h.toggleSelected("a", 0)
+  assert.equal(summary.classList.on, false)
+  assert.deepEqual(buttons.map((b) => b.disabled), [true, false], "one photo can be added to a stack")
+  h.toggleSelected("b", 1)
+  assert.deepEqual(buttons.map((b) => b.disabled), [false, false])
+
+  menu.open = true
+  sent.length = 0
+  h.selectionClick({ target: { closest: (s) => (s === "[data-bulk]" ? buttons[1] : s === "details" ? menu : null) } })
+  assert.equal(menu.open, false)
+  assert.deepEqual(sent.at(-1).slice(1), ["timeline:bulk", { action: "stack_add", ids: ["a", "b"] }])
+})
+
+test("the viewer's Add to stack shows on a photo in no stack, for someone who may change it", () => {
+  const { h, sent } = hook()
+  const slides = [{ id: "a" }, { id: "s", stack: { id: "S", count: 3, title: null } }, { id: "b" }]
+  h.slides = { total: 3, get: (i) => slides[i] || null, indexOf: (id) => slides.findIndex((s) => s.id === id) }
+  const root = { dataset: { stackEdit: "true", stackStrings: JSON.stringify({ add: "Lisa virna" }) } }
+  h.root = () => root
+
+  const [action] = h.viewerActions()
+  assert.equal(action.label, "Lisa virna")
+  assert.deepEqual([0, 1, 2].map(action.shown), [true, false, true], "not on a stack's cover")
+
+  // The stack's pages arrive and open in line: none of them is offered either.
+  h.stacked().expand("S", "s", [{ id: "s" }, { id: "p2" }, { id: "p3" }])
+  assert.deepEqual([0, 1, 2, 3, 4].map(action.shown), [true, false, false, false, true])
+
+  sent.length = 0
+  action.run(4)
+  assert.deepEqual(sent.at(-1).slice(1), ["timeline:pick_stack", { file: "b" }])
+  action.run(2)
+  assert.equal(sent.length, 1, "a stack's page asks nothing")
+
+  root.dataset.stackEdit = "false"
+  assert.deepEqual(h.viewerActions(), [], "someone who may not change it gets no button")
+})

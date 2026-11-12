@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added
+
+- **Fetching photos and videos from a link** (`PhoenixKitPhotos.Fetches`), off by
+  default. A link pasted on a library page (or given to the uploader's new *From a
+  link* field, or its Paste button on an iPad) is looked at on the server with
+  yt-dlp (video sites) or gallery-dl (photo sites, plain file links): the dialog
+  (`PhoenixKitPhotos.Components.LinkFetcher`) shows what was found, lets the person
+  untick items of an album or playlist and choose a video's quality, and fetches only
+  once they tick that they may keep a copy (when and which wording are recorded). The
+  download runs in Oban (`PhoenixKitPhotos.Fetches.FetchJob`), one at a time per
+  person, with progress on a card that follows it through refreshes; each file is
+  stored as it arrives, titled and dated by its post, and keeps where it came from
+  (shown in core's viewer through `file_info/1`). Cancel, retry of what is missing,
+  a bell notification for a fetch of a minute or more, and **site logins**: a person's
+  own cookies for a site that needs a login, kept to that site and encrypted
+  (`PhoenixKitPhotos.Fetches.SiteLogins`, `PhoenixKitPhotos.Components.FetchList`).
+  ⚠️ Every request goes through an egress proxy that refuses internal addresses
+  (`:proxy`, e.g. smokescreen); without it fetching does not run. To turn it on: run
+  `mix phoenix_kit.update` (this package's own migration chain, V1, three tables),
+  add `photo_fetches: 3` to Oban's queues, install yt-dlp, gallery-dl and the proxy,
+  and set `config :phoenix_kit_photos, PhoenixKitPhotos.Fetches, enabled: true,
+  proxy: …` (keys in `PhoenixKitPhotos.Fetches.Config`). Mount `LinkFetcher` on the
+  library page and pass the uploader `link_fetcher`.
+- `PhoenixKitPhotos.Migrations`: the package's own migration chain
+  (`migration_module/0`), so `mix phoenix_kit.update` writes its wrapper.
+
 ### Fixed
 
 - **A video the swipe viewer opens on plays.** PhotoSwipe builds the first slide's

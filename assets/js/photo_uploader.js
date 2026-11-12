@@ -1,5 +1,6 @@
 import { carriesFiles, filesFromDrop } from "./drop_files.js"
 import { canReadClipboard, carriesPastedFiles, filesFromClipboard, filesFromPaste, isEditable } from "./paste_files.js"
+import { LINK_EVENT, linkFromClipboardItems } from "./link_fetcher.js"
 import { makePreview, offerPreview, withdrawPreviews } from "./upload_previews.js"
 
 /**
@@ -348,6 +349,13 @@ export const PhotoUploader = {
     }
     const { files, skipped, unreadable, truncated } = await filesFromClipboard(items, { accept: this.accept })
     if (files.length === 0 && skipped === 0) {
+      // No picture, but perhaps a link: the page's link fetcher takes it, where there is one.
+      const link = this.el.dataset.linkFetcher === "true" ? await linkFromClipboardItems(items) : null
+      if (link) {
+        document.dispatchEvent(new CustomEvent(LINK_EVENT, { detail: { text: link } }))
+        this.pushEventTo(this.el, "close", {})
+        return
+      }
       this.pushEventTo(this.el, "clipboard", { result: "empty" })
       return
     }

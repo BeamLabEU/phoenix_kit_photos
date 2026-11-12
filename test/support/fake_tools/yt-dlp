@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+# A fake yt-dlp: see common.py.
+import json, os, subprocess, sys, time
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from common import arg_after, err, log_args
+
+log_args()
+mode = os.environ.get("FAKE_MODE", "video")
+url = sys.argv[-1]
+
+if mode in ("unsupported", "album_unsupported"):
+    err(f"ERROR: Unsupported URL: {url}")
+    sys.exit(1)
+
+if "-J" in sys.argv:
+    duration = 7200 if mode == "video_long" else 3
+    doc = {"id": "vid1", "title": "A fake video", "uploader": "Vic Uploader", "timestamp": 1114313512,
+           "duration": duration, "thumbnail": "https://img.example/vid1.jpg", "webpage_url": url,
+           "formats": [{"format_id": "a", "vcodec": "none", "acodec": "opus", "abr": 128, "filesize": 50000},
+                       {"format_id": "v720", "vcodec": "vp9", "acodec": "none", "height": 720, "tbr": 1000, "filesize": 300000},
+                       {"format_id": "v1080", "vcodec": "vp9", "acodec": "none", "height": 1080, "tbr": 2000, "filesize": 600000},
+                       {"format_id": "v2160", "vcodec": "vp9", "acodec": "none", "height": 2160, "tbr": 8000, "filesize": 2400000}]}
+    print(json.dumps(doc))
+    sys.exit(0)
+
+directory = arg_after("-P")
+os.makedirs(directory, exist_ok=True)
+print('PKF_ITEM 0 "vid1"', flush=True)
+
+if mode == "video_stall":
+    print('PKF_DL {"downloaded_bytes": 10, "total_bytes": 100, "status": "downloading"}', flush=True)
+    time.sleep(60)
+    sys.exit(0)
+
+if mode == "video_slow":
+    # A child of its own, as yt-dlp's ffmpeg is: cancelling must end it too.
+    child = subprocess.Popen(["sleep", "60"])
+    with open(os.path.join(directory, "child.pid"), "w") as f:
+        f.write(str(child.pid))
+    for i in range(200):
+        print('PKF_DL ' + json.dumps({"downloaded_bytes": i * 10, "total_bytes": 2000, "speed": 100.0, "eta": 20 - i // 10, "status": "downloading"}), flush=True)
+        time.sleep(0.1)
+    sys.exit(0)
+
+if mode == "video_too_big":
+    err("[download] File is larger than max-filesize (2000000000 bytes > 1073741824 bytes). Skipping...")
+    sys.exit(0)
+
+for i in range(1, 4):
+    print('PKF_DL ' + json.dumps({"downloaded_bytes": i * 100, "total_bytes": 300, "speed": 1000.0, "eta": 3 - i, "status": "downloading" if i < 3 else "finished"}), flush=True)
+print("PKF_PP started Merger", flush=True)
+path = os.path.join(directory, "0-vid1.mp4")
+subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=16x16:d=1", "-pix_fmt", "yuv420p", path], check=True)
+print("PKF_PP finished Merger", flush=True)
+print("PKF_FILE " + json.dumps({"filepath": path, "id": "vid1", "title": "A fake video", "uploader": "Vic Uploader",
+                                 "timestamp": 1114313512, "webpage_url": url, "ext": "mp4"}), flush=True)
+sys.exit(0)

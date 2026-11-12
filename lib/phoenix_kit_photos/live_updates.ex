@@ -17,6 +17,10 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   store files in the background: without this hook on its page it stores them inline,
   while the page waits. And it tells an uploader that asked (`watch_processed/1`) which
   files finished processing, so its tiles stop saying *Making previews…* at once.
+
+  And it relays a person's fetches from a link (`PhoenixKitPhotos.Fetches`) to the
+  components that asked (`watch_fetches/3`: the library's `LinkFetcher`, the Fetches
+  list), as `send_update(module, id: id, fetch_event: {:fetch, fetch} | {:removed, uuid})`.
   """
 
   alias PhoenixKit.Modules.Storage
@@ -25,6 +29,8 @@ defmodule PhoenixKitPhotos.LiveUpdates do
 
   @upload_topic_key {__MODULE__, :upload_topic}
   @watching_key {__MODULE__, :watching_processed}
+  @fetch_watchers_key {__MODULE__, :watching_fetches}
+  @fetch_topics_key {__MODULE__, :fetch_topics}
 
   @events [
     :phoenix_kit_file_processed,
@@ -57,6 +63,31 @@ defmodule PhoenixKitPhotos.LiveUpdates do
     :ok
   end
 
+  @doc """
+  Asks that the component `module` with this id be told about the fetches of the person
+  `user_uuid`: their page subscribes (once per person) and relays each change as
+  `send_update(module, id: component_id, fetch_event: event)`. Called by the component,
+  in the page's process; does nothing more on a page without this hook.
+  """
+  @spec watch_fetches(module(), String.t(), String.t() | nil) :: :ok
+  def watch_fetches(_module, _component_id, nil), do: :ok
+
+  def watch_fetches(module, component_id, user_uuid) do
+    topics = Process.get(@fetch_topics_key, MapSet.new())
+
+    unless MapSet.member?(topics, user_uuid) do
+      PhoenixKitPhotos.Fetches.subscribe(user_uuid)
+      Process.put(@fetch_topics_key, MapSet.put(topics, user_uuid))
+    end
+
+    Process.put(
+      @fetch_watchers_key,
+      Map.put(Process.get(@fetch_watchers_key, %{}), component_id, module)
+    )
+
+    :ok
+  end
+
   def on_mount(ids, _params, _session, socket) do
     if Phoenix.LiveView.connected?(socket) do
       Storage.subscribe_to_file_events()
@@ -68,6 +99,14 @@ defmodule PhoenixKitPhotos.LiveUpdates do
       Phoenix.LiveView.attach_hook(socket, __MODULE__, :handle_info, fn
         {:phoenix_kit_photos_upload, component, ref, event}, socket when is_binary(component) ->
           Phoenix.LiveView.send_update(PhotoUploader, id: component, upload_event: {ref, event})
+          {:halt, socket}
+
+        {:phoenix_kit_photos_fetch, fetch}, socket ->
+          tell_fetchers({:fetch, fetch})
+          {:halt, socket}
+
+        {:phoenix_kit_photos_fetch_removed, uuid}, socket ->
+          tell_fetchers({:removed, uuid})
           {:halt, socket}
 
         # Stacked, unstacked, dated by hand: the timeline is read again, like for an upload.
@@ -111,6 +150,14 @@ defmodule PhoenixKitPhotos.LiveUpdates do
       end)
 
     {:cont, socket}
+  end
+
+  defp tell_fetchers(event) do
+    for {id, module} <- Process.get(@fetch_watchers_key, %{}) do
+      Phoenix.LiveView.send_update(module, id: id, fetch_event: event)
+    end
+
+    :ok
   end
 
   defp tell_uploaders(file_uuids) do

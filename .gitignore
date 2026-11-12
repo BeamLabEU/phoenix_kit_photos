@@ -16,3 +16,6 @@ erl_crash.dump
 
 # NOTE: priv/static/assets/*.js is the prebuilt bundle js_sources/0 points at.
 # It ships in the Hex package, so it is deliberately NOT ignored.
+
+# Python bytecode of the fake fetch tools in test/support/fake_tools
+__pycache__/

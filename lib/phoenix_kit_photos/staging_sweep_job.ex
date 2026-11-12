@@ -4,7 +4,11 @@ defmodule PhoenixKitPhotos.StagingSweepJob do
   older than a day, and not waiting in a `PhoenixKitPhotos.StoreUploadJob`. A job's
   retries end within about twenty minutes, so a day old is well past any of them.
 
-  It schedules itself (`schedule/0`, called whenever the uploader stages a file): at
+  It also tidies fetches from a link (`PhoenixKitPhotos.Fetches.sweep/0`): looks
+  nobody confirmed, fetches whose job died, folders left behind.
+
+  It schedules itself (`schedule/0`, called whenever the uploader stages a file or a
+  fetch starts): at
   most one is waiting at a time, an hour out. A host needs no cron entry for it, so a
   host's config never names a module an older release of this package lacks.
   """
@@ -35,6 +39,7 @@ defmodule PhoenixKitPhotos.StagingSweepJob do
   def perform(_job) do
     removed = UploadStaging.sweep(waiting())
     if removed > 0, do: Logger.info("[PhotoUploader] removed #{removed} stale staged upload(s)")
+    PhoenixKitPhotos.Fetches.sweep()
     :ok
   end
 

@@ -75,8 +75,17 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   files and slow storage. Otherwise (no hook, no queue) the file is stored inline, as
   before. A file that is saving stays saving after a reload; only the panel forgets it.
 
+  ## From a link
+
+  With `link_fetcher` (the id of the page's `PhoenixKitPhotos.Components.LinkFetcher`)
+  and fetching available (`PhoenixKitPhotos.Fetches.available?/0`), the panel has a
+  **From a link** field: a link typed or pasted there goes to that component, which
+  looks at it and fetches it on the server. The Paste button hands it a copied link the
+  same way, when the clipboard holds a link and no picture.
+
   ## Options
 
+    * `:link_fetcher` — the id of the page's `LinkFetcher`, see above.
     * `:on_stored` — an atom. When set, the parent LiveView gets
       `{on_stored, component_id, {:added | :duplicate | :elsewhere, file} | {:error, reason}}`
       for each finished file; it must have a clause for it. Unset, nothing is sent.
@@ -138,7 +147,9 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        upload_auto: nil,
        expanded: false,
        hide_token: nil,
-       clipboard: nil
+       clipboard: nil,
+       link_fetcher: nil,
+       fetching?: false
      )}
   end
 
@@ -212,6 +223,11 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       |> assign(:id, assigns.id)
       |> assign(:auth, assigns[:auth])
       |> assign(:on_stored, assigns[:on_stored])
+      |> assign(:link_fetcher, assigns[:link_fetcher])
+      |> assign(
+        :fetching?,
+        is_binary(assigns[:link_fetcher]) and PhoenixKitPhotos.Fetches.available?()
+      )
       |> assign(:library_uuid, library_uuid)
       |> then(&if(changed?, do: forget(&1), else: &1))
       |> assign_library()
@@ -541,6 +557,20 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   @impl true
   # The **+** button and *Details*: the whole panel, and no countdown while it is read.
+  # The From a link field: the page's LinkFetcher takes it from here.
+  def handle_event("fetch_link", %{"link" => text}, %{assigns: %{fetching?: true}} = socket) do
+    if String.trim(text) != "" do
+      Phoenix.LiveView.send_update(PhoenixKitPhotos.Components.LinkFetcher,
+        id: socket.assigns.link_fetcher,
+        start: text
+      )
+    end
+
+    {:noreply, assign(socket, :open, false)}
+  end
+
+  def handle_event("fetch_link", _params, socket), do: {:noreply, socket}
+
   def handle_event("open", _params, socket),
     do: {:noreply, assign(socket, open: true, expanded: true, hide_token: nil, clipboard: nil)}
 
@@ -698,6 +728,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       data-previews={Jason.encode!(for e <- @entries, do: [e.ref, e.client_name, e.client_size])}
       data-preparing={Jason.encode!(for item <- @preparing, do: [item.ref, item.uuid])}
       data-refs={Jason.encode!(Enum.map(@entries, & &1.ref) ++ Enum.map(@saving ++ @preparing, & &1.ref))}
+      data-link-fetcher={to_string(@fetching?)}
     >
       <%!-- Shown while files are dragged over the page; it never takes a click. --%>
       <div
@@ -838,6 +869,29 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               {clipboard_note(@clipboard)}
             </p>
 
+            <%!-- A link: the page's LinkFetcher looks at it and fetches it on the server.
+                 Its own small form, outside the upload form (a form cannot hold one). --%>
+            <div :if={@fetching? && !@blocked} class="flex flex-col gap-1 border-t border-base-300 pt-3">
+              <label for={"#{@id}-link"} class="text-xs font-medium text-base-content/70">
+                {gettext("From a link")}
+              </label>
+              <div class="join w-full">
+                <input
+                  id={"#{@id}-link"}
+                  name="link"
+                  form={"#{@id}-link-form"}
+                  type="url"
+                  inputmode="url"
+                  autocomplete="off"
+                  placeholder={gettext("https://… a post, an album or a video")}
+                  class="input input-sm join-item w-full"
+                />
+                <button type="submit" form={"#{@id}-link-form"} class="btn btn-sm join-item">
+                  {gettext("Fetch")}
+                </button>
+              </div>
+            </div>
+
             <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept
                  in the browser (localStorage), so no event goes to the server. --%>
             <label :if={!@blocked} class="flex items-center justify-between gap-2 text-xs text-base-content/60">
@@ -964,6 +1018,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
           </div>
         </section>
       </form>
+
+      <form :if={@fetching?} id={"#{@id}-link-form"} phx-submit="fetch_link" phx-target={@myself} class="hidden"></form>
     </div>
     """
   end

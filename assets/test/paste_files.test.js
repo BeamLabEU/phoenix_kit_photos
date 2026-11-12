@@ -231,3 +231,29 @@ test("the Paste button hands the clipboard's images on, or says why there were n
   assert.deepEqual(failed.pushed, [["clipboard", { result: "failed" }]])
   assert.deepEqual(failed.taken, [])
 })
+
+test("the Paste button hands a copied link to the page's link fetcher, where there is one", async () => {
+  const item = clipItem({ "text/plain": new Blob(["https://site.example/p/1"]) })
+  const read = { clipboard: { read: async () => [item] } }
+
+  const dispatched = []
+  const previous = globalThis.document
+  globalThis.document = { dispatchEvent: event => dispatched.push(event), documentElement: { setAttribute() {} } }
+  try {
+    const withFetcher = pasteButtonHook()
+    withFetcher.el.dataset.linkFetcher = "true"
+    await withFetcher.pasteClipboard(read)
+    assert.equal(dispatched.length, 1)
+    assert.equal(dispatched[0].type, "phoenix-kit-photos:link")
+    assert.deepEqual(dispatched[0].detail, { text: "https://site.example/p/1" })
+    assert.deepEqual(withFetcher.pushed, [["close", {}]])
+
+    // No fetcher on the page: a link is no picture, as before.
+    const without = pasteButtonHook()
+    await without.pasteClipboard(read)
+    assert.deepEqual(without.pushed, [["clipboard", { result: "empty" }]])
+    assert.equal(dispatched.length, 1)
+  } finally {
+    globalThis.document = previous
+  }
+})

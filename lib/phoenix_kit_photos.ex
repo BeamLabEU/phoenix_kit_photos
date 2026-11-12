@@ -27,6 +27,9 @@ defmodule PhoenixKitPhotos do
   Stage 1 reads one storage library, ordered by capture date. The scope is
   `{:library, uuid}`. Capture date and the library partition live in
   PhoenixKit core (V200 and V202); this package does not migrate either.
+
+  The tables it does own (fetching from a link, `PhoenixKitPhotos.Fetch`) come from its
+  own migration chain, `PhoenixKitPhotos.Migrations` (`migration_module/0`).
   """
 
   use PhoenixKit.Module
@@ -61,6 +64,9 @@ defmodule PhoenixKitPhotos do
   # Storage module there is nothing to show.
   @impl PhoenixKit.Module
   def required_modules, do: ["storage"]
+
+  @impl PhoenixKit.Module
+  def migration_module, do: PhoenixKitPhotos.Migrations
 
   # Path-dep installs resolve through this absolute fallback; Hex installs
   # resolve the OTP app name. Emitting both keeps one entry working in each

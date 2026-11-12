@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+# A fake gallery-dl: see common.py.
+import json, os, sys, time
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+from common import arg_after, err, log_args, png
+
+log_args()
+mode = os.environ.get("FAKE_MODE", "album")
+url = sys.argv[-1]
+files = [("a", "First photo", "2019-05-01 10:20:30"), ("b", "Second photo", "2019-05-02 11:00:00"), ("c", None, None)]
+
+if mode == "unsupported" or "video" in mode:
+    err(f"[gallery-dl][error] Unsupported URL '{url}'")
+    sys.exit(64)
+if mode == "login":
+    err("[twitter][error] AuthRequired: authenticated cookies needed to access this timeline")
+    sys.exit(4)
+if mode == "blocked":
+    err("[reddit][error] \"You've been blocked by network security.\"")
+    sys.exit(4)
+
+if "-J" in sys.argv:
+    out = []
+    for key, title, date in files:
+        meta = {"category": "fake", "subcategory": "album", "filename": key, "extension": "png",
+                "title": title, "date": date, "user": {"username": "Ann Author"}, "width": 2, "height": 2}
+        out.append([2, meta])
+        out.append([3, f"https://img.example/{key}.png", meta])
+    print(json.dumps(out, indent=2))
+    sys.exit(0)
+
+directory = arg_after("-D")
+flt = arg_after("--filter") or ""
+os.makedirs(directory, exist_ok=True)
+for n, (key, title, date) in enumerate(files, 1):
+    if flt and json.dumps(key) not in flt:
+        continue
+    print("PKF_ITEM fake", flush=True)
+    path = os.path.join(directory, key + ".png")
+    png(path, n + (int(time.time()) % 1000) * 3 if mode == "fresh" else n)
+    with open(path + ".json", "w") as f:
+        json.dump({"category": "fake", "filename": key, "extension": "png", "title": title, "date": date,
+                   "user": {"username": "Ann Author"}, "post_url": f"https://site.example/p/{key}"}, f)
+    print(path, flush=True)
+    print("PKF_FILE " + json.dumps(path), flush=True)
+    if mode == "slow":
+        time.sleep(0.5)
+sys.exit(0)

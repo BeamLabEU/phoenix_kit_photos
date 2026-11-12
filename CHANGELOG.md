@@ -30,6 +30,12 @@
 
 ### Fixed
 
+- **A video picks up where it was when its storage link runs out.** A browser keeps
+  reading the address it was redirected to, so when a storage's signed link expires
+  mid-video a seek fails for good. On such a network error the viewer asks for the
+  same file again (a fresh link) and goes back to the same moment, playing if it was,
+  at most once a minute.
+
 - **A video the swipe viewer opens on plays.** PhotoSwipe builds the first slide's
   video in its own `openingAnimationEnd` listener, after the viewer's, so the video
   was never given its file: play did nothing until the person swiped away and back.

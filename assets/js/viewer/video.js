@@ -32,6 +32,8 @@ export class VideoController {
     video.pkSources = slide.sources || []
     video.pkTried = null
 
+    video.addEventListener("playing", () => (video.pkPlaying = true))
+    video.addEventListener("pause", () => (video.pkPlaying = false))
     video.addEventListener("volumechange", () => {
       this.muted = video.muted
     })
@@ -65,14 +67,41 @@ export class VideoController {
   }
 
   // The file failed (a codec this browser lacks, a dead link): try the next listed one.
+  // A network error after the file had started is most likely the storage's signed link
+  // expiring while the video played: the browser keeps reading the address it was
+  // redirected to and never asks ours again. So the same file is asked for afresh
+  // (ours answers with a new link) and picks up where it was, at most once a minute.
   next(video) {
     if (video.pkTried === null) return
+    if (this.resume(video)) return
     const source = video.pkSources.find((s) => !video.pkTried.includes(s.url))
     if (!source) return
     video.pkTried.push(source.url)
     video.src = source.url
     video.load()
     this.start(video)
+  }
+
+  resume(video, now = Date.now()) {
+    const NETWORK = 2 // MediaError.MEDIA_ERR_NETWORK
+    const url = video.pkTried[video.pkTried.length - 1]
+    const at = video.currentTime || 0
+    if (!url || !video.error || video.error.code !== NETWORK || !(at > 0)) return false
+    if (video.pkResumedAt && now - video.pkResumedAt < 60_000) return false
+
+    video.pkResumedAt = now
+    const playing = video.pkPlaying === true
+    video.addEventListener(
+      "loadedmetadata",
+      () => {
+        video.currentTime = at
+        if (playing) this.start(video)
+      },
+      { once: true }
+    )
+    video.src = url
+    video.load()
+    return true
   }
 
   start(video) {

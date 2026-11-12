@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **A video the swipe viewer opens on plays.** PhotoSwipe builds the first slide's
+  video in its own `openingAnimationEnd` listener, after the viewer's, so the video
+  was never given its file: play did nothing until the person swiped away and back.
+  It now starts when it is built (`appendHeavyContent`); the snap engine starts a
+  video whose slide arrived late; and a video's own play button chooses a file if
+  none was chosen yet.
+
 - An account whose email is not confirmed is now told so instead of "You may not add
   to this library". The page let it upload, and `StoreUploadJob`, which reads the
   account again, refused every file without saying why (nor logging it). The uploader

@@ -157,7 +157,11 @@ export class SnapEngine {
       const offset = index - this.current
       if (offset < -1 || offset > 1) continue
       const page = this.pages[offset + 1]
-      if (page.dataset.state === "wait") this.draw(page, index)
+      if (page.dataset.state === "wait") {
+        this.draw(page, index)
+        // The page on screen was waiting for its slide: a video in it starts now.
+        if (offset === 0) this.activate()
+      }
     }
   }
 

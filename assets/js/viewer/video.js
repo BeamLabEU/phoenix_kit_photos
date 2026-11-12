@@ -36,6 +36,11 @@ export class VideoController {
       this.muted = video.muted
     })
     video.addEventListener("error", () => this.next(video))
+    // Its own play button, pressed before the engine chose a file: choose one now, or
+    // the press does nothing at all.
+    video.addEventListener("play", () => {
+      if (video.pkTried === null) this.play(video)
+    })
     return video
   }
 

@@ -117,8 +117,11 @@ export class PhotoSwipeEngine {
       if (pswp.opener.isOpen) this.play(content)
     })
     pswp.on("contentDeactivate", ({ content }) => this.pause(content))
-    pswp.on("openingAnimationEnd", () => {
-      if (pswp.currSlide) this.play(pswp.currSlide.content)
+    // The slide the viewer opens on gets its video only once the opening animation is
+    // over, and PhotoSwipe builds it in its own `openingAnimationEnd` listener, which runs
+    // after this one: so it is started when it is built (`appendHeavyContent`), not here.
+    pswp.on("appendHeavyContent", ({ slide }) => {
+      if (slide && slide === pswp.currSlide && pswp.opener.isOpen) this.play(slide.content)
     })
     pswp.on("pointerDown", (event) => this.keepControlsUsable(event))
     // The host's own viewer is a dialog over this one: the keys are its, not ours.

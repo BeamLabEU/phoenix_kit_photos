@@ -11,8 +11,8 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
   ## What becomes of a file
 
     * Stored (`{:added | :duplicate | :elsewhere, file}`) or refused for good
-      (`:not_allowed`, `:unsupported_type`, `:quota_exceeded`, `:file_missing`): the
-      page is told, the staged file is deleted, the job ends.
+      (`:not_allowed`, `:email_unconfirmed`, `:unsupported_type`, `:quota_exceeded`,
+      `:file_missing`): the page is told, the staged file is deleted, the job ends.
     * Anything else (storage slow or down, a timeout, `:failed`): tried again after
       5 s, 15 s, 30 s, 1, 2, 5 and 10 minutes, the staged file kept meanwhile, and the
       page told it is being retried. After the last attempt the page gets the error and
@@ -20,7 +20,9 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
 
   The store runs as the uploader: their account is read again
   (`SessionRef.scope_for_user/1`), so one that was deactivated meanwhile stores nothing,
-  and `Uploads.store/4` checks again that they may add to the library.
+  and `Uploads.store/4` checks again that they may add to the library. An account whose
+  email is not confirmed is refused as `:email_unconfirmed`, not as `:not_allowed`: the
+  page tells the person to open the link they were sent, and the refusal is logged.
 
   ## Telling the page
 
@@ -55,7 +57,7 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
   alias PhoenixKitPhotos.{Uploads, UploadStaging}
 
   @queue :photo_uploads
-  @final [:not_allowed, :unsupported_type, :quota_exceeded, :file_missing]
+  @final [:not_allowed, :email_unconfirmed, :unsupported_type, :quota_exceeded, :file_missing]
   # Seconds to wait before attempt 2, 3, … 8.
   @backoff [5, 15, 30, 60, 120, 300, 600]
 
@@ -142,8 +144,26 @@ defmodule PhoenixKitPhotos.StoreUploadJob do
       |> Uploads.store(entry, scope, args["library_uuid"])
       |> tap(&read_now(&1, staged))
     else
-      _ -> {:error, :not_allowed}
+      refusal -> refused(refusal, args)
     end
+  end
+
+  # Why the account stores nothing, said as exactly as the page can use it, and logged:
+  # the job ends "completed" either way, so the log is where a refusal can be found.
+  defp refused({:error, :unconfirmed}, args) do
+    Logger.info(
+      "[StoreUploadJob] #{inspect(args["name"])} not stored: the email of user #{args["user_uuid"]} is not confirmed"
+    )
+
+    {:error, :email_unconfirmed}
+  end
+
+  defp refused(refusal, args) do
+    Logger.info(
+      "[StoreUploadJob] #{inspect(args["name"])} not stored: user #{args["user_uuid"]} was refused (#{inspect(refusal)})"
+    )
+
+    {:error, :not_allowed}
   end
 
   # The new file's date and shape are read from the staged copy while it is still here,

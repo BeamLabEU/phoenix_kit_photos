@@ -273,6 +273,32 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
       assert library_files(ctx.library) == []
     end
 
+    test "an account whose email is not confirmed: refused at once, and the page is told why",
+         ctx do
+      staged = stage!()
+      owner = user_fixture("bg-unconfirmed-#{System.unique_integer([:positive])}@example.com")
+      library = library_fixture(owner)
+      topic = "phoenix_kit_photos:uploads:test-#{System.unique_integer([:positive])}"
+      PhoenixKit.PubSub.Manager.subscribe(topic)
+
+      job_args =
+        args(staged, ctx, %{
+          "user_uuid" => owner.uuid,
+          "library_uuid" => library.uuid,
+          "topic" => topic,
+          "component" => "bg-uploader",
+          "ref" => "0"
+        })
+
+      assert :ok = Oban.Testing.perform_job(StoreUploadJob, job_args, repo: TestRepo)
+
+      assert_receive {:phoenix_kit_photos_upload, "bg-uploader", "0",
+                      {:stored, {:error, :email_unconfirmed}}}
+
+      refute File.exists?(staged)
+      assert library_files(library) == []
+    end
+
     test "a path outside the staging directory is never touched", ctx do
       outside =
         Path.join(System.tmp_dir!(), "pk_photos_outside_#{System.unique_integer([:positive])}")

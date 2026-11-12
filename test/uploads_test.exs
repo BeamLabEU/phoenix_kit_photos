@@ -44,7 +44,7 @@ defmodule PhoenixKitPhotos.UploadsTest do
       File.rm_rf(dir)
     end)
 
-    owner = user_fixture("owner-#{n}@example.com")
+    owner = confirmed_user_fixture("owner-#{n}@example.com")
     %{n: n, dir: dir, owner: owner, library: library_fixture(owner)}
   end
 
@@ -57,7 +57,9 @@ defmodule PhoenixKitPhotos.UploadsTest do
   defp entry(name \\ "a.png", type \\ "image/png"), do: %{client_name: name, client_type: type}
 
   defp as_member(ctx, role) do
-    user = user_fixture("#{role}-#{ctx.n}-#{System.unique_integer([:positive])}@example.com")
+    user =
+      confirmed_user_fixture("#{role}-#{ctx.n}-#{System.unique_integer([:positive])}@example.com")
+
     member_fixture(ctx.library, user, role)
     scope_for(user)
   end
@@ -92,7 +94,7 @@ defmodule PhoenixKitPhotos.UploadsTest do
       assert Uploads.can_upload?(as_member(ctx, "contributor"), ctx.library.uuid)
 
       refute Uploads.can_upload?(as_member(ctx, "viewer"), ctx.library.uuid)
-      stranger = user_fixture("stranger-#{ctx.n}@example.com")
+      stranger = confirmed_user_fixture("stranger-#{ctx.n}@example.com")
       refute Uploads.can_upload?(scope_for(stranger), ctx.library.uuid)
     end
 
@@ -112,7 +114,7 @@ defmodule PhoenixKitPhotos.UploadsTest do
     end
 
     test "Media: an admin and a holder of media, not everyone", ctx do
-      user = user_fixture("plain-#{ctx.n}@example.com")
+      user = confirmed_user_fixture("plain-#{ctx.n}@example.com")
       media = media_uuid()
 
       refute Uploads.can_upload?(scope_for(user), media)
@@ -167,7 +169,7 @@ defmodule PhoenixKitPhotos.UploadsTest do
     end
 
     test "someone who may not add stores nothing", ctx do
-      stranger = scope_for(user_fixture("nobody-#{ctx.n}@example.com"))
+      stranger = scope_for(confirmed_user_fixture("nobody-#{ctx.n}@example.com"))
       viewer = as_member(ctx, "viewer")
       path = file!(ctx)
 
@@ -175,6 +177,34 @@ defmodule PhoenixKitPhotos.UploadsTest do
       assert {:error, :not_allowed} = Uploads.store(path, entry(), viewer, ctx.library.uuid)
       assert {:error, :not_allowed} = Uploads.store(path, entry(), nil, ctx.library.uuid)
       assert Storage.list_files() == []
+    end
+
+    test "an account whose email is not confirmed stores nothing, and is told why", ctx do
+      owner = user_fixture("unconfirmed-#{ctx.n}@example.com")
+      library = library_fixture(owner)
+      scope = scope_for(owner)
+      path = file!(ctx)
+
+      # Theirs to add to, so not "you may not add to this library": what is missing.
+      assert Uploads.can_upload?(scope, library.uuid)
+      assert Uploads.blocked(scope) == :email_unconfirmed
+      assert {:error, :email_unconfirmed} = Uploads.precheck(path, entry(), scope, library.uuid)
+      assert {:error, :email_unconfirmed} = Uploads.store(path, entry(), scope, library.uuid)
+      assert Storage.list_files() == []
+      assert Uploads.error_message(:email_unconfirmed) =~ "not confirmed"
+
+      # In someone else's library the answer is still the library's.
+      assert {:error, :not_allowed} = Uploads.store(path, entry(), scope, ctx.library.uuid)
+
+      confirmed =
+        owner
+        |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now(:second))
+        |> TestRepo.update!()
+        |> scope_for()
+
+      assert Uploads.blocked(confirmed) == nil
+      assert Uploads.blocked(nil) == nil
+      assert {:added, _file} = Uploads.store(path, entry(), confirmed, library.uuid)
     end
 
     test "an SVG is kept as one, whatever the browser called it", ctx do

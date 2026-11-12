@@ -17,6 +17,12 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   a user library's owner, managers and contributors; for Media, the admins and holders
   of `media`), and checks again before it stores anything.
 
+  Someone who may add but whose **email is not confirmed** yet (`Uploads.blocked/1`)
+  gets the button and the panel, opened once, saying so in place of *Choose files*:
+  check your email, with the address the link went to and a way to have it sent again
+  (core's `/users/confirm`). Files they pick, drop or paste anyway are turned away
+  before a byte is sent, each listed with that reason.
+
   ## What it does
 
     * **Pick or drop.** The **+** button opens a panel with *Choose files*; dropping files
@@ -83,6 +89,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKit.Utils.Routes
   alias PhoenixKitPhotos.{LiveUpdates, StagingSweepJob, StoreUploadJob, Uploads, UploadStaging}
 
   @upload :photos
@@ -122,6 +129,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        library: nil,
        library_uuid: nil,
        can_upload: false,
+       blocked: nil,
        public?: false,
        upload_auto: nil,
        expanded: false,
@@ -202,6 +210,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       |> assign(:library_uuid, library_uuid)
       |> then(&if(changed?, do: forget(&1), else: &1))
       |> assign_library()
+      |> show_blocked(socket.assigns.blocked)
       |> configure_upload()
 
     {:ok, socket}
@@ -230,9 +239,18 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     socket
     |> assign(:library, library)
     |> assign(:can_upload, Uploads.can_upload?(socket.assigns.auth, uuid))
+    |> assign(:blocked, Uploads.blocked(socket.assigns.auth))
     |> assign(:public?, Libraries.published?(library))
     |> assign(:anonymous?, Libraries.public?(library))
   end
+
+  # What keeps this person from adding (their email is not confirmed) is said without
+  # being asked: the panel opens the first time it is known. Closed, it stays closed.
+  defp show_blocked(%{assigns: %{can_upload: true, blocked: reason}} = socket, was)
+       when not is_nil(reason) and reason != was,
+       do: assign(socket, open: true, expanded: true, hide_token: nil)
+
+  defp show_blocked(socket, _was), do: socket
 
   # Nothing is allowed to someone who may not add. The upload always starts entries as
   # they are handed to it (`auto_upload: true`), so the hook's concurrency window works
@@ -400,6 +418,14 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
     end)
   end
 
+  defp refuse_all(socket, reason) do
+    Enum.reduce(socket.assigns.uploads[@upload].entries, socket, fn entry, socket ->
+      socket
+      |> cancel_upload(@upload, entry.ref)
+      |> record(entry.ref, entry.client_name, {:error, reason})
+    end)
+  end
+
   defp record(socket, ref, name, outcome) do
     item = %{ref: ref, name: name, outcome: outcome}
     assign(socket, :done, Enum.take([item | socket.assigns.done], @max_results))
@@ -529,8 +555,15 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   # away (not a photo, too large) is reported and cancelled, not left in the list: it
   # would hold one of the batch's places for good, the hook would wait for it to finish
   # before sending the next batch, and nothing ever would.
-  def handle_event("validate", _params, socket) do
+  def handle_event("validate", _params, %{assigns: %{blocked: nil}} = socket) do
     {:noreply, socket |> reject_invalid() |> settle()}
+  end
+
+  # Someone who may not add yet (`Uploads.blocked/1`): every file is turned away here,
+  # before it is sent, and listed with the reason. `Uploads.precheck/4` and `store/4`
+  # would refuse it too, after the whole file had travelled.
+  def handle_event("validate", _params, %{assigns: %{blocked: reason}} = socket) do
+    {:noreply, socket |> refuse_all(reason) |> assign(open: true, expanded: true) |> settle()}
   end
 
   # Upload was pressed: in a public library the hook now starts feeding the queue
@@ -630,8 +663,10 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
       |> assign(:failed, count_outcome(assigns.done, :error))
       |> assign(
         :compact?,
-        assigns.open and not assigns.expanded and assigns.done != [] and idle?(assigns)
+        assigns.open and not assigns.expanded and assigns.done != [] and idle?(assigns) and
+          is_nil(assigns.blocked)
       )
+      |> assign(:email, Scope.user_email(assigns.auth))
 
     ~H"""
     <div
@@ -728,7 +763,32 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
               </button>
             </div>
 
-            <p :if={@public?} class="rounded-lg bg-warning/15 p-2 text-xs text-warning-content" role="note">
+            <%!-- May add, but not yet: what is missing, and what to do about it. --%>
+            <div
+              :if={@blocked == :email_unconfirmed}
+              id={"#{@id}-confirm-email"}
+              role="alert"
+              class="flex flex-col gap-2 rounded-lg bg-warning/15 p-3 text-sm"
+            >
+              <p class="flex items-center gap-2 font-semibold">
+                <.icon name="hero-envelope" class="h-5 w-5 shrink-0" />
+                {gettext("Check your email to continue")}
+              </p>
+              <p :if={@email}>
+                {gettext("We sent a confirmation link to %{email}. Open it, and you can add photos here.", email: @email)}
+              </p>
+              <p :if={!@email}>
+                {gettext("We sent you a confirmation link. Open it, and you can add photos here.")}
+              </p>
+              <p class="text-xs text-base-content/70">
+                {gettext("Nothing arrived? Look in your spam folder, or have the link sent again.")}
+              </p>
+              <a href={Routes.path("/users/confirm")} class="btn btn-primary btn-sm self-start">
+                {gettext("Send the link again")}
+              </a>
+            </div>
+
+            <p :if={@public? && !@blocked} class="rounded-lg bg-warning/15 p-2 text-xs text-warning-content" role="note">
               <%= if @anonymous? do %>
                 {gettext("This library is public. Everything you add to it can be seen by anyone.")}
               <% else %>
@@ -737,6 +797,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
             </p>
 
             <label
+              :if={!@blocked}
               for={@uploads.photos.ref}
               class="flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed border-base-300 p-4 text-center hover:border-primary"
             >
@@ -747,7 +808,7 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
             <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept
                  in the browser (localStorage), so no event goes to the server. --%>
-            <label class="flex items-center justify-between gap-2 text-xs text-base-content/60">
+            <label :if={!@blocked} class="flex items-center justify-between gap-2 text-xs text-base-content/60">
               <span>{gettext("Uploads at once")}</span>
               <select
                 data-concurrency-select

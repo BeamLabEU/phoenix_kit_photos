@@ -15,6 +15,11 @@ defmodule PhoenixKitPhotos.Uploads do
   the browser says is not what the server decides. If access is lost during
   storage, a newly created row is trashed; a pre-existing duplicate is retained.
 
+  An account whose email is not confirmed adds nothing while the site asks for
+  confirmation (`blocked/1`), whatever its role in the library: `store/4` and
+  `precheck/4` answer `{:error, :email_unconfirmed}`, which is not `:not_allowed`, so
+  the person is told what to do about it (`error_message/1`).
+
   ## What it takes
 
   Pictures and videos (`accept/0`): JPEG, PNG, GIF, WebP, HEIC/HEIF (an iPhone's),
@@ -146,6 +151,27 @@ defmodule PhoenixKitPhotos.Uploads do
   def can_upload?(_scope, _library_uuid), do: false
 
   @doc """
+  What keeps `scope`'s person from adding anything yet, whatever the library:
+  `:email_unconfirmed` for an account whose email is not confirmed while the site asks
+  for it (the `require_email_confirmation` setting, on unless switched off: the rule of
+  core's account gate), otherwise `nil`. A session is minted for such an account, so a
+  page can be open to it; the uploader says what is missing instead of taking files.
+  """
+  @spec blocked(Scope.t() | nil) :: :email_unconfirmed | nil
+  def blocked(%Scope{} = scope) do
+    case Scope.user(scope) do
+      %{confirmed_at: nil} ->
+        if Settings.get_boolean_setting("require_email_confirmation", true),
+          do: :email_unconfirmed
+
+      _confirmed_or_nobody ->
+        nil
+    end
+  end
+
+  def blocked(_scope), do: nil
+
+  @doc """
   Stores the finished upload at `path` (a LiveView upload `entry` says what it is
   called and what the browser thought it was) in the library, for `scope`'s user.
 
@@ -154,8 +180,9 @@ defmodule PhoenixKitPhotos.Uploads do
     * `{:duplicate, file}` — the same bytes are already in this library
     * `{:elsewhere, file}` — the same bytes are already in another of this person's
       libraries, which this one cannot show
-    * `{:error, reason}` — `:not_allowed`, `:unsupported_type`, or what storage said
-      (`:quota_exceeded` when the library's owner has no room left for it)
+    * `{:error, reason}` — `:not_allowed`, `:email_unconfirmed` (`blocked/1`),
+      `:unsupported_type`, or what storage said (`:quota_exceeded` when the library's
+      owner has no room left for it)
   """
   @spec store(Path.t(), map(), Scope.t() | nil, term()) :: outcome()
   def store(path, entry, scope, library_uuid) do
@@ -194,8 +221,8 @@ defmodule PhoenixKitPhotos.Uploads do
   @doc """
   The checks `store/4` starts with that cost next to nothing: whether `scope` may add
   to the library, and whether this is a file it takes (by its name, and for SVG and
-  camera raw by its first 512 bytes). `:ok` or `store/4`'s `{:error, :not_allowed}` or
-  `{:error, :unsupported_type}`. The uploader asks before it hands a file to
+  camera raw by its first 512 bytes). `:ok` or `store/4`'s `{:error, :not_allowed}`,
+  `{:error, :email_unconfirmed}` or `{:error, :unsupported_type}`. The uploader asks before it hands a file to
   `PhoenixKitPhotos.StoreUploadJob`, so a refusal is said at once; `store/4` asks again.
   """
   @spec precheck(Path.t(), map(), Scope.t() | nil, term()) :: :ok | {:error, atom()}
@@ -238,8 +265,13 @@ defmodule PhoenixKitPhotos.Uploads do
       []
   end
 
-  defp allowed(scope, library_uuid),
-    do: if(can_upload?(scope, library_uuid), do: :ok, else: {:error, :not_allowed})
+  defp allowed(scope, library_uuid) do
+    cond do
+      not can_upload?(scope, library_uuid) -> {:error, :not_allowed}
+      reason = blocked(scope) -> {:error, reason}
+      true -> :ok
+    end
+  end
 
   defp authorized_outcome({:error, _} = error, _scope, _library_uuid), do: error
 
@@ -379,6 +411,10 @@ defmodule PhoenixKitPhotos.Uploads do
   @spec error_message(term()) :: String.t()
   def error_message({:rejected, reason}), do: entry_error(reason)
   def error_message(:not_allowed), do: gettext("You may not add to this library")
+
+  def error_message(:email_unconfirmed),
+    do: gettext("Your email is not confirmed yet")
+
   def error_message(:unsupported_type), do: gettext("This kind of file is not supported")
   def error_message(:file_missing), do: gettext("The upload was lost on the way")
 

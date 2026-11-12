@@ -41,7 +41,7 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       File.rm_rf(root)
     end)
 
-    owner = user_fixture("owner-#{n}@example.com")
+    owner = confirmed_user_fixture("owner-#{n}@example.com")
     %{n: n, owner: owner, library: library_fixture(owner)}
   end
 
@@ -90,19 +90,19 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
       assert html =~ "Add photos"
       assert html =~ ~s(phx-hook="PhotoUploader")
 
-      viewer = user_fixture("viewer-#{ctx.n}@example.com")
+      viewer = confirmed_user_fixture("viewer-#{ctx.n}@example.com")
       member_fixture(ctx.library, viewer, "viewer")
       {_view, html} = mount!(scope_for(viewer), ctx.library)
       refute html =~ "Add photos"
       refute html =~ "PhotoUploader"
 
-      stranger = user_fixture("stranger-#{ctx.n}@example.com")
+      stranger = confirmed_user_fixture("stranger-#{ctx.n}@example.com")
       {_view, html} = mount!(scope_for(stranger), ctx.library)
       refute html =~ "Add photos"
     end
 
     test "a contributor sees it", ctx do
-      contributor = user_fixture("contrib-#{ctx.n}@example.com")
+      contributor = confirmed_user_fixture("contrib-#{ctx.n}@example.com")
       member_fixture(ctx.library, contributor, "contributor")
 
       {_view, html} = mount!(scope_for(contributor), ctx.library)
@@ -119,6 +119,62 @@ defmodule PhoenixKitPhotos.PhotoUploaderTest do
 
       html = view |> element("button[aria-label='Close']") |> render_click()
       refute html =~ "Choose files"
+    end
+  end
+
+  describe "an account whose email is not confirmed" do
+    setup ctx do
+      owner = user_fixture("unconfirmed-#{ctx.n}@example.com")
+      %{unconfirmed: owner, own: library_fixture(owner)}
+    end
+
+    test "is told to check their email, without asking, in place of Choose files", ctx do
+      {view, html} = mount!(scope_for(ctx.unconfirmed), ctx.own)
+
+      assert html =~ "Check your email to continue"
+      assert html =~ ctx.unconfirmed.email
+      assert has_element?(view, "#test-uploader-confirm-email a[href$='/users/confirm']")
+      refute html =~ "Choose files"
+
+      # Closed, it stays closed; the button brings it back.
+      html = view |> element("button[aria-label='Close']") |> render_click()
+      refute html =~ "Check your email to continue"
+      html = view |> element("button[aria-label='Add photos']") |> render_click()
+      assert html =~ "Check your email to continue"
+    end
+
+    test "files chosen anyway are turned away before they are sent, each with the reason",
+         ctx do
+      {view, _html} = mount!(scope_for(ctx.unconfirmed), ctx.own)
+
+      input = upload(view, "holiday.png")
+      assert {:ok, _} = preflight_upload(input)
+      html = view |> element("#test-uploader") |> render_hook("validate", %{})
+
+      assert html =~ "holiday.png"
+      assert html =~ "Your email is not confirmed yet"
+      assert html =~ "1 failed"
+      assert html =~ "Check your email to continue"
+      refute html =~ ~s(phx-click="cancel")
+      assert Storage.list_files() == []
+
+      view |> element("#test-uploader") |> render_hook("ready", %{})
+      assert_reply(view, %{idle: true, in_flight: 0})
+    end
+
+    test "a file that arrives all the same is not stored, and the reason is the same", ctx do
+      {view, _html} = mount!(scope_for(ctx.unconfirmed), ctx.own)
+
+      html = view |> upload("holiday.png") |> render_upload("holiday.png")
+
+      assert html =~ "Your email is not confirmed yet"
+      assert html =~ "1 failed"
+      assert Storage.list_files() == []
+    end
+
+    test "nothing of it is shown to a confirmed account", ctx do
+      {_view, html} = mount!(scope_for(ctx.owner), ctx.library)
+      refute html =~ "Check your email"
     end
   end
 

@@ -37,6 +37,15 @@ defmodule PhoenixKitPhotos.DataCase do
     user
   end
 
+  # A new account's email is not confirmed, and such an account adds nothing
+  # (`Uploads.blocked/1`): whoever uploads in a test is one that confirmed.
+  def confirmed_user_fixture(email) do
+    email
+    |> user_fixture()
+    |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now(:second))
+    |> TestRepo.update!()
+  end
+
   def scope_for(%User{} = user, roles \\ []) do
     %Scope{user: user, authenticated?: true, cached_roles: roles}
   end

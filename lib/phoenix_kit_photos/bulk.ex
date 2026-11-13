@@ -21,6 +21,8 @@ defmodule PhoenixKitPhotos.Bulk do
   | `:stack` | edit | one stack of them all (`Stacks.create/4`), titled by `"title"` |
   | `:stack_add` | edit | into the stack `"stack"` of the same library (`Stacks.add/3`) |
   | `:unstack` | edit | takes apart the stacks they are in (`Stacks.unstack/2`) |
+  | `:date` | edit | dates them by hand, moved together (`ManualDate.set/3`), or gives them their own dates back |
+  | `:place` | edit | puts them all at one place by hand (`ManualLocation.set/4`), or removes their place |
 
   **Stacks.** The timeline shows a stack as one tile, its cover, and a person who chooses it
   means the whole stack: `whole_stacks/2` turns each cover into all of its files before a
@@ -48,6 +50,8 @@ defmodule PhoenixKitPhotos.Bulk do
   alias PhoenixKit.Modules.Storage.FileStack
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Modules.Storage.Library
+  alias PhoenixKit.Modules.Storage.ManualDate
+  alias PhoenixKit.Modules.Storage.ManualLocation
   alias PhoenixKit.Modules.Storage.Quotas
   alias PhoenixKit.Modules.Storage.Stacks
   alias PhoenixKit.RepoHelper
@@ -55,7 +59,7 @@ defmodule PhoenixKitPhotos.Bulk do
   alias PhoenixKitPhotos.Uploads
 
   @limit 5_000
-  @actions ~w(download links copy move tag trash restore stack stack_add unstack)a
+  @actions ~w(download links copy move tag trash restore stack stack_add unstack date place)a
   @max_tags 20
   @max_tag_length 60
 
@@ -70,6 +74,8 @@ defmodule PhoenixKitPhotos.Bulk do
           | :stack
           | :stack_add
           | :unstack
+          | :date
+          | :place
   @type reason ::
           :not_found
           | :not_allowed
@@ -112,8 +118,10 @@ defmodule PhoenixKitPhotos.Bulk do
   Checks `ids` for `action` by `auth`.
 
   `params` holds what the action needs: `"library"` (a uuid) for `:copy` and `:move`, `"add"` and
-  `"remove"` (lists of tags, or text with commas) for `:tag`, `"title"` for `:stack`, and
-  `"stack"` (a stack's uuid) for `:stack_add`.
+  `"remove"` (lists of tags, or text with commas) for `:tag`, `"title"` for `:stack`,
+  `"stack"` (a stack's uuid) for `:stack_add`, `"date"`, `"time"` and `"mode"` (`"set"` or
+  `"reset"`) for `:date`, and `"lat"`, `"lon"`, `"name"` and `"mode"` (`"set"` or `"clear"`)
+  for `:place`.
   """
   @spec plan(action(), [String.t()], Scope.t() | nil, map()) :: plan()
   def plan(action, ids, auth, params \\ %{}) when action in @actions do
@@ -145,8 +153,33 @@ defmodule PhoenixKitPhotos.Bulk do
       stack: stack,
       add: add,
       remove: remove,
-      title: if(action == :stack, do: title(params["title"]))
+      title: if(action == :stack, do: title(params["title"])),
+      date: if(action == :date, do: date_change(params)),
+      place: if(action == :place, do: place_change(params))
     }
+  end
+
+  # `{:set, Date | NaiveDateTime}`, `:reset`, or nil while the date is not a date.
+  defp date_change(%{"mode" => "reset"}), do: :reset
+
+  defp date_change(params) do
+    case PhoenixKitPhotos.Details.parse_date(params["date"], params["time"]) do
+      {:ok, to} -> {:set, to}
+      _ -> nil
+    end
+  end
+
+  # `{:set, {lat, lon}, name}`, `:clear`, or nil while no place is chosen.
+  defp place_change(%{"mode" => "clear"}), do: :clear
+
+  defp place_change(params) do
+    with {lat, _} <- Float.parse(to_string(params["lat"])),
+         {lon, _} <- Float.parse(to_string(params["lon"])),
+         true <- lat >= -90 and lat <= 90 and lon >= -180 and lon <= 180 do
+      {:set, {lat, lon}, params["name"]}
+    else
+      _ -> nil
+    end
   end
 
   defp title(text) when is_binary(text) do
@@ -398,6 +431,14 @@ defmodule PhoenixKitPhotos.Bulk do
     end
   end
 
+  defp check_action(action, file, rights, _target, _present) when action in [:date, :place] do
+    cond do
+      not is_nil(file.trashed_at) -> {:refused, :trashed}
+      may?(rights, file, :edit) -> :ok
+      true -> {:refused, :not_allowed}
+    end
+  end
+
   defp check_action(:tag, file, rights, _target, _present) do
     if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
   end
@@ -570,6 +611,42 @@ defmodule PhoenixKitPhotos.Bulk do
     result
   end
 
+  # Dated together: the earliest becomes the date, every other moves by as much, so their order
+  # and the time between them stay. Or their own dates back. All at once.
+  def run(%{action: :date, files: files, auth: auth} = plan, opts) do
+    ordered = Enum.sort_by(files, &ManualDate.local/1, NaiveDateTime)
+    uuids = Enum.map(ordered, & &1.uuid)
+
+    outcome =
+      case {files, plan.date} do
+        {[], _} -> {:ok, []}
+        {_, {:set, to}} -> ManualDate.set(uuids, to, auth)
+        {_, :reset} -> ManualDate.reset(uuids, auth)
+        {_, nil} -> {:error, :bad_date}
+      end
+
+    result = all_at_once(:date, files, outcome)
+    log(plan, result, opts)
+    result
+  end
+
+  # One place for them all, or none.
+  def run(%{action: :place, files: files, auth: auth} = plan, opts) do
+    uuids = Enum.map(files, & &1.uuid)
+
+    outcome =
+      case {files, plan.place} do
+        {[], _} -> {:ok, []}
+        {_, {:set, position, name}} -> ManualLocation.set(uuids, position, auth, name: name)
+        {_, :clear} -> ManualLocation.clear(uuids, auth)
+        {_, nil} -> {:error, :no_place}
+      end
+
+    result = all_at_once(:place, files, outcome)
+    log(plan, result, opts)
+    result
+  end
+
   # Each stack among the files, taken apart once.
   def run(%{action: :unstack, files: files, auth: auth} = plan, opts) do
     result =
@@ -616,6 +693,27 @@ defmodule PhoenixKitPhotos.Bulk do
       | done: Enum.reverse(result.done),
         failed: Enum.reverse(result.failed),
         created: Enum.reverse(result.created)
+    }
+  end
+
+  # A change made in one call: every file done, or every file failed for the same reason.
+  defp all_at_once(action, files, {:ok, _uuids}),
+    do: %{action: action, done: Enum.map(files, & &1.uuid), failed: [], created: []}
+
+  defp all_at_once(action, files, {:error, reason}) do
+    reason =
+      case reason do
+        :forbidden -> :not_allowed
+        :not_found -> :not_found
+        :implausible_date -> :implausible_date
+        _ -> :failed
+      end
+
+    %{
+      action: action,
+      done: [],
+      failed: Enum.map(files, &refusal(&1.uuid, &1, reason)),
+      created: []
     }
   end
 
@@ -846,6 +944,7 @@ defmodule PhoenixKitPhotos.Bulk do
   def reason_text(:mixed_libraries), do: gettext("not all in one library")
   def reason_text(:no_stack), do: gettext("no stack chosen")
   def reason_text(:in_stack), do: gettext("already in that stack")
+  def reason_text(:implausible_date), do: gettext("that date is before 1826 or in the future")
   def reason_text(_other), do: gettext("could not be done")
 
   defp repo, do: RepoHelper.repo()

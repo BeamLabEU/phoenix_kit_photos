@@ -119,11 +119,15 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   use Phoenix.LiveComponent
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  alias PhoenixKit.Modules.Languages
   alias PhoenixKit.Modules.Storage.Libraries
+  alias PhoenixKit.Modules.Storage.ManualDate
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Bulk
+  alias PhoenixKitPhotos.Components.InfoPanel
   alias PhoenixKitPhotos.Components.StackEdit
   alias PhoenixKitPhotos.Components.StackPick
+  alias PhoenixKitPhotos.Places
   alias PhoenixKitPhotos.Timeline
   alias PhoenixKitPhotos.Uploads
 
@@ -162,9 +166,11 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         {:ok, socket}
 
       socket.assigns[:refresh_queued] ->
-        {:ok, socket}
+        {:ok, tell_info(socket, assigns)}
 
       true ->
+        tell_info(socket, assigns)
+
         Phoenix.LiveView.send_update_after(
           __MODULE__,
           [id: socket.assigns.id, refresh_now: true],
@@ -173,6 +179,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
         {:ok, assign(socket, :refresh_queued, true)}
     end
+  end
+
+  # The info panel moved a photo in time: read the index again and keep the viewer on it.
+  def update(%{info_moved: file_uuid}, socket) do
+    %{id: id, scope: scope, auth: auth} = socket.assigns
+    {:ok, socket |> load_index() |> push_view(id, scope, auth, file_uuid)}
   end
 
   def update(%{refresh_now: true}, socket) do
@@ -230,6 +242,19 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       end
 
     {:ok, socket}
+  end
+
+  # The info panel reads its photo again when a change touched it.
+  defp tell_info(socket, assigns) do
+    if socket.assigns[:pager] not in [nil, "false"] do
+      send_update(InfoPanel,
+        id: "#{socket.assigns.id}-info",
+        reload: true,
+        file_uuids: Map.get(assigns, :file_uuids)
+      )
+    end
+
+    socket
   end
 
   # How long a burst of storage events is gathered before the index is read again.
@@ -660,6 +685,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   def handle_event("timeline:bulk_change", params, socket) do
     case socket.assigns.bulk do
       %{action: action, ids: ids} = bulk ->
+        # The place dialog's map and search are not in its form: they stay as they were.
+        params =
+          if action == :place,
+            do: Map.merge(Map.take(bulk.params, ["map", "q"]), params),
+            else: params
+
         plan = Bulk.plan(action, ids, socket.assigns.auth, params)
 
         targets =
@@ -673,6 +704,46 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         {:noreply, socket}
     end
   end
+
+  # The place dialog: a search, a result picked, a spot clicked on its map.
+  def handle_event("timeline:bulk_place_search", %{"q" => query}, socket) do
+    case socket.assigns.bulk do
+      %{action: :place} = bulk ->
+        results =
+          case Places.search(
+                 query,
+                 Languages.request_locale()
+               ) do
+            {:ok, results} -> results
+            _ -> []
+          end
+
+        {:noreply,
+         assign(socket, :bulk, %{
+           bulk
+           | targets: results,
+             params: Map.put(bulk.params, "q", query)
+         })}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("timeline:bulk_place_search", _params, socket), do: {:noreply, socket}
+
+  def handle_event("timeline:bulk_place_pick", %{"lat" => lat, "lon" => lon} = params, socket) do
+    params = %{"lat" => lat, "lon" => lon, "name" => params["name"] || ""}
+    {:noreply, place_params(socket, params, true)}
+  end
+
+  def handle_event("place_pin", %{"lat" => lat, "lon" => lon}, socket)
+      when is_number(lat) and is_number(lon) do
+    params = %{"lat" => to_string(lat), "lon" => to_string(lon), "name" => ""}
+    {:noreply, place_params(socket, params, false)}
+  end
+
+  def handle_event("place_pin", _params, socket), do: {:noreply, socket}
 
   def handle_event("timeline:bulk_cancel", _params, socket) do
     {:noreply, assign(socket, :bulk, nil)}
@@ -710,6 +781,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     {:noreply, push_event(socket, event(socket, "jump"), %{id: id})}
   end
 
+  # The info panel shows the photo `id` on screen in the swipe viewer.
+  def handle_event("timeline:info", %{"id" => id}, socket) when is_binary(id) do
+    send_update(InfoPanel, id: "#{socket.assigns.id}-info", file_uuid: id)
+    {:noreply, socket}
+  end
+
+  def handle_event("timeline:info", _params, socket), do: {:noreply, socket}
+
   def handle_event("timeline:open", %{"id" => id}, socket) do
     if event = socket.assigns.on_open do
       send(self(), {event, id})
@@ -738,7 +817,11 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     Enum.filter(
       [assigns.download_path && :download, assigns.photo_path && :links, signed_in && :copy],
       & &1
-    ) ++ if(editor, do: [:move, :tag, :stack, :stack_add, :unstack, :trash], else: [])
+    ) ++
+      if(editor,
+        do: [:move, :tag, :date, :place, :stack, :stack_add, :unstack, :trash],
+        else: []
+      )
   end
 
   defp open_bulk(socket, :links, ids) do
@@ -775,6 +858,33 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     })
   end
 
+  # Changing the date starts from the earliest of them, the one that gets the new date.
+  defp open_bulk(socket, :date, ids) do
+    plan = Bulk.plan(:date, ids, socket.assigns.auth, %{})
+
+    params =
+      case Enum.map(plan.files, &ManualDate.local/1) do
+        [] ->
+          %{"date" => "", "time" => ""}
+
+        locals ->
+          first = Enum.min(locals, NaiveDateTime)
+
+          %{
+            "date" => first |> NaiveDateTime.to_date() |> Date.to_iso8601(),
+            "time" => Calendar.strftime(first, "%H:%M")
+          }
+      end
+
+    assign(socket, :bulk, %{
+      action: :date,
+      ids: ids,
+      plan: Bulk.plan(:date, ids, socket.assigns.auth, params),
+      params: params,
+      targets: []
+    })
+  end
+
   defp open_bulk(socket, action, ids) do
     targets = targets(socket, action)
     params = default_params(action, targets)
@@ -787,6 +897,35 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       params: params,
       targets: targets
     })
+  end
+
+  # A place chosen in the place dialog: the plan made again for it. A result picked from the
+  # search moves the map there (a new map, `"map"`); a click on the map leaves it as it is.
+  defp place_params(socket, chosen, move_map?) do
+    case socket.assigns.bulk do
+      %{action: :place, ids: ids} = bulk ->
+        params =
+          bulk.params
+          |> Map.merge(chosen)
+          |> Map.delete("mode")
+          |> move_map(move_map?)
+
+        plan = Bulk.plan(:place, ids, socket.assigns.auth, params)
+        assign(socket, :bulk, %{bulk | plan: plan, params: params})
+
+      _ ->
+        socket
+    end
+  end
+
+  defp move_map(params, true), do: Map.update(params, "map", 1, &(&1 + 1))
+  defp move_map(params, false), do: params
+
+  defp map_default_center do
+    case Application.get_env(:phoenix_kit_photos, :map_default_center) do
+      {lat, lon, zoom} -> "#{lat},#{lon},#{zoom}"
+      _ -> "30,10,2"
+    end
   end
 
   defp default_params(action, [first | _]) when action in [:copy, :move],
@@ -887,6 +1026,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp outcome_text(:tag, count),
     do: ngettext("Tagged 1 item", "Tagged %{count} items", count)
 
+  defp outcome_text(:date, count),
+    do: ngettext("Changed the date of 1 item", "Changed the date of %{count} items", count)
+
+  defp outcome_text(:place, count),
+    do: ngettext("Changed the place of 1 item", "Changed the place of %{count} items", count)
+
   defp outcome_text(:stack, count),
     do: ngettext("Stacked 1 photo", "Stacked %{count} photos", count)
 
@@ -960,6 +1105,13 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         })
       }
       data-selection-limit={Bulk.limit()}
+      data-info-panel={"#{@id}-info"}
+      data-info-strings={
+        Jason.encode!(%{
+          info: gettext("Info"),
+          close: gettext("Close the info panel")
+        })
+      }
     >
       <%!-- The month, and the choice of style. Filling the screen they float under the header
            as pills. --%>
@@ -1130,6 +1282,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       <.bulk_dialog :if={@bulk} bulk={@bulk} myself={@myself} id={@id} />
       <StackEdit.dialog :if={@stack_edit} edit={@stack_edit} myself={@myself} id={@id} />
       <StackPick.dialog :if={@stack_pick} pick={@stack_pick} myself={@myself} id={@id} />
+      <.live_component
+        :if={@pager != "false"}
+        module={InfoPanel}
+        id={"#{@id}-info"}
+        scope={@scope}
+        auth={@auth}
+        timeline_id={@id}
+      />
       <.bulk_progress :if={@running} running={@running} />
       <.bulk_notice :if={@notice && !@running} notice={@notice} myself={@myself} />
     </div>
@@ -1229,6 +1389,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp bulk_label(:copy), do: gettext("Add to library")
   defp bulk_label(:move), do: gettext("Move")
   defp bulk_label(:tag), do: gettext("Tags")
+  defp bulk_label(:date), do: gettext("Date")
+  defp bulk_label(:place), do: gettext("Place")
   defp bulk_label(:trash), do: gettext("Trash")
   defp bulk_label(:stack), do: gettext("Stack")
   defp bulk_label(:unstack), do: gettext("Unstack")
@@ -1238,6 +1400,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp bulk_icon(:copy), do: "hero-document-duplicate"
   defp bulk_icon(:move), do: "hero-arrow-right-circle"
   defp bulk_icon(:tag), do: "hero-tag"
+  defp bulk_icon(:date), do: "hero-calendar-days"
+  defp bulk_icon(:place), do: "hero-map-pin"
   defp bulk_icon(:trash), do: "hero-trash"
   defp bulk_icon(:stack), do: "hero-square-2-stack"
   defp bulk_icon(:unstack), do: "hero-squares-2x2"
@@ -1262,6 +1426,15 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
     ~H"""
     <div class="modal modal-open z-50" role="dialog" aria-modal="true">
+      <%!-- The place search is a form of its own, so Enter in it searches and does not save. --%>
+      <form
+        :if={@bulk.action == :place}
+        id={"#{@id}-bulk-place-search"}
+        phx-submit="timeline:bulk_place_search"
+        phx-target={@myself}
+        hidden
+      >
+      </form>
       <form
         id={"#{@id}-bulk"}
         class="modal-box max-w-md"
@@ -1312,6 +1485,112 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
               maxlength="400"
               autocomplete="off"
             />
+          </label>
+        </div>
+
+        <div :if={@bulk.action == :date} class="mt-4 space-y-3">
+          <div class="flex gap-2">
+            <input
+              type="date"
+              name="date"
+              value={@bulk.params["date"]}
+              min="1826-01-01"
+              aria-label={gettext("Date")}
+              class={["input flex-1", @bulk.params["mode"] == "reset" && "opacity-40"]}
+            />
+            <input
+              type="time"
+              name="time"
+              value={@bulk.params["time"]}
+              aria-label={gettext("Time")}
+              class={["input w-32", @bulk.params["mode"] == "reset" && "opacity-40"]}
+            />
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="mode"
+              value="reset"
+              checked={@bulk.params["mode"] == "reset"}
+              class="checkbox checkbox-sm"
+            />
+            {gettext("Instead, give them back their own dates")}
+          </label>
+        </div>
+
+        <div :if={@bulk.action == :place} class="mt-4 space-y-3">
+          <input type="hidden" name="lat" value={@bulk.params["lat"]} />
+          <input type="hidden" name="lon" value={@bulk.params["lon"]} />
+          <input type="hidden" name="name" value={@bulk.params["name"]} />
+          <div :if={@bulk.params["mode"] != "clear"} class="space-y-2">
+            <div :if={PhoenixKitPhotos.Places.enabled?()} class="join w-full">
+              <input
+                type="search"
+                name="q"
+                form={"#{@id}-bulk-place-search"}
+                value={@bulk.params["q"]}
+                placeholder={gettext("Search for a place or an address")}
+                aria-label={gettext("Search for a place")}
+                autocomplete="off"
+                class="input join-item flex-1"
+              />
+              <button
+                type="submit"
+                form={"#{@id}-bulk-place-search"}
+                class="btn join-item"
+                aria-label={gettext("Search")}
+              >
+                <span class="hero-magnifying-glass size-4" aria-hidden="true"></span>
+              </button>
+            </div>
+            <ul :if={@bulk.targets != []} class="menu menu-sm w-full rounded-box bg-base-200 p-1">
+              <li :for={result <- @bulk.targets}>
+                <button
+                  type="button"
+                  phx-click="timeline:bulk_place_pick"
+                  phx-value-lat={result.latitude}
+                  phx-value-lon={result.longitude}
+                  phx-value-name={result.name}
+                  phx-target={@myself}
+                  class="items-start text-left"
+                >
+                  <span class="hero-map-pin mt-0.5 size-4 shrink-0 opacity-60" aria-hidden="true"></span>
+                  <span class="line-clamp-2">{result.name}</span>
+                </button>
+              </li>
+            </ul>
+            <div
+              id={"#{@id}-bulk-map-#{@bulk.params["map"] || 0}"}
+              phx-hook="PhotoPlaceMap"
+              phx-update="ignore"
+              data-lat={@bulk.params["lat"]}
+              data-lon={@bulk.params["lon"]}
+              data-center={@bulk.params["lat"] && "#{@bulk.params["lat"]},#{@bulk.params["lon"]},13"}
+              data-default-center={map_default_center()}
+              data-editable="true"
+              data-tiles={PhoenixKitPhotos.Places.tiles().url}
+              data-attribution={PhoenixKitPhotos.Places.tiles().attribution}
+              class="pk-place-map h-56 w-full overflow-hidden rounded-box bg-base-300"
+            >
+            </div>
+            <p class="text-sm">
+              <span class="hero-map-pin size-4 align-text-bottom text-primary" aria-hidden="true"></span>
+              {cond do
+                @bulk.params["name"] not in [nil, ""] -> @bulk.params["name"]
+                @bulk.params["lat"] not in [nil, ""] -> gettext("The pin on the map")
+                true -> gettext("No place chosen yet")
+              end}
+            </p>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="mode"
+              value="clear"
+              checked={@bulk.params["mode"] == "clear"}
+              class="checkbox checkbox-sm"
+            />
+            {gettext("Instead, remove their place")}
           </label>
         </div>
 
@@ -1389,6 +1668,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   defp ready?(%{action: :tag, plan: plan}), do: plan.add != [] or plan.remove != []
+  defp ready?(%{action: :date, plan: plan}), do: plan.date != nil
+  defp ready?(%{action: :place, plan: plan}), do: plan.place != nil
   defp ready?(%{action: :stack, plan: plan}), do: length(plan.files) >= 2
   defp ready?(%{action: :stack_add, plan: plan}), do: plan.stack != nil
   defp ready?(_bulk), do: true
@@ -1403,6 +1684,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     do: ngettext("Move 1 item to a library", "Move %{count} items to a library", count)
 
   defp dialog_title(:tag, count), do: ngettext("Tag 1 item", "Tag %{count} items", count)
+
+  defp dialog_title(:date, count),
+    do: ngettext("Change the date of 1 item", "Change the date of %{count} items", count)
+
+  defp dialog_title(:place, count),
+    do: ngettext("Where was 1 item taken?", "Where were %{count} items taken?", count)
 
   defp dialog_title(:stack, count),
     do: ngettext("Stack 1 photo", "Stack %{count} photos", count)
@@ -1435,12 +1722,23 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp dialog_hint(:unstack),
     do: gettext("Each photo goes back to its own place in the timeline.")
 
+  defp dialog_hint(:date),
+    do:
+      gettext(
+        "The earliest gets this date and the others move with it, keeping their order and the time between them. A stack moves whole."
+      )
+
+  defp dialog_hint(:place),
+    do: gettext("Search for the place, or click the map. They all get the same place.")
+
   defp dialog_hint(_action), do: nil
 
   defp dialog_confirm(:trash), do: gettext("Move to trash")
   defp dialog_confirm(:copy), do: gettext("Add")
   defp dialog_confirm(:move), do: gettext("Move")
   defp dialog_confirm(:tag), do: gettext("Save tags")
+  defp dialog_confirm(:date), do: gettext("Change the date")
+  defp dialog_confirm(:place), do: gettext("Save the place")
   defp dialog_confirm(:stack), do: gettext("Stack")
   defp dialog_confirm(:stack_add), do: gettext("Add")
   defp dialog_confirm(:unstack), do: gettext("Unstack")

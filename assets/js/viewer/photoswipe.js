@@ -1,6 +1,7 @@
 import PhotoSwipe from "photoswipe"
 import photoswipeCss from "photoswipe/dist/photoswipe.css"
 import { dialogOpen } from "./engine.js"
+import { inPanel, typing, viewportBesidePanel } from "../info_panel.js"
 import { SHARED_CSS, addStyle } from "./video.js"
 
 // The PhotoSwipe engine (see engine.js for the contract): PhotoSwipe is the gesture engine (swipe, pinch, double-tap, drag-down to
@@ -13,6 +14,16 @@ const INFO_ICON =
   '<svg aria-hidden="true" class="pswp__icn" viewBox="0 0 32 32" width="32" height="32">' +
   '<circle cx="16" cy="16" r="9" fill="none" stroke="#fff" stroke-width="2"/>' +
   '<path d="M16 15v6.5M16 10.8v.4" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>'
+
+// A photo's title over its lower edge, while the info panel (which shows it) is closed, and
+// out of the way of a stack's strip.
+const CAPTION_CSS = `
+.pk-caption{position:absolute;left:0;right:0;bottom:0;z-index:20;padding:56px 20px calc(18px + env(safe-area-inset-bottom,0px));background:linear-gradient(transparent,#000a);color:#fff;font:600 16px/1.35 system-ui,sans-serif;text-shadow:0 1px 3px #0008;pointer-events:none;transition:opacity .2s}
+.pk-caption span{display:-webkit-box;max-width:min(42rem,100%);overflow:hidden;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pk-caption[hidden],html.pk-info-open .pk-caption{display:none}
+.pswp:not(.pswp--ui-visible) .pk-caption{opacity:0}
+body:has(.pk-stack-strip:not([hidden])) .pk-caption{padding-bottom:calc(68px + env(safe-area-inset-bottom,0px))}
+`
 
 // How much of a video's bottom edge belongs to its native controls, in pixels.
 const CONTROLS_STRIP = 72
@@ -45,7 +56,7 @@ export class PhotoSwipeEngine {
 
   open(index) {
     if (this.pswp) return
-    addStyle("pk-photoswipe-css", photoswipeCss + SHARED_CSS)
+    addStyle("pk-photoswipe-css", photoswipeCss + SHARED_CSS + CAPTION_CSS)
 
     const pswp = new PhotoSwipe({
       dataSource: [],
@@ -62,6 +73,11 @@ export class PhotoSwipeEngine {
       // rendition's own pixels (1 is its natural size): beyond that it only blurs.
       secondaryZoomLevel: (zoom) => Math.min(zoom.fit * 3, 1),
       maxZoomLevel: 1.5,
+      // The info panel beside (or under) the photo takes its share of the screen, and the
+      // photo is laid out in what is left (`info_panel.js`).
+      getViewportSizeFn: () => viewportBesidePanel(),
+      // Focus may go to the info panel (a title being typed): it is not ours to take back.
+      trapFocus: false,
       closeTitle: "Close",
       zoomTitle: "Zoom",
       arrowPrevTitle: "Previous",
@@ -98,6 +114,17 @@ export class PhotoSwipeEngine {
         })
       }
       pswp.ui.registerElement({
+        name: "caption",
+        appendTo: "root",
+        className: "pk-caption",
+        html: "<span></span>",
+        onInit: (el) => {
+          this.captionEl = el
+          pswp.on("change", () => this.caption())
+          this.caption()
+        }
+      })
+      pswp.ui.registerElement({
         name: "info",
         order: 8,
         isButton: true,
@@ -125,12 +152,15 @@ export class PhotoSwipeEngine {
     })
     pswp.on("pointerDown", (event) => this.keepControlsUsable(event))
     // The host's own viewer is a dialog over this one: the keys are its, not ours.
+    // So are the keys typed into the info panel, or pressed on its buttons.
     pswp.on("keydown", (event) => {
-      if (dialogOpen()) event.preventDefault()
+      const target = event.originalEvent && event.originalEvent.target
+      if (dialogOpen() || typing(target) || inPanel(target)) event.preventDefault()
     })
     pswp.on("change", () => this.onChange(pswp.currIndex))
     pswp.on("destroy", () => {
       this.pswp = null
+      this.captionEl = null
       this.actionSyncs = []
       this.onClose()
     })
@@ -147,10 +177,21 @@ export class PhotoSwipeEngine {
     if (this.pswp) this.pswp.goTo(index)
   }
 
+  /** The title of the photo on screen, or nothing. */
+  caption() {
+    const el = this.captionEl
+    if (!el || !this.pswp) return
+    const slide = this.store.get(this.pswp.currIndex)
+    const title = slide && slide.title ? String(slide.title) : ""
+    el.firstChild.textContent = title
+    el.hidden = title === ""
+  }
+
   /** Slides at `indices` have arrived: show them where a waiting slide was. */
   refresh(indices) {
     if (!this.pswp) return
     const here = this.pswp.currIndex
+    if (indices.includes(here)) this.caption()
     for (const index of indices) {
       if (Math.abs(index - here) <= 2) this.pswp.refreshSlideContent(index)
     }
@@ -166,6 +207,11 @@ export class PhotoSwipeEngine {
     for (const index of [here - 2, here - 1, here + 1, here + 2]) {
       if (index >= 0 && index < this.store.total) this.pswp.refreshSlideContent(index)
     }
+  }
+
+  /** The space it has changed (the info panel opened or closed): lay the photo out again. */
+  resize() {
+    if (this.pswp) this.pswp.updateSize(true)
   }
 
   syncActions() {

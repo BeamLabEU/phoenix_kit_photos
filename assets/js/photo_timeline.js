@@ -15,6 +15,7 @@ import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
 import { StackedList } from "./stack_list.js"
 import { StackStrip } from "./stack_strip.js"
+import { InfoPanelController, typing } from "./info_panel.js"
 import { dialogOpen, engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
 import { VideoController } from "./viewer/video.js"
@@ -197,6 +198,9 @@ export const PhotoTimeline = {
     this.handleEvent(`${prefix}:range`, (payload) => this.applyRange(payload))
     this.handleEvent(`${prefix}:selection`, (payload) => this.applySelection(payload))
     this.handleEvent(`${prefix}:links`, (payload) => this.showLinks(payload))
+    this.bindInfo()
+    // A title changed in the info panel: the viewer's caption says it at once.
+    this.handleEvent("photos:retitle", ({ id, title }) => this.retitle(id, title))
     this.sayHello()
   },
 
@@ -251,6 +255,7 @@ export const PhotoTimeline = {
     this.addressClosing = true
     if (this.pager && this.pager.destroy) this.pager.destroy()
     if (this.strip) this.strip.destroy()
+    this.unbindInfo()
     this.stopStackKeys()
     this.pool.clear()
   },
@@ -1169,7 +1174,7 @@ export const PhotoTimeline = {
       video: this.video,
       thumbOf: (slideId) => this.thumbOf(slideId),
       tileImage: (i) => this.tileImage(i),
-      onInfo: (slideId) => this.send("timeline:open", { id: slideId }),
+      onInfo: (slideId) => this.info && this.info.toggle(slideId),
       actions: this.viewerActions(),
       onChange: (i) => {
         // The person turned the page: stop following a photo an upload moved.
@@ -1181,10 +1186,13 @@ export const PhotoTimeline = {
         this.reveal(at)
         this.syncAddress(i)
         this.showStrip(i)
+        const slide = this.stacked().get(i)
+        if (this.info && slide) this.info.follow(slide.id)
       },
       onClose: () => {
         this.pager = null
         this.following = null
+        if (this.info) this.info.close({ remember: false })
         if (this.strip) this.strip.hide()
         this.stopStackKeys()
         this.applyDeferred()
@@ -1192,10 +1200,74 @@ export const PhotoTimeline = {
       }
     })
     this.pager.open(index)
+    const opened = this.stacked().get(index)
+    if (this.info && opened) this.info.viewerOpened(opened.id)
     this.syncAddress(index)
     this.startStackKeys()
     this.prefetchStacks(this.stacked().fromView(index).at)
     this.showStrip(index)
+  },
+
+  // --- the info panel ---------------------------------------------------------
+
+  /**
+   * The info panel (`info_panel.js`): the Info button and `i` open and close it, and it follows
+   * the photo on screen. Its own buttons send DOM events: `photos:info-close`, and
+   * `photos:info-more` for the host's full viewer (every detail of the file).
+   */
+  bindInfo() {
+    const panelId = this.root()?.dataset.infoPanel
+    if (!panelId || !this.pagerEnabled()) return
+
+    this.info = new InfoPanelController({
+      element: () => document.getElementById(panelId),
+      show: (id) => this.send("timeline:info", { id }),
+      resize: () => {
+        if (this.pager && this.pager !== true && this.pager.resize) this.pager.resize()
+        if (this.strip && this.strip.place) this.strip.place()
+      },
+      current: () => {
+        const open = this.pager && this.pager !== true && this.pager.isOpen
+        const slide = open ? this.stacked().get(this.pager.index) : null
+        return slide ? slide.id : null
+      }
+    })
+
+    this.onInfoClose = () => this.info && this.info.close()
+    this.onInfoMore = (event) => {
+      const id = event.detail && event.detail.id
+      if (id) this.send("timeline:open", { id })
+    }
+    this.onInfoKey = (event) => {
+      if (event.key !== "i" && event.key !== "I") return
+      if (event.altKey || event.ctrlKey || event.metaKey || typing(event.target) || dialogOpen()) return
+      const id = this.info.host.current()
+      if (!id) return
+      event.preventDefault()
+      this.info.toggle(id)
+    }
+    window.addEventListener("photos:info-close", this.onInfoClose)
+    window.addEventListener("photos:info-more", this.onInfoMore)
+    document.addEventListener("keydown", this.onInfoKey)
+  },
+
+  retitle(id, title) {
+    const at = this.slides ? this.slides.indexOf(id) : -1
+    const slide = at >= 0 ? this.slides.get(at) : null
+    if (slide) slide.title = title
+    for (const stack of this.list?.stacks?.values() || []) {
+      for (const page of stack?.pages || []) if (page.id === id) page.title = title
+    }
+    if (this.pager && this.pager !== true && this.pager.caption) this.pager.caption()
+  },
+
+  unbindInfo() {
+    if (!this.info) return
+    this.info.destroy()
+    window.removeEventListener("photos:info-close", this.onInfoClose)
+    window.removeEventListener("photos:info-more", this.onInfoMore)
+    document.removeEventListener("keydown", this.onInfoKey)
+    this.info = null
   },
 
   // --- a stack's pages in the viewer ---------------------------------------

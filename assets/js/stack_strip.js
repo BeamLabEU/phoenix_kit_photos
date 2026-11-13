@@ -10,7 +10,7 @@
 const MAX_DOTS = 12
 
 const CSS = `
-.pk-stack-strip{position:fixed;left:50%;bottom:calc(14px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);padding:6px 8px 6px 14px;border-radius:999px;background:#000b;color:#fff;font:500 13px/1.2 system-ui,sans-serif;box-shadow:0 6px 24px -8px #000;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.pk-stack-strip{position:fixed;left:calc((100vw - var(--pk-info-right,0px)) / 2);bottom:calc(14px + var(--pk-info-bottom,0px) + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:2147483000;display:flex;align-items:center;gap:10px;max-width:calc(100vw - 24px);padding:6px 8px 6px 14px;border-radius:999px;background:#000b;color:#fff;font:500 13px/1.2 system-ui,sans-serif;box-shadow:0 6px 24px -8px #000;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .pk-stack-strip[hidden]{display:none}
 .pk-stack-strip__title{max-width:28vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
 .pk-stack-strip__count{white-space:nowrap;font-variant-numeric:tabular-nums;opacity:.8}

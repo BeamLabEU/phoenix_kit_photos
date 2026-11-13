@@ -12,7 +12,7 @@
 //   host.tileImage(i)   the tile's <img> when it is on screen, else null (an engine
 //                       that can fly to a tile does; the others fade)
 //   host.video          a VideoController: build / play / pause for video slides
-//   host.onInfo(id)     the person asked for the host's own viewer (details)
+//   host.onInfo(id)     the person asked for the details of photo `id` (the info panel)
 //   host.actions        (optional) more buttons for the bar: `[{ name, label, icon, shown(i),
 //                       run(i) }]`, `icon` an SVG string; each shows only where `shown(i)`
 //   host.onChange(i)    the page turned to index i
@@ -26,6 +26,8 @@
 //   redraw()            (optional) the slides beside the current one may be others now
 //                       (a stack's pages opened in line): draw them again
 //   syncActions()       (optional) ask each of `host.actions` again whether it shows here
+//   resize()            (optional) the space it may use changed (the info panel opened or
+//                       closed): lay the page out again
 //   destroy()           remove it at once, no callbacks needed
 //   refresh(indices)    slides at these indices arrived: draw them where a
 //                       placeholder was

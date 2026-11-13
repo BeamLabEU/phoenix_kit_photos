@@ -54,8 +54,10 @@ defmodule PhoenixKitPhotos.Timeline do
   use Gettext, backend: PhoenixKitPhotos.Gettext
   import Ecto.Query, warn: false
 
+  alias PhoenixKit.Modules.Languages
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
+  alias PhoenixKit.Modules.Storage.FileDetails
   alias PhoenixKit.Modules.Storage.FileInstance
   alias PhoenixKit.Modules.Storage.FileStack
   alias PhoenixKit.Modules.Storage.Libraries
@@ -64,6 +66,7 @@ defmodule PhoenixKitPhotos.Timeline do
   alias PhoenixKit.Modules.Storage.URLSigner
   alias PhoenixKit.RepoHelper
   alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKit.Utils.Multilang
 
   @window_limit 500
   @slide_limit 24
@@ -716,41 +719,63 @@ defmodule PhoenixKitPhotos.Timeline do
   @spec slide_limit() :: pos_integer()
   def slide_limit, do: @slide_limit
 
-  @doc "Read-authorized data for PhoenixKit's existing canvas viewer."
-  def viewer_file({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
+  @doc """
+  The file `uuid` of the library, when `auth` may read it there: what the timeline would
+  show it. `{:error, :not_found}` otherwise (no such file, another library's, trashed, or
+  not this person's to see). `preload` is passed to `Ecto.Query.preload/3`.
+  """
+  @spec readable_file(scope(), String.t(), Scope.t() | nil, list()) ::
+          {:ok, StorageFile.t()} | {:error, :not_found}
+  def readable_file(scope, uuid, auth, preload \\ [])
+
+  def readable_file({:library, library_uuid}, uuid, auth, preload)
+      when is_binary(library_uuid) and is_binary(uuid) do
     with {:ok, uuid} <- Ecto.UUID.cast(uuid),
          :ok <- reader(auth, library_uuid),
          %StorageFile{} = file <-
            library_uuid
            |> visible(auth)
            |> where([f], f.uuid == ^uuid)
-           |> preload(instances: ^completed_instances())
+           |> preload(^preload)
            |> repo().one(),
          true <- Libraries.can?(auth, file, :read) do
-      urls =
-        Map.new(file.instances, fn instance ->
-          {instance.variant_name,
-           Storage.authorized_url(auth, file, instance.variant_name, version: instance)}
-        end)
-
-      {:ok,
-       %{
-         file_uuid: file.uuid,
-         filename: file.original_file_name || file.file_name,
-         file_type: file.file_type,
-         mime_type: file.mime_type,
-         size: file.size || 0,
-         inserted_at: file.inserted_at,
-         width: file.width,
-         height: file.height,
-         urls: urls
-       }}
+      {:ok, file}
     else
       _ -> {:error, :not_found}
     end
   end
 
+  def readable_file(_scope, _uuid, _auth, _preload), do: {:error, :not_found}
+
+  @doc "Read-authorized data for PhoenixKit's existing canvas viewer."
+  def viewer_file({:library, library_uuid} = scope, uuid, auth) when is_binary(library_uuid) do
+    case readable_file(scope, uuid, auth, instances: completed_instances()) do
+      {:ok, file} -> {:ok, viewer_data(file, auth)}
+      _ -> {:error, :not_found}
+    end
+  end
+
   def viewer_file(_library, _uuid, _auth), do: {:error, :not_found}
+
+  defp viewer_data(file, auth) do
+    urls =
+      Map.new(file.instances, fn instance ->
+        {instance.variant_name,
+         Storage.authorized_url(auth, file, instance.variant_name, version: instance)}
+      end)
+
+    %{
+      file_uuid: file.uuid,
+      filename: file.original_file_name || file.file_name,
+      file_type: file.file_type,
+      mime_type: file.mime_type,
+      size: file.size || 0,
+      inserted_at: file.inserted_at,
+      width: file.width,
+      height: file.height,
+      urls: urls
+    }
+  end
 
   @doc """
   Folds per-day counts into month sections.
@@ -1148,6 +1173,7 @@ defmodule PhoenixKitPhotos.Timeline do
     %{
       id: file.uuid,
       code: file.short_code,
+      title: caption(file),
       kind: :video,
       w: w,
       h: h,
@@ -1168,12 +1194,34 @@ defmodule PhoenixKitPhotos.Timeline do
     %{
       id: file.uuid,
       code: file.short_code,
+      title: caption(file),
       kind: :image,
       w: w,
       h: h,
       src: src,
       preview: variant_url(auth, file, min_width: @thumb_min_width, aspect: :preserve)
     }
+  end
+
+  # The title the swipe viewer shows over a photo: in the page's language, else in another the
+  # photo has (`FileDetails`), else none. The page's language is the request's
+  # (`Languages.request_locale/0`); the primary language is read once per process and minute.
+  defp caption(%StorageFile{} = file) do
+    FileDetails.translated_title(file, Languages.request_locale(), primary: primary_language())
+  end
+
+  defp primary_language do
+    now = System.monotonic_time(:second)
+
+    case Process.get(:phoenix_kit_photos_primary) do
+      {lang, at} when now - at < 60 ->
+        lang
+
+      _ ->
+        lang = Multilang.primary_language()
+        Process.put(:phoenix_kit_photos_primary, {lang, now})
+        lang
+    end
   end
 
   defp original_source(auth, file) do

@@ -486,4 +486,60 @@ defmodule PhoenixKitPhotos.BulkTest do
     {:ok, _} = Storage.trash_file(a)
     refute one == Bulk.fingerprint(Bulk.plan(:trash, [a.uuid, b.uuid], ctx.scope))
   end
+
+  describe "dates and places" do
+    test "dated together: the earliest gets the date, the others keep their distance", ctx do
+      a = photo(ctx, %{taken_at: ~U[2018-07-14 12:00:00Z], taken_on: ~D[2018-07-14]})
+      b = photo(ctx, %{taken_at: ~U[2018-07-14 12:30:00Z], taken_on: ~D[2018-07-14]})
+
+      plan =
+        Bulk.plan(:date, [b.uuid, a.uuid], ctx.scope, %{"date" => "1985-03-12", "time" => "09:00"})
+
+      assert plan.date == {:set, ~N[1985-03-12 09:00:00]}
+      assert %{done: done, failed: []} = Bulk.run(plan)
+      assert length(done) == 2
+
+      assert reload(a).taken_at == ~U[1985-03-12 09:00:00Z]
+      assert reload(b).taken_at == ~U[1985-03-12 09:30:00Z]
+      assert reload(b).taken_at_source == "manual"
+
+      plan = Bulk.plan(:date, [a.uuid, b.uuid], ctx.scope, %{"mode" => "reset"})
+      assert plan.date == :reset
+      assert %{done: [_, _]} = Bulk.run(plan)
+      refute reload(a).taken_at_source == "manual"
+    end
+
+    test "no date is no plan to run, and a viewer may not date", ctx do
+      a = photo(ctx)
+      assert Bulk.plan(:date, [a.uuid], ctx.scope, %{"date" => "soon"}).date == nil
+
+      member_fixture(ctx.library, ctx.stranger, "viewer")
+
+      assert [%{reason: :not_allowed}] =
+               Bulk.plan(:date, [a.uuid], scope_for(ctx.stranger), %{"date" => "1999-01-01"}).refused
+    end
+
+    test "one place for them all, by hand, then none", ctx do
+      a = photo(ctx)
+      b = photo(ctx)
+
+      plan =
+        Bulk.plan(:place, [a.uuid, b.uuid], ctx.scope, %{
+          "lat" => "58.38",
+          "lon" => "26.72",
+          "name" => "Tartu"
+        })
+
+      assert plan.place == {:set, {58.38, 26.72}, "Tartu"}
+      assert %{done: [_, _]} = Bulk.run(plan)
+      assert {reload(a).latitude, reload(b).longitude} == {58.38, 26.72}
+
+      assert Bulk.plan(:place, [a.uuid], ctx.scope, %{"lat" => "200", "lon" => "0"}).place == nil
+
+      plan = Bulk.plan(:place, [a.uuid, b.uuid], ctx.scope, %{"mode" => "clear"})
+      assert %{done: [_, _]} = Bulk.run(plan)
+      assert reload(a).latitude == nil
+      assert reload(a).metadata["location_source"] == "manual"
+    end
+  end
 end

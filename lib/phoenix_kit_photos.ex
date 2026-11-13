@@ -68,6 +68,10 @@ defmodule PhoenixKitPhotos do
   @impl PhoenixKit.Module
   def migration_module, do: PhoenixKitPhotos.Migrations
 
+  # The geocoder's turns and answers (`PhoenixKitPhotos.Places`).
+  @impl PhoenixKit.Module
+  def children, do: [PhoenixKitPhotos.Places]
+
   # Path-dep installs resolve through this absolute fallback; Hex installs
   # resolve the OTP app name. Emitting both keeps one entry working in each
   # case without the host application toggling anything.

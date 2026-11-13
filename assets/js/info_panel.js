@@ -65,9 +65,14 @@ export function typing(target = document.activeElement) {
 // Inputs a person does not type into: the arrow keys over them are the viewer's.
 const NOT_TYPED = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "file", "color", "image"])
 
-/** True when `target` is inside the info panel (a click or a key there is not the viewer's). */
+/**
+ * True when `target` is inside the info panel (a click or a key there is not the viewer's).
+ * By the panel's own class: the timeline's root carries `data-info-panel` too (the panel's
+ * id), so looking for that attribute took every tile for part of the panel, and a tile
+ * focused by the click that opened the viewer kept Escape and the arrows from it.
+ */
 export function inPanel(target) {
-  return !!(target && target.closest && target.closest("[data-info-panel]"))
+  return !!(target && target.closest && target.closest(".pk-info-panel"))
 }
 
 export class InfoPanelController {

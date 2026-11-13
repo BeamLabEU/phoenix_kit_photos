@@ -12,6 +12,10 @@ if mode in ("unsupported", "album_unsupported"):
     err(f"ERROR: Unsupported URL: {url}")
     sys.exit(1)
 
+if mode in ("tweet_unavailable", "json_not_found", "json_login"):
+    err(f"ERROR: [twitter] 1: No video could be found in this tweet")
+    sys.exit(1)
+
 if "-J" in sys.argv:
     duration = 7200 if mode == "video_long" else 3
     doc = {"id": "vid1", "title": "A fake video", "uploader": "Vic Uploader", "timestamp": 1114313512,

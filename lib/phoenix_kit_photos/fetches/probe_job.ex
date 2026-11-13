@@ -147,27 +147,28 @@ defmodule PhoenixKitPhotos.Fetches.ProbeJob do
 
       {:ok, status, stdout} ->
         stderr = Runner.stderr_tail(dir)
-        read(tool, status, stdout, stderr, opts[:max_items])
+        read(tool, status, stdout, stderr, opts)
     end
   end
 
-  defp read(:gallery_dl, status, stdout, stderr, max_items) do
+  defp read(:gallery_dl, status, stdout, stderr, opts) do
     with {:ok, messages} when is_list(messages) <- Jason.decode(stdout),
-         %{} = info <- GalleryDl.probe_info(messages, max_items) do
+         %{} = info <- GalleryDl.probe_info(messages, opts[:max_items]) do
       {:ok, info}
     else
       {:delegate, :yt_dlp} ->
         {:next, :delegate}
 
       _ ->
-        code = Errors.classify(stderr)
+        reported = GalleryDl.reported_error(stdout)
+        code = gallery_dl_code(reported, stderr, opts[:cookies] != nil)
 
         cond do
           code == "unsupported" ->
             {:next, :unsupported}
 
           code in ["needs_login", "blocked", "address", "not_found"] ->
-            {:error, code, Errors.last_error_line(stderr)}
+            {:error, code, reported || Errors.last_error_line(stderr)}
 
           # gallery-dl read the page and found no files: perhaps a video page it only links to.
           status == 0 ->
@@ -179,13 +180,35 @@ defmodule PhoenixKitPhotos.Fetches.ProbeJob do
     end
   end
 
-  defp read(:yt_dlp, _status, stdout, stderr, max_items) do
+  defp read(:yt_dlp, _status, stdout, stderr, opts) do
     case Jason.decode(stdout) do
       {:ok, %{} = doc} ->
-        {:ok, YtDlp.probe_info(doc, max_items)}
+        {:ok, YtDlp.probe_info(doc, opts[:max_items])}
 
       _ ->
         {:error, Errors.classify(stderr), Errors.last_error_line(stderr)}
+    end
+  end
+
+  # Why gallery-dl found nothing: from its stderr, and from the error its extractor raised,
+  # which `-J` puts inside the JSON (`reported`), never on stderr. Without reading that, the
+  # look went on to yt-dlp and told a person yt-dlp's "No video could be found in this
+  # tweet" for a photo post that needs a login. A tweet a guest may not see says only
+  # "Unavailable": a login is what shows it, unless the look already had the person's login
+  # (then it is not there for them), or the reason says it is gone.
+  defp gallery_dl_code(reported, stderr, with_login) do
+    text = Enum.join(List.wrap(reported) ++ [stderr || ""], "\n")
+
+    case Errors.classify(text) do
+      "failed" when is_binary(reported) ->
+        cond do
+          not (reported =~ ~r/unavailable/i) -> "failed"
+          with_login or reported =~ ~r/suspend|delet|removed|tombstone/i -> "not_found"
+          true -> "needs_login"
+        end
+
+      code ->
+        code
     end
   end
 

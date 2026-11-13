@@ -28,11 +28,11 @@ defmodule PhoenixKitPhotos.Fetches.Errors do
         "address"
 
       text =~
-          ~r/AuthRequired|authenticated cookies|log ?in (to|required)|login required|sign in to|requires? (a )?log ?in|redirect(ed)? to (the )?login|use --cookies|account (is )?private|private (account|video)|NotFoundError: Requested user could not be found/i ->
+          ~r/AuthRequired|AuthorizationError|AuthenticationError|authenticated cookies|log ?in (to|required)|login required|sign in to|requires? (a )?log ?in|redirect(ed)? to (the )?login|use --cookies|account (is )?private|private (account|video)|NotFoundError: Requested user could not be found/i ->
         "needs_login"
 
       text =~
-          ~r/blocked by network security|confirm you.?re not a bot|HTTP Error 403|403 Forbidden|HTTP Error 429|429 Too Many Requests|rate.?limit/i ->
+          ~r/ChallengeError|blocked by network security|confirm you.?re not a bot|HTTP Error 403|403 Forbidden|HTTP Error 429|429 Too Many Requests|rate.?limit/i ->
         "blocked"
 
       text =~ ~r/Unsupported URL|No suitable extractor/i ->

@@ -15,6 +15,17 @@ if mode == "unsupported" or "video" in mode:
 if mode == "login":
     err("[twitter][error] AuthRequired: authenticated cookies needed to access this timeline")
     sys.exit(4)
+# gallery-dl -J reports an extractor's error inside its JSON, not on stderr: a tweet a guest
+# may not see ('Unavailable', a login shows it, or it is gone), a post that is not there.
+json_errors = {
+    "tweet_unavailable": ("AbortExtraction", "'Unavailable'"),
+    "json_not_found": ("NotFoundError", "Requested tweet could not be found"),
+    "json_login": ("AuthRequired", "Account credentials required"),
+}
+if mode in json_errors and "-J" in sys.argv:
+    error, message = json_errors[mode]
+    print(json.dumps([[-1, {"error": error, "message": message}]], indent=2))
+    sys.exit(4)
 if mode == "blocked":
     err("[reddit][error] \"You've been blocked by network security.\"")
     sys.exit(4)

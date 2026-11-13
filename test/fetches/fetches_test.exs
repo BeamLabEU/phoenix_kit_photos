@@ -244,6 +244,34 @@ defmodule PhoenixKitPhotos.FetchesTest do
         assert_receive {:looked, _, "unavailable"}
       end
     end
+
+    test "gallery-dl's own error, which -J puts in its JSON, says why; yt-dlp is not asked",
+         ctx do
+      for {mode, code, detail} <- [
+            {"tweet_unavailable", "needs_login", "AbortExtraction: 'Unavailable'"},
+            {"json_login", "needs_login", "AuthRequired: Account credentials required"},
+            {"json_not_found", "not_found", "NotFoundError: Requested tweet could not be found"}
+          ] do
+        File.rm(ctx.log)
+        mode(mode)
+        fetch = started!(ctx, "https://x.example/ann/status/#{ctx.n}")
+
+        assert {fetch.status, fetch.error_code, fetch.error} == {"unavailable", code, detail},
+               "#{mode}: #{inspect({fetch.status, fetch.error_code, fetch.error})}"
+
+        # Not yt-dlp's "No video could be found in this tweet" for a photo post.
+        assert [_gallery_dl] = calls(ctx)
+        assert_receive {:looked, _, "unavailable"}
+      end
+    end
+
+    test "a tweet still unavailable with the person's login is not there for them", ctx do
+      cookies = ".site.example\tTRUE\t/\tTRUE\t0\tsessionid\ts3cret\n"
+      assert {:ok, _} = SiteLogins.put(ctx.scope, "https://site.example/", cookies)
+      mode("tweet_unavailable")
+      fetch = started!(ctx, "https://site.example/ann/status/1")
+      assert {fetch.status, fetch.error_code} == {"unavailable", "not_found"}
+    end
   end
 
   describe "confirm/3" do

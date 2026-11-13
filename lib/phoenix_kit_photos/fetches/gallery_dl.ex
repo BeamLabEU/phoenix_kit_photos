@@ -133,6 +133,34 @@ defmodule PhoenixKitPhotos.Fetches.GalleryDl do
 
   def probe_info(_messages, _max_items), do: {:error, :nothing}
 
+  @doc """
+  The error gallery-dl's extractor raised, from its `-J` output (`stdout`, raw or decoded),
+  as `"Class: message"`: `-J` reports it as a message `[-1, %{"error", "message"}]` in the
+  JSON, not on stderr. `nil` when there is none.
+  """
+  @spec reported_error(String.t() | list() | nil) :: String.t() | nil
+  def reported_error(stdout) when is_binary(stdout) do
+    case Jason.decode(stdout) do
+      {:ok, messages} -> reported_error(messages)
+      _ -> nil
+    end
+  end
+
+  def reported_error(messages) when is_list(messages) do
+    Enum.find_value(messages, fn
+      [-1, %{"error" => error} = said] when is_binary(error) ->
+        case said["message"] do
+          message when is_binary(message) and message != "" -> "#{error}: #{message}"
+          _ -> error
+        end
+
+      _ ->
+        nil
+    end)
+  end
+
+  def reported_error(_stdout), do: nil
+
   defp info(files, max_items) do
     entries =
       files

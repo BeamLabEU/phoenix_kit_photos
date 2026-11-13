@@ -40,7 +40,7 @@ defmodule PhoenixKitPhotos.Places do
   @default_tiles "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
   @default_attribution "© OpenStreetMap"
 
-  @type place :: %{name: String.t(), latitude: float(), longitude: float()}
+  @type place :: %{name: String.t(), full: String.t(), latitude: float(), longitude: float()}
 
   # ---------------------------------------------------------------------------
   # Asking
@@ -132,11 +132,17 @@ defmodule PhoenixKitPhotos.Places do
   # The geocoder
 
   defp do_search(query, lang) do
-    params = [q: query, format: "jsonv2", limit: 5, addressdetails: 0]
+    params = [q: query, format: "jsonv2", limit: 8, addressdetails: 1]
 
     with {:ok, body} <- get(config()[:search_url] || @default_search, params, lang),
          list when is_list(list) <- body do
-      {:ok, list |> Enum.map(&place/1) |> Enum.reject(&is_nil/1)}
+      # The same square under four postcodes is one place to a person.
+      {:ok,
+       list
+       |> Enum.map(&place/1)
+       |> Enum.reject(&is_nil/1)
+       |> Enum.uniq_by(& &1.name)
+       |> Enum.take(5)}
     else
       {:error, _} = error -> error
       _ -> {:error, :bad_answer}
@@ -144,8 +150,8 @@ defmodule PhoenixKitPhotos.Places do
   end
 
   defp do_name(lat, lon, lang, detail) do
-    # Nominatim's zoom: 10 is a town, 16 a street.
-    zoom = if detail == :area, do: 10, else: 16
+    # Nominatim's zoom: 12 is a town or a borough, 16 a street.
+    zoom = if detail == :area, do: 12, else: 16
     params = [lat: lat, lon: lon, format: "jsonv2", zoom: zoom, addressdetails: 1]
 
     case get(config()[:reverse_url] || @default_reverse, params, lang) do
@@ -155,10 +161,11 @@ defmodule PhoenixKitPhotos.Places do
     end
   end
 
-  defp place(%{"display_name" => name, "lat" => lat, "lon" => lon}) do
+  defp place(%{"display_name" => full, "lat" => lat, "lon" => lon} = body) do
     with {lat, _} <- Float.parse(to_string(lat)),
          {lon, _} <- Float.parse(to_string(lon)) do
-      %{name: name, latitude: lat, longitude: lon}
+      name = place_label(body) || full
+      %{name: name, full: full, latitude: lat, longitude: lon}
     else
       _ -> nil
     end
@@ -193,6 +200,30 @@ defmodule PhoenixKitPhotos.Places do
   def short_name(_body, _detail), do: nil
 
   defp first(address, keys), do: Enum.find_value(keys, &address[&1])
+
+  # A search result as a line: what was found (a landmark's or a street's own name), then its
+  # town and country.
+  defp place_label(%{"address" => %{} = address} = body) do
+    own = body["name"]
+    rest = short_name(body, :exact)
+
+    cond do
+      own in [nil, ""] -> rest
+      is_binary(rest) and String.starts_with?(rest, own) -> rest
+      is_binary(rest) -> own <> ", " <> rest_without_street(address, rest)
+      true -> own
+    end
+  end
+
+  defp place_label(_body), do: nil
+
+  # The town and country of `short_name/2`'s line, for a result whose own name stands first.
+  defp rest_without_street(address, line) do
+    case first(address, ~w(road pedestrian square park attraction building)) do
+      nil -> line
+      street -> line |> String.replace_prefix(street <> ", ", "")
+    end
+  end
 
   defp get(url, params, lang) do
     with :ok <- take_turn() do
@@ -283,13 +314,14 @@ defmodule PhoenixKitPhotos.Places do
   def init(_opts) do
     :ets.new(@table, [:named_table, :public, :set, read_concurrency: true])
     :timer.send_interval(:timer.minutes(30), :sweep)
-    {:ok, %{next: 0}}
+    # Monotonic time can be negative: the first turn is now, whatever its value.
+    {:ok, %{next: nil}}
   end
 
   @impl true
   def handle_call(:turn, _from, %{next: next} = state) do
     now = System.monotonic_time(:millisecond)
-    at = max(now, next)
+    at = if next, do: max(now, next), else: now
     wait = at - now
 
     if wait > @max_wait_ms do

@@ -1555,7 +1555,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
                   class="items-start text-left"
                 >
                   <span class="hero-map-pin mt-0.5 size-4 shrink-0 opacity-60" aria-hidden="true"></span>
-                  <span class="line-clamp-2">{result.name}</span>
+                  <span class="min-w-0">
+                    <span class="block truncate font-medium">{result.name}</span>
+                    <span :if={result[:full] && result.full != result.name} class="block truncate text-xs opacity-60">
+                      {result.full}
+                    </span>
+                  </span>
                 </button>
               </li>
             </ul>

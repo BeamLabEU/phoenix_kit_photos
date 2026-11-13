@@ -58,10 +58,12 @@ function remember(open) {
 export function typing(target = document.activeElement) {
   if (!target || target === document.body) return false
   const tag = target.tagName
-  return (
-    tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true
-  )
+  if (tag === "INPUT") return !NOT_TYPED.has((target.type || "text").toLowerCase())
+  return tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true
 }
+
+// Inputs a person does not type into: the arrow keys over them are the viewer's.
+const NOT_TYPED = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "file", "color", "image"])
 
 /** True when `target` is inside the info panel (a click or a key there is not the viewer's). */
 export function inPanel(target) {
@@ -100,17 +102,38 @@ export class InfoPanelController {
     if (!el || typeof el.showPopover !== "function") return false
     if (keep) remember(true)
     if (!this.isOpen) {
-      try {
-        el.showPopover()
-      } catch (_error) {
-        // Already open (a LiveView patch kept it), or not in the document yet.
-      }
+      this.show(el)
       this.isOpen = true
       document.documentElement.classList.add("pk-info-open")
+      this.watch()
       this.layout()
     }
     this.follow(id, true)
     return true
+  }
+
+  show(el) {
+    try {
+      if (el && el.isConnected && !el.matches(":popover-open")) el.showPopover()
+    } catch (_error) {
+      // Not in the document yet: the watch below shows it when it is.
+    }
+  }
+
+  // LiveView may move the part of the page the panel is in (a patch of the address when the
+  // viewer turns a page), and a popover taken out of the document closes without a word. While
+  // it should be open, any change to the page checks it still is.
+  watch() {
+    if (this.observer || typeof MutationObserver === "undefined") return
+    this.observer = new MutationObserver(() => {
+      if (this.isOpen) this.show(this.host.element())
+    })
+    this.observer.observe(document.body, { childList: true, subtree: true })
+  }
+
+  unwatch() {
+    if (this.observer) this.observer.disconnect()
+    this.observer = null
   }
 
   /** `remember: false` when the viewer closes: the panel comes back with it next time. */
@@ -119,6 +142,7 @@ export class InfoPanelController {
     if (keep) remember(false)
     this.isOpen = false
     this.shownId = null
+    this.unwatch()
     clearTimeout(this.timer)
     const el = this.host.element()
     try {

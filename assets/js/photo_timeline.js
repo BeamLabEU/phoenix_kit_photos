@@ -1174,7 +1174,7 @@ export const PhotoTimeline = {
       video: this.video,
       thumbOf: (slideId) => this.thumbOf(slideId),
       tileImage: (i) => this.tileImage(i),
-      onInfo: (slideId) => this.info && this.info.toggle(slideId),
+      onInfo: (slideId) => this.whenViewerOpen(() => this.info && this.info.toggle(slideId)),
       actions: this.viewerActions(),
       onChange: (i) => {
         // The person turned the page: stop following a photo an upload moved.
@@ -1201,7 +1201,7 @@ export const PhotoTimeline = {
     })
     this.pager.open(index)
     const opened = this.stacked().get(index)
-    if (this.info && opened) this.info.viewerOpened(opened.id)
+    if (this.info && opened) this.whenViewerOpen(() => this.info && this.info.viewerOpened(this.info.host.current() || opened.id))
     this.syncAddress(index)
     this.startStackKeys()
     this.prefetchStacks(this.stacked().fromView(index).at)
@@ -1244,11 +1244,18 @@ export const PhotoTimeline = {
       const id = this.info.host.current()
       if (!id) return
       event.preventDefault()
-      this.info.toggle(id)
+      this.whenViewerOpen(() => this.info && this.info.toggle(this.info.host.current() || id))
     }
     window.addEventListener("photos:info-close", this.onInfoClose)
     window.addEventListener("photos:info-more", this.onInfoMore)
     document.addEventListener("keydown", this.onInfoKey)
+  },
+
+  /** `fn` once the swipe viewer has opened (see the engine's `whenOpen`). */
+  whenViewerOpen(fn) {
+    const pager = this.pager && this.pager !== true ? this.pager : null
+    if (pager && pager.whenOpen) pager.whenOpen(fn)
+    else fn()
   },
 
   retitle(id, title) {

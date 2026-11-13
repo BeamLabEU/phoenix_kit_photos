@@ -26,6 +26,7 @@
 //   redraw()            (optional) the slides beside the current one may be others now
 //                       (a stack's pages opened in line): draw them again
 //   syncActions()       (optional) ask each of `host.actions` again whether it shows here
+//   whenOpen(fn)        (optional) run `fn` once the viewer has finished opening
 //   resize()            (optional) the space it may use changed (the info panel opened or
 //                       closed): lay the page out again
 //   destroy()           remove it at once, no callbacks needed

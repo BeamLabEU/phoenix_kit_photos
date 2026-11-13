@@ -533,6 +533,7 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert plan.place == {:set, {58.38, 26.72}, "Tartu"}
       assert %{done: [_, _]} = Bulk.run(plan)
       assert {reload(a).latitude, reload(b).longitude} == {58.38, 26.72}
+      assert PhoenixKit.Modules.Storage.ManualLocation.place_name(reload(a)) == "Tartu"
 
       assert Bulk.plan(:place, [a.uuid], ctx.scope, %{"lat" => "200", "lon" => "0"}).place == nil
 

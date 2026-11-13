@@ -157,6 +157,14 @@ export class PhotoSwipeEngine {
       const target = event.originalEvent && event.originalEvent.target
       if (dialogOpen() || typing(target) || inPanel(target)) event.preventDefault()
     })
+    // Focus to the viewer once it is open (what PhotoSwipe's focus trap did), unless the
+    // person is already in the info panel: the keys are the viewer's, not the tile's.
+    pswp.on("openingAnimationEnd", () => {
+      const active = document.activeElement
+      if (pswp.template && !inPanel(active) && !typing(active)) {
+        pswp.template.focus({ preventScroll: true })
+      }
+    })
     pswp.on("change", () => this.onChange(pswp.currIndex))
     pswp.on("destroy", () => {
       this.pswp = null
@@ -209,9 +217,35 @@ export class PhotoSwipeEngine {
     }
   }
 
+  /**
+   * Runs `fn` once the viewer has opened: at once if it has, else when its opening animation
+   * ends. What changes the page around the viewer (the info panel) waits for that, since a
+   * change during the animation can keep it from ever ending, and the viewer from taking keys.
+   */
+  whenOpen(fn) {
+    const pswp = this.pswp
+    if (!pswp) return
+    if (!pswp.opener || pswp.opener.isOpen) fn()
+    else pswp.on("openingAnimationEnd", () => this.pswp === pswp && fn())
+  }
+
   /** The space it has changed (the info panel opened or closed): lay the photo out again. */
   resize() {
-    if (this.pswp) this.pswp.updateSize(true)
+    const pswp = this.pswp
+    if (!pswp) return
+    // Not while it is opening: a new size then breaks the opening animation, and the viewer
+    // never becomes ready (no keys, the photo at its old size). Once it has opened.
+    if (pswp.opener && !pswp.opener.isOpen) {
+      if (!this.resizeQueued) {
+        this.resizeQueued = true
+        pswp.on("openingAnimationEnd", () => {
+          this.resizeQueued = false
+          if (this.pswp === pswp) pswp.updateSize(true)
+        })
+      }
+      return
+    }
+    pswp.updateSize(true)
   }
 
   syncActions() {

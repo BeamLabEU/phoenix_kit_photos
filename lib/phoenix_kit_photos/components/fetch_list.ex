@@ -8,12 +8,15 @@ defmodule PhoenixKitPhotos.Components.FetchList do
         id="fetches"
         auth={scope}
         library_link={&MyAppWeb.library_link/1}
+        photo_link={&MyAppWeb.photo_link/2}
       />
 
   `library_link` (optional) is called with a library uuid and gives `{name, href}` or
   nil, for the line under each card and for *Review and fetch*, which opens the dialog
   in its library (`href` with `?fetch=<uuid>`, which the library page hands its
-  `LinkFetcher` as `open`). The cards move with the fetches when the page mounts
+  `LinkFetcher` as `open`). `photo_link` (optional) is called with a library uuid and a
+  file's short code and gives the address of that photo, or nil: a fetch that brought
+  something in links to its first file (`Fetches.first_files/1`). The cards move with the fetches when the page mounts
   `PhoenixKitPhotos.LiveUpdates`.
 
   ## Site logins
@@ -43,6 +46,8 @@ defmodule PhoenixKitPhotos.Components.FetchList do
        fetches: [],
        logins: [],
        libraries: %{},
+       shown: %{},
+       photo_link: nil,
        login_error: nil,
        login_saved: nil,
        notice: nil
@@ -57,7 +62,8 @@ defmodule PhoenixKitPhotos.Components.FetchList do
     {:ok,
      socket
      |> assign(:fetches, Enum.sort_by(fetches, & &1.inserted_at, {:desc, NaiveDateTime}))
-     |> label_libraries()}
+     |> label_libraries()
+     |> find_shown([fetch])}
   end
 
   def update(%{fetch_event: {:removed, uuid}}, socket) do
@@ -80,10 +86,48 @@ defmodule PhoenixKitPhotos.Components.FetchList do
      |> assign(:id, assigns.id)
      |> assign(:auth, auth)
      |> assign(:library_link, assigns[:library_link])
+     |> assign(:photo_link, assigns[:photo_link])
      |> assign(:available?, Fetches.available?())
      |> assign(:fetches, Fetches.list(auth))
      |> assign(:logins, SiteLogins.list(auth))
-     |> label_libraries()}
+     |> label_libraries()
+     |> find_shown(nil)}
+  end
+
+  # The address of the first file of each ended fetch (see `photo_link`), worked out for
+  # `only` (every fetch when nil) and kept for the others.
+  defp find_shown(socket, only) do
+    link = socket.assigns.photo_link
+
+    if is_function(link, 2) do
+      ended = Enum.filter(socket.assigns.fetches, &(&1.status in Fetch.ended_statuses()))
+
+      asked =
+        if only,
+          do: Enum.filter(ended, fn f -> Enum.any?(only, &(&1.uuid == f.uuid)) end),
+          else: ended
+
+      found = Fetches.first_files(asked)
+
+      shown =
+        Map.new(ended, fn fetch ->
+          if fetch in asked do
+            href =
+              case found[fetch.uuid] do
+                %{short_code: code} -> link.(to_string(fetch.library_uuid), code)
+                _ -> nil
+              end
+
+            {fetch.uuid, href}
+          else
+            {fetch.uuid, socket.assigns.shown[fetch.uuid]}
+          end
+        end)
+
+      assign(socket, :shown, shown)
+    else
+      socket
+    end
   end
 
   defp label_libraries(socket) do
@@ -241,6 +285,7 @@ defmodule PhoenixKitPhotos.Components.FetchList do
             waiting={if fetch.status == "queued", do: Fetches.waiting_before(fetch), else: 0}
             library_name={library_name(@libraries, fetch)}
             library_href={library_href(@libraries, fetch)}
+            show_href={@shown[fetch.uuid]}
           />
         </div>
       </section>

@@ -10,6 +10,7 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
         auth={scope}
         logins_path="/profile/settings/fetches"
         open={@params["fetch"]}
+        photo_path="/anna/private/p/:code"
       />
 
   It shows nothing to someone who may not add to the library, or where fetching is off
@@ -28,7 +29,9 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
 
   It opens on the link at once, says it is being looked at, then shows what was found:
   title, author, date, the entries of an album or playlist (each can be unticked), the
-  quality for a video, and **the confirmation of the right to keep a copy**, unticked:
+  quality for a video, *Set the date myself* (for an old film posted recently: the
+  files are dated by hand with it, see `Fetches.confirm/3`), and **the confirmation of
+  the right to keep a copy**, unticked:
   *Fetch* stays disabled until it is ticked, and the server refuses without it
   (`Fetches.confirm/3`). Closing it keeps the link as a card ("Review and fetch");
   *Forget* drops it.
@@ -38,7 +41,10 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
   They float in the library's bottom-left corner (the uploader's + is bottom right).
   One per fetch of the person's into this library that is not dismissed: being looked
   at, waiting for them, waiting its turn, running (with a progress bar), or how it
-  ended. They are read from the database and then follow the fetch over PubSub
+  ended. A fetch that brought something in links to it: its picture and title open the
+  first file in the library (`photo_path`, the address of a photo with `:code` where its
+  short code goes, as `PhotoTimeline` takes it; through `JS.patch`, so the page's
+  `handle_params/3` opens the viewer). They are read from the database and then follow the fetch over PubSub
   (`PhoenixKitPhotos.LiveUpdates.watch_fetches/3`), so a refresh or a lost connection
   loses nothing. The page needs the `LiveUpdates` hook for the cards to move.
   """
@@ -67,6 +73,9 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
        library_uuid: nil,
        enabled: false,
        logins_path: nil,
+       photo_path: nil,
+       shown: %{},
+       recheck_queued: false,
        opened_param: nil
      )}
   end
@@ -91,6 +100,12 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
 
   def update(%{start: text}, socket), do: {:ok, start(socket, text)}
 
+  # A fetch ended before its files were ready to open: look again (see `find_shown/2`).
+  def update(%{recheck_shown: true}, socket) do
+    waiting = Enum.filter(socket.assigns.fetches, &awaits_file?(&1, socket.assigns.shown))
+    {:ok, socket |> assign(:recheck_queued, false) |> find_shown(Enum.map(waiting, & &1.uuid))}
+  end
+
   def update(assigns, socket) do
     library_uuid = to_string(assigns.library_uuid)
     auth = assigns[:auth]
@@ -101,6 +116,10 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
       |> assign(:id, assigns.id)
       |> assign(:auth, auth)
       |> assign(:logins_path, assigns[:logins_path])
+      |> assign(
+        :photo_path,
+        PhoenixKitPhotos.Components.PhotoTimeline.photo_path(assigns[:photo_path])
+      )
       |> assign(:library_uuid, library_uuid)
       |> assign(:enabled, enabled)
 
@@ -116,6 +135,7 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
         |> assign(:public?, Libraries.published?(library))
         |> assign(:fetches, Fetches.for_library(auth, library_uuid))
         |> count_waiting()
+        |> find_shown()
         |> open_asked(assigns[:open])
       else
         assign(socket, fetches: [])
@@ -158,7 +178,7 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
   def handle_event("close", _params, socket), do: {:noreply, close(socket)}
 
   def handle_event("change", params, socket) do
-    {:noreply, assign(socket, :form, form_from(params))}
+    {:noreply, assign(socket, :form, form_from(params, socket.assigns.form))}
   end
 
   def handle_event("select", %{"all" => all}, socket) do
@@ -272,8 +292,60 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
         do: Enum.sort_by([fetch | others], & &1.inserted_at, NaiveDateTime),
         else: others
 
-    socket |> assign(:fetches, fetches) |> count_waiting()
+    socket |> assign(:fetches, fetches) |> count_waiting() |> find_shown([fetch.uuid])
   end
+
+  # The first file of each ended fetch that brought something in, for its card to open.
+  # Only ended fetches: a running one's first file may still go. `only` limits the work
+  # to the fetch that just changed.
+  defp find_shown(socket, only \\ nil) do
+    ended = Enum.filter(socket.assigns.fetches, &(&1.status in Fetch.ended_statuses()))
+    asked = if only, do: Enum.filter(ended, &(&1.uuid in only)), else: ended
+    found = Fetches.first_files(asked)
+
+    shown =
+      Map.new(ended, fn fetch ->
+        if fetch in asked,
+          do: {fetch.uuid, found[fetch.uuid]},
+          else: {fetch.uuid, socket.assigns.shown[fetch.uuid]}
+      end)
+
+    socket |> assign(:shown, shown) |> recheck_later()
+  end
+
+  # A fetch that brought files in ends as soon as they are stored, and their previews are
+  # made after: until its first file opens, the card asks again every few seconds (for
+  # @recheck_minutes after it ended; a reload looks again anyway).
+  @recheck_ms 3_000
+  @recheck_minutes 15
+
+  defp recheck_later(socket) do
+    if connected?(socket) and not socket.assigns.recheck_queued and
+         Enum.any?(socket.assigns.fetches, &awaits_file?(&1, socket.assigns.shown)) do
+      Phoenix.LiveView.send_update_after(
+        __MODULE__,
+        [id: socket.assigns.id, recheck_shown: true],
+        @recheck_ms
+      )
+
+      assign(socket, :recheck_queued, true)
+    else
+      socket
+    end
+  end
+
+  defp awaits_file?(%Fetch{status: status, finished_at: finished} = fetch, shown) do
+    progress = fetch.progress || %{}
+
+    status in Fetch.ended_statuses() and is_nil(shown[fetch.uuid]) and
+      (progress["saved"] || 0) + (progress["duplicates"] || 0) > 0 and
+      not is_nil(finished) and
+      NaiveDateTime.diff(NaiveDateTime.utc_now(), finished, :second) < @recheck_minutes * 60
+  end
+
+  defp shown_href(nil, _shown), do: nil
+  defp shown_href(_path, nil), do: nil
+  defp shown_href(path, %{short_code: code}), do: String.replace(path, ":code", code)
 
   defp count_waiting(socket) do
     waiting =
@@ -288,19 +360,36 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
     %{
       "items" => for(%{"index" => i} <- info["entries"] || [], do: to_string(i)),
       "quality" => "default",
-      "rights" => false
+      "rights" => false,
+      "redate" => false,
+      "date" => posted_day(info["posted_at"]) || Date.to_iso8601(Date.utc_today()),
+      "time" => ""
     }
   end
 
   defp default_form(_fetch), do: %{}
 
-  defp form_from(params) do
+  # The date fields are not in the form while *Set the date myself* is unticked: what
+  # they held stays for when it is ticked again.
+  defp form_from(params, previous \\ %{}) do
     %{
       "items" => params |> Map.get("items", []) |> List.wrap() |> Enum.reject(&(&1 in ["", nil])),
       "quality" => if(params["quality"] == "best", do: "best", else: "default"),
-      "rights" => params["rights"] in ["true", "on", true]
+      "rights" => params["rights"] in ["true", "on", true],
+      "redate" => params["redate"] in ["true", "on", true],
+      "date" => params["date"] || previous["date"] || "",
+      "time" => params["time"] || previous["time"] || ""
     }
   end
+
+  defp posted_day(iso) when is_binary(iso) do
+    case NaiveDateTime.from_iso8601(iso) do
+      {:ok, at} -> at |> NaiveDateTime.to_date() |> Date.to_iso8601()
+      _ -> nil
+    end
+  end
+
+  defp posted_day(_iso), do: nil
 
   defp open_fetch(%{assigns: %{open: nil}}), do: nil
 
@@ -327,6 +416,8 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
   defp confirm_error(:no_items), do: gettext("Choose at least one item to fetch.")
   defp confirm_error(:nothing_missing), do: gettext("Everything from this link is already here.")
   defp confirm_error(:not_ready), do: gettext("This link is not ready to fetch any more.")
+  defp confirm_error(:bad_date), do: gettext("That is not a date.")
+  defp confirm_error(:implausible_date), do: gettext("That date is before 1826 or in the future.")
   defp confirm_error(reason), do: start_error(reason)
 
   # ── Rendering ──────────────────────────────────────────────────────────
@@ -362,7 +453,14 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
             <.icon name="hero-x-mark" class="h-4 w-4" />
           </button>
         </div>
-        <.card :for={fetch <- @cards} fetch={fetch} target={@myself} waiting={Map.get(@waiting, fetch.uuid, 0)} />
+        <.card
+          :for={fetch <- @cards}
+          fetch={fetch}
+          target={@myself}
+          waiting={Map.get(@waiting, fetch.uuid, 0)}
+          show_href={shown_href(@photo_path, @shown[fetch.uuid])}
+          show_patch
+        />
       </div>
 
       <.dialog :if={@dialog_fetch} id={@id} fetch={@dialog_fetch} form={@form} notice={@notice} target={@myself} public?={@public?} logins_path={@logins_path} />
@@ -527,6 +625,30 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
           <p :if={!quality_choice?(@info) && @info["sizes"]["default"]} class="text-xs text-base-content/60">
             {gettext("About %{size}", size: bytes(@info["sizes"]["default"]))}
           </p>
+
+          <%!-- The person's own date: an old film posted last week. --%>
+          <div class="rounded-lg border border-base-300 p-3 text-sm">
+            <label class="flex cursor-pointer items-center gap-2">
+              <input type="checkbox" name="redate" value="true" class="checkbox checkbox-sm" checked={@form["redate"] == true} />
+              <span>{gettext("Set the date myself")}</span>
+            </label>
+            <p :if={@form["redate"] != true} class="mt-1 text-xs text-base-content/60">
+              {gettext("Otherwise each file keeps its own date, or the date it was posted.")}
+            </p>
+            <div :if={@form["redate"] == true} class="mt-2 flex flex-wrap items-end gap-2">
+              <label class="flex flex-col gap-1 text-xs">
+                <span>{gettext("Date")}</span>
+                <input type="date" name="date" value={@form["date"]} min="1826-01-01" max={Date.to_iso8601(Date.add(Date.utc_today(), 1))} class="input input-sm" required />
+              </label>
+              <label class="flex flex-col gap-1 text-xs">
+                <span>{gettext("Time (optional)")}</span>
+                <input type="time" name="time" value={@form["time"]} class="input input-sm" />
+              </label>
+              <p :if={@info["kind"] == "collection"} class="basis-full text-xs text-base-content/60">
+                {gettext("The earliest file gets this date; the others move with it and keep their order.")}
+              </p>
+            </div>
+          </div>
 
           <p :if={@public?} class="rounded-lg bg-warning/15 p-2 text-xs" role="note">
             {gettext("This library is shared. Everyone who can see it will see what you fetch, with where it came from.")}

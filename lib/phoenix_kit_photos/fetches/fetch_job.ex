@@ -23,7 +23,10 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   A stored file is named `<title> <posted date>.<ext>`: core dates a file by its own
   capture date first, and only a file that has none (a merged video, a photo whose site
   stripped EXIF) by the date in its name (`PhoenixKit.Modules.Storage.CaptureDate`).
-  The title also becomes the file's title.
+  The title also becomes the file's title. When the person set a date of their own in
+  the dialog (`choices["date"]`), the files this run stored are dated by hand with it
+  at the end, moved together from the earliest (`ManualDate.set/3`, as the selection
+  bar's Date does), so a collection keeps its order and the time between its files.
 
   ## Stopping
 
@@ -51,6 +54,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   require Logger
 
   alias PhoenixKit.Modules.Storage
+  alias PhoenixKit.Modules.Storage.ManualDate
   alias PhoenixKit.Modules.Storage.ProcessFileJob
   alias PhoenixKit.PubSub.Manager
   alias PhoenixKit.Users.Auth
@@ -245,6 +249,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
       by_key: if(keys, do: Map.new(entries(fetch), &{&1["key"], &1["index"]}), else: %{}),
       position: nil,
       started: 0,
+      stored: [],
       stop: nil,
       written_at: 0,
       progress:
@@ -522,6 +527,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
     )
 
     counter = counter(status)
+    state = if status == "stored", do: %{state | stored: [file_uuid | state.stored]}, else: state
 
     state
     |> put_progress(%{counter => (state.progress[counter] || 0) + 1, "phase" => "downloading"})
@@ -549,6 +555,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   # ── Ending ────────────────────────────────────────────────────────────
 
   defp conclude(state, stderr) do
+    redate(state)
     fetch = Fetches.get_any(state.fetch.uuid) || state.fetch
     kept = state.progress["saved"] + state.progress["duplicates"]
     missing = Fetches.missing_items(fetch)
@@ -564,6 +571,39 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
 
     finish(fetch, status, code, detail, progress)
   end
+
+  # The person's own date (see the moduledoc), for what this run stored.
+  defp redate(%{fetch: %Fetch{choices: %{"date" => iso}}, stored: [_ | _] = uuids} = state) do
+    with {:ok, to} <- parse_choice(iso) do
+      uuids =
+        uuids
+        |> Enum.map(&Storage.get_file/1)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.sort_by(&ManualDate.local/1, NaiveDateTime)
+        |> Enum.map(& &1.uuid)
+
+      case uuids != [] && ManualDate.set(uuids, to, state.scope) do
+        {:error, reason} ->
+          Logger.info("[Fetches] #{state.fetch.uuid}: could not set the chosen date (#{reason})")
+
+        _ ->
+          :ok
+      end
+    end
+  rescue
+    error ->
+      Logger.warning("[Fetches] could not set the chosen date: #{Exception.message(error)}")
+  end
+
+  defp redate(_state), do: :ok
+
+  defp parse_choice(iso) when is_binary(iso) do
+    if String.contains?(iso, "T"),
+      do: NaiveDateTime.from_iso8601(iso),
+      else: Date.from_iso8601(iso)
+  end
+
+  defp parse_choice(_iso), do: :error
 
   # `{status, error code, detail}` of an ended fetch, from what stopped it, what it kept
   # (`kept`: stored or already there) and what of the chosen it did not (`missing`).

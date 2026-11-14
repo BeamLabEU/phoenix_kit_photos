@@ -7,6 +7,10 @@ defmodule PhoenixKitPhotos.Components.FetchCards do
   Every button sends its event to `target` with the fetch's `uuid`: `"open"` (the
   dialog of a fetch the person has not confirmed yet), `"cancel"`, `"retry"`,
   `"dismiss"`.
+
+  `show_href`, when given, is the address of the first file the fetch brought in: the
+  card's picture and title link to it, with a *Show* button. `show_patch` makes it a
+  `JS.patch` (the card is on that library's own page), else a navigation.
   """
 
   use Phoenix.Component
@@ -22,6 +26,8 @@ defmodule PhoenixKitPhotos.Components.FetchCards do
   attr :waiting, :integer, default: 0, doc: "how many of the person's fetches go first"
   attr :library_name, :string, default: nil, doc: "shown where the card is not in its library"
   attr :library_href, :string, default: nil
+  attr :show_href, :string, default: nil, doc: "where the first file it brought in is"
+  attr :show_patch, :boolean, default: false
 
   @doc "One fetch."
   def card(assigns) do
@@ -37,9 +43,13 @@ defmodule PhoenixKitPhotos.Components.FetchCards do
       role="status"
       aria-live="polite"
     >
-      <.thumb info={@info} status={@fetch.status} />
+      <.show_link href={@show_href} patch={@show_patch} class="shrink-0" label={gettext("Show")}>
+        <.thumb info={@info} status={@fetch.status} />
+      </.show_link>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium" title={@fetch.url}>{headline(@fetch)}</p>
+        <p class="truncate text-sm font-medium" title={@fetch.url}>
+          <.show_link href={@show_href} patch={@show_patch} class="link link-hover">{headline(@fetch)}</.show_link>
+        </p>
         <p class="truncate text-xs text-base-content/60">
           {@fetch.site}
           <span :if={@library_name}>
@@ -50,6 +60,24 @@ defmodule PhoenixKitPhotos.Components.FetchCards do
         <.state fetch={@fetch} progress={@progress} waiting={@waiting} />
 
         <div class="mt-2 flex flex-wrap gap-1">
+          <.link
+            :if={@show_href && @show_patch}
+            patch={@show_href}
+            class="btn btn-primary btn-xs"
+            data-fetch-show
+          >
+            <.icon name="hero-eye" class="h-3.5 w-3.5" />
+            {gettext("Show")}
+          </.link>
+          <.link
+            :if={@show_href && !@show_patch}
+            navigate={@show_href}
+            class="btn btn-primary btn-xs"
+            data-fetch-show
+          >
+            <.icon name="hero-eye" class="h-3.5 w-3.5" />
+            {gettext("Show")}
+          </.link>
           <button
             :if={@fetch.status == "ready"}
             type="button"
@@ -119,6 +147,27 @@ defmodule PhoenixKitPhotos.Components.FetchCards do
         <.icon name="hero-x-mark" class="h-4 w-4" />
       </button>
     </div>
+    """
+  end
+
+  attr :href, :string, default: nil
+  attr :patch, :boolean, default: false
+  attr :class, :string, default: nil
+  attr :label, :string, default: nil
+  slot :inner_block, required: true
+
+  # What it wraps, as a link to the file when there is one; as it is otherwise.
+  defp show_link(%{href: nil} = assigns), do: ~H"{render_slot(@inner_block)}"
+
+  defp show_link(%{patch: true} = assigns) do
+    ~H"""
+    <.link patch={@href} class={@class} aria-label={@label}>{render_slot(@inner_block)}</.link>
+    """
+  end
+
+  defp show_link(assigns) do
+    ~H"""
+    <.link navigate={@href} class={@class} aria-label={@label}>{render_slot(@inner_block)}</.link>
     """
   end
 

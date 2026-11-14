@@ -317,6 +317,127 @@ defmodule PhoenixKitPhotos.FetchesTest do
     end
   end
 
+  describe "the person's own date" do
+    test "confirm/3 keeps it only when asked for, and refuses one that is not plausible", ctx do
+      fetch = started!(ctx)
+      base = %{"rights" => true}
+
+      assert {:error, :bad_date} =
+               Fetches.confirm(
+                 ctx.scope,
+                 fetch.uuid,
+                 Map.merge(base, %{"redate" => true, "date" => "soon"})
+               )
+
+      assert {:error, :implausible_date} =
+               Fetches.confirm(
+                 ctx.scope,
+                 fetch.uuid,
+                 Map.merge(base, %{"redate" => "true", "date" => "1800-01-01"})
+               )
+
+      future = Date.utc_today() |> Date.add(10) |> Date.to_iso8601()
+
+      assert {:error, :implausible_date} =
+               Fetches.confirm(
+                 ctx.scope,
+                 fetch.uuid,
+                 Map.merge(base, %{"redate" => true, "date" => future})
+               )
+
+      assert {:ok, queued} =
+               Fetches.confirm(
+                 ctx.scope,
+                 fetch.uuid,
+                 Map.merge(base, %{"redate" => true, "date" => "2002-06-01", "time" => "18:30"})
+               )
+
+      assert queued.choices["date"] == "2002-06-01T18:30:00"
+
+      other = started!(ctx, "https://site.example/album/2")
+
+      assert {:ok, plain} =
+               Fetches.confirm(
+                 ctx.scope,
+                 other.uuid,
+                 Map.merge(base, %{"redate" => false, "date" => "2002-06-01"})
+               )
+
+      refute Map.has_key?(plain.choices, "date")
+    end
+
+    test "a video posted last week, filmed in 2002, is dated 2002 by hand", ctx do
+      mode("video")
+      fetch = started!(ctx, "https://video.example/watch/1")
+
+      {:ok, _} =
+        Fetches.confirm(ctx.scope, fetch.uuid, %{
+          "rights" => true,
+          "redate" => true,
+          "date" => "2002-06-01"
+        })
+
+      assert %{status: "done"} = run!(fetch)
+      assert [file] = library_files(ctx.library)
+      # Named by the post, as before; dated by the person, which nothing automatic undoes.
+      assert file.original_file_name == "A fake video 2005-04-24 03.31.52.mp4"
+      assert file.taken_at_source == "manual"
+      assert file.taken_on == ~D[2002-06-01]
+    end
+
+    test "a collection: the earliest file gets the date, and every file is dated by hand", ctx do
+      fetch = started!(ctx)
+
+      {:ok, _} =
+        Fetches.confirm(ctx.scope, fetch.uuid, %{
+          "rights" => true,
+          "redate" => true,
+          "date" => "1999-12-31"
+        })
+
+      assert %{status: "done"} = run!(fetch)
+      files = library_files(ctx.library)
+      assert length(files) == 3
+      assert Enum.all?(files, &(&1.taken_at_source == "manual"))
+
+      earliest =
+        files
+        |> Enum.map(&PhoenixKit.Modules.Storage.ManualDate.local/1)
+        |> Enum.min(NaiveDateTime)
+
+      assert NaiveDateTime.to_date(earliest) == ~D[1999-12-31]
+    end
+  end
+
+  describe "the file a card opens (first_files/1)" do
+    test "the first file in the library, also when it was already there; not a trashed one",
+         ctx do
+      fetch = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true, "items" => [1, 3]})
+      done = run!(fetch)
+
+      [first | _] = Fetches.items(done)
+      assert %{uuid: uuid, short_code: code} = Fetches.first_file(done)
+      assert uuid == first.file_uuid
+      assert is_binary(code)
+
+      again = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, again.uuid, %{"rights" => true, "items" => [1]})
+      again = run!(again)
+      assert %{progress: %{"duplicates" => 1}} = again
+      assert %{uuid: ^uuid} = Fetches.first_files([done, again])[again.uuid]
+
+      TestRepo.update_all(from(f in StorageFile, where: f.uuid == ^uuid),
+        set: [trashed_at: DateTime.utc_now() |> DateTime.truncate(:second)]
+      )
+
+      assert %{uuid: next} = Fetches.first_file(done)
+      refute next == uuid
+      assert Fetches.first_file(again) == nil
+      assert Fetches.first_files([]) == %{}
+    end
+  end
+
   describe "the fetch (FetchJob)" do
     test "stores the chosen photos, with their titles, sources and dates", ctx do
       fetch = started!(ctx)

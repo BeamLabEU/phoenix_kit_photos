@@ -176,9 +176,14 @@ defmodule PhoenixKitPhotos.Fetches do
     * `"rights"` — must be `true` (or `"true"`): the person confirmed `rights_text/0`.
     * `"quality"` — `"default"` (up to 1080p) or `"best"`.
     * `"items"` — the indexes of the entries to fetch (all when absent).
+    * `"redate"` and `"date"` (and an optional `"time"`, `HH:MM`) — the person's own
+      date for what is fetched, when they know better than the site (an old film posted
+      last week). `FetchJob` dates the stored files by hand with it, moved together
+      (`ManualDate.set/3`, as the selection bar's Date does). Without `"redate"` the
+      files keep their own dates, or the post's.
 
   `{:ok, fetch}`, or `{:error, reason}`: `:not_found`, `:not_ready`, `:rights`,
-  `:no_items`, `:not_allowed`, `:email_unconfirmed`.
+  `:no_items`, `:bad_date`, `:implausible_date`, `:not_allowed`, `:email_unconfirmed`.
   """
   @spec confirm(scope(), String.t(), map()) :: {:ok, Fetch.t()} | {:error, atom()}
   def confirm(scope, uuid, params) when is_map(params) do
@@ -186,13 +191,16 @@ defmodule PhoenixKitPhotos.Fetches do
          true <- fetch.status == "ready" || {:error, :not_ready},
          true <- params["rights"] in [true, "true", "on"] || {:error, :rights},
          :ok <- may_add(scope, fetch.library_uuid),
-         {:ok, items} <- picked_items(fetch, params["items"]) do
+         {:ok, items} <- picked_items(fetch, params["items"]),
+         {:ok, date} <- chosen_date(params) do
       now = now()
 
-      choices = %{
-        "quality" => if(params["quality"] == "best", do: "best", else: "default"),
-        "items" => items
-      }
+      choices =
+        %{
+          "quality" => if(params["quality"] == "best", do: "best", else: "default"),
+          "items" => items
+        }
+        |> then(&if(date, do: Map.put(&1, "date", date), else: &1))
 
       repo().transaction(fn ->
         {1, [fetch]} =
@@ -220,6 +228,26 @@ defmodule PhoenixKitPhotos.Fetches do
     end
   rescue
     MatchError -> {:error, :not_ready}
+  end
+
+  # The person's own date, as ISO 8601 (`"2002-06-01"` or `"2002-06-01T18:30:00"`), or
+  # nil when they did not ask for one. The span is `ManualDate`'s: from 1826 to tomorrow.
+  defp chosen_date(%{"redate" => redate} = params) when redate in [true, "true", "on"] do
+    with {:ok, to} <- PhoenixKitPhotos.Details.parse_date(params["date"], params["time"]),
+         :ok <- plausible(to) do
+      {:ok, to |> to_string() |> String.replace(" ", "T")}
+    end
+  end
+
+  defp chosen_date(_params), do: {:ok, nil}
+
+  defp plausible(to) do
+    day = if is_struct(to, NaiveDateTime), do: NaiveDateTime.to_date(to), else: to
+
+    if Date.compare(day, ~D[1826-01-01]) != :lt and
+         Date.compare(day, Date.add(Date.utc_today(), 1)) != :gt,
+       do: :ok,
+       else: {:error, :implausible_date}
   end
 
   defp picked_items(%Fetch{info: info}, picked) do
@@ -479,6 +507,41 @@ defmodule PhoenixKitPhotos.Fetches do
         order_by: [asc: i.position, asc: i.inserted_at]
       )
     )
+  end
+
+  @doc """
+  The first file a fetch brought into its library that is still there, as
+  `%{uuid: uuid, short_code: code}`, or nil: what its card opens. A file that was
+  already in the library counts (the fetch found it there); one in another library does
+  not, and neither does one in the trash, nor one still being processed: the library
+  opens a file only once its previews are made (`Timeline.readable_file/4`), and a fetch
+  ends before that.
+  """
+  @spec first_file(Fetch.t()) :: %{uuid: String.t(), short_code: String.t()} | nil
+  def first_file(%Fetch{uuid: uuid} = fetch), do: Map.get(first_files([fetch]), uuid)
+
+  @doc "`first_file/1` of several fetches at once, by fetch uuid (absent: none)."
+  @spec first_files([Fetch.t()]) :: %{String.t() => %{uuid: String.t(), short_code: String.t()}}
+  def first_files([]), do: %{}
+
+  def first_files(fetches) do
+    uuids = Enum.map(fetches, & &1.uuid)
+
+    from(i in Item,
+      join: fe in Fetch,
+      on: fe.uuid == i.fetch_uuid,
+      join: f in PhoenixKit.Modules.Storage.File,
+      on: f.uuid == i.file_uuid,
+      where:
+        i.fetch_uuid in ^uuids and i.status in ["stored", "duplicate"] and
+          f.library_uuid == fe.library_uuid and f.status == "active" and
+          is_nil(f.trashed_at) and not is_nil(f.short_code),
+      distinct: i.fetch_uuid,
+      order_by: [asc: i.fetch_uuid, asc: i.position, asc: i.inserted_at],
+      select: {i.fetch_uuid, %{uuid: f.uuid, short_code: f.short_code}}
+    )
+    |> repo().all()
+    |> Map.new()
   end
 
   @doc """

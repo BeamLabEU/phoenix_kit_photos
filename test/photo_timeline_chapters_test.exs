@@ -108,6 +108,72 @@ defmodule PhoenixKitPhotos.PhotoTimelineChaptersTest do
              {~D[2026-09-01], nil, nil}
   end
 
+  test "on a site of three languages: a tab each, all kept by one Save", ctx do
+    {:ok, _} = PhoenixKit.Settings.update_setting("languages_enabled", "true")
+
+    {:ok, _} =
+      PhoenixKit.Settings.update_json_setting("languages_config", %{
+        "languages" =>
+          for code <- ~w(et en ru) do
+            %{"code" => code, "name" => code, "is_enabled" => true, "is_default" => code == "et"}
+          end
+      })
+
+    assert [%{code: "et", is_primary: true}, _, _] =
+             PhoenixKit.Utils.Multilang.build_language_tabs()
+
+    ctx.view
+    |> element("#test-timeline-jump")
+    |> render_change(%{"id" => "+chapter"})
+
+    # The main language's fields show; the others are in the form, hidden.
+    assert has_element?(ctx.view, "#test-timeline-chapter-languages")
+    assert has_element?(ctx.view, "#test-timeline-chapter-form input[name=title]:not(.hidden)")
+    assert has_element?(ctx.view, "input[name='translations[ru][title]'].hidden")
+
+    ctx.view
+    |> element("#test-timeline-chapter-form")
+    |> render_change(%{"title" => "Kooliaasta", "translations" => %{"ru" => %{"title" => ""}}})
+
+    ctx.view
+    |> element("#test-timeline-chapter-languages [phx-value-language=ru]")
+    |> render_click()
+
+    assert has_element?(ctx.view, "input[name='translations[ru][title]']:not(.hidden)")
+    assert has_element?(ctx.view, "#test-timeline-chapter-form input[name=title].hidden")
+
+    # Saving without the main title brings its tab back with the reason.
+    html =
+      ctx.view
+      |> element("#test-timeline-chapter-form")
+      |> render_submit(%{
+        "title" => "",
+        "starts_on" => "2026-09-01",
+        "translations" => %{"ru" => %{"title" => "Учебный год"}}
+      })
+
+    assert html =~ "Give the chapter a title."
+    assert has_element?(ctx.view, "#test-timeline-chapter-form input[name=title]:not(.hidden)")
+
+    ctx.view
+    |> element("#test-timeline-chapter-form")
+    |> render_submit(%{
+      "title" => "Kooliaasta",
+      "starts_on" => "2026-09-01",
+      "translations" => %{
+        "en" => %{"title" => "School year", "description" => ""},
+        "ru" => %{"title" => "Учебный год", "description" => "Первый класс"}
+      }
+    })
+
+    [chapter] = Chapters.list(ctx.library.uuid)
+
+    assert chapter.translations == %{
+             "en" => %{"title" => "School year"},
+             "ru" => %{"title" => "Учебный год", "description" => "Первый класс"}
+           }
+  end
+
   test "the banner's pencil: change, add a sub-chapter, delete", ctx do
     {:ok, chapter} =
       Chapters.create(scope_for(ctx.user), ctx.library.uuid, %{

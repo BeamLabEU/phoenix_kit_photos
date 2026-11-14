@@ -217,7 +217,20 @@ defmodule PhoenixKitPhotos.ChapterSections do
 
   @doc "What a chip says of a chapter: its id, title, emoji and colour."
   def chip(%Chapter{} = chapter) do
-    %{id: chapter.uuid, title: chapter.title, emoji: chapter.emoji, color: color(chapter)}
+    %{
+      id: chapter.uuid,
+      title: Chapter.title(chapter, reader_lang()),
+      emoji: chapter.emoji,
+      color: color(chapter)
+    }
+  end
+
+  # The reader's language (the request's; this runs in their LiveView), for a chapter's
+  # title and description in it.
+  defp reader_lang do
+    PhoenixKit.Modules.Languages.request_locale() || Gettext.get_locale(PhoenixKitPhotos.Gettext)
+  rescue
+    _ -> nil
   end
 
   defp banner(%Chapter{} = chapter, by_uuid, counts) do
@@ -225,9 +238,9 @@ defmodule PhoenixKitPhotos.ChapterSections do
 
     %{
       id: chapter.uuid,
-      title: chapter.title,
+      title: Chapter.title(chapter, reader_lang()),
       emoji: chapter.emoji,
-      description: chapter.description,
+      description: Chapter.description(chapter, reader_lang()),
       color: color(chapter),
       starts_on: Date.to_iso8601(chapter.starts_on),
       ends_on: chapter.ends_on && Date.to_iso8601(chapter.ends_on),

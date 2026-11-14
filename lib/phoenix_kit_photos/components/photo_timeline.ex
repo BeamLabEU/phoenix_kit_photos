@@ -870,6 +870,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     end
   end
 
+  # A language tab of the dialog (core's language switcher sends `language`).
+  def handle_event("timeline:chapter_lang", %{"language" => code}, socket) do
+    case socket.assigns.chapter_edit do
+      nil -> {:noreply, socket}
+      edit -> {:noreply, assign(socket, :chapter_edit, ChapterEdit.lang(edit, code))}
+    end
+  end
+
   def handle_event("timeline:chapter_emoji", %{"emoji" => emoji}, socket) do
     case socket.assigns.chapter_edit do
       nil ->
@@ -905,7 +913,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
              )}
 
           {:error, message} ->
-            {:noreply, assign(socket, :chapter_edit, %{edit | error: message})}
+            {:noreply, assign(socket, :chapter_edit, ChapterEdit.failed(edit, message))}
         end
     end
   end

@@ -115,11 +115,11 @@ msgstr[2] "Ещё %{count} файлов ждут"
 msgid "Add photos"
 msgstr "Добавить фото"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:395
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:496
 #: lib/phoenix_kit_photos/components/info_panel.ex:433
 #: lib/phoenix_kit_photos/components/info_panel.ex:587
 #: lib/phoenix_kit_photos/components/info_panel.ex:756
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1812
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1820
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:983
 #: lib/phoenix_kit_photos/components/stack_edit.ex:259
 #: lib/phoenix_kit_photos/components/stack_pick.ex:191
@@ -140,9 +140,9 @@ msgstr "Очистить"
 #: lib/phoenix_kit_photos/components/fetch_list.ex:275
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:452
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:509
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1812
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1836
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1964
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1820
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1844
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1972
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:814
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:836
 #, elixir-autogen, elixir-format
@@ -281,14 +281,14 @@ msgstr "Места не осталось: хранилище этой библи
 msgid "%{count} already in this library"
 msgstr "Уже в этой библиотеке: %{count}"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1912
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1918
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1920
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1926
 #: lib/phoenix_kit_photos/components/stack_pick.ex:194
 #, elixir-autogen, elixir-format
 msgid "Add"
 msgstr "Добавить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1856
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1864
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a library"
 msgid_plural "Add %{count} items to a library"
@@ -296,22 +296,22 @@ msgstr[0] "Добавить %{count} объект в библиотеку"
 msgstr[1] "Добавить %{count} объекта в библиотеку"
 msgstr[2] "Добавить %{count} объектов в библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1638
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1646
 #, elixir-autogen, elixir-format
 msgid "Add tags (separate with commas)"
 msgstr "Добавьте теги (через запятую)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1557
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1565
 #, elixir-autogen, elixir-format
 msgid "Add to library"
 msgstr "В библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1505
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1513
 #, elixir-autogen, elixir-format
 msgid "All photos"
 msgstr "Все фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1504
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1512
 #, elixir-autogen, elixir-format
 msgid "All videos"
 msgstr "Все видео"
@@ -321,12 +321,12 @@ msgstr "Все видео"
 msgid "Cancel all"
 msgstr "Отменить все"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1304
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1312
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown"
 msgstr "Изменить вид"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1305
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1313
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown (V)"
 msgstr "Изменить вид (V)"
@@ -336,12 +336,12 @@ msgstr "Изменить вид (V)"
 msgid "Changes are saved automatically."
 msgstr "Изменения сохраняются автоматически."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1485
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1493
 #, elixir-autogen, elixir-format
 msgid "Clear selection"
 msgstr "Снять выбор"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1486
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1494
 #, elixir-autogen, elixir-format
 msgid "Clear selection (Esc)"
 msgstr "Снять выбор (Esc)"
@@ -351,12 +351,12 @@ msgstr "Снять выбор (Esc)"
 msgid "Columns"
 msgstr "Столбцы"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1818
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1826
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr "Скопировано"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1172
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1180
 #, elixir-autogen, elixir-format
 msgid "Copied 1 item"
 msgid_plural "Copied %{count} items"
@@ -364,12 +364,12 @@ msgstr[0] "Скопирован %{count} объект"
 msgstr[1] "Скопировано %{count} объекта"
 msgstr[2] "Скопировано %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1821
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1829
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr "Копировать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1556
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1564
 #, elixir-autogen, elixir-format
 msgid "Copy links"
 msgstr "Копировать ссылки"
@@ -381,12 +381,12 @@ msgstr "Копировать ссылки"
 msgid "Details"
 msgstr "Детали"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1555
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1563
 #, elixir-autogen, elixir-format
 msgid "Download"
 msgstr "Скачать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1506
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1514
 #, elixir-autogen, elixir-format
 msgid "Everything"
 msgstr "Всё"
@@ -411,12 +411,12 @@ msgstr "Сетка"
 msgid "Honeycomb"
 msgstr "Соты"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1621
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1629
 #, elixir-autogen, elixir-format
 msgid "Library"
 msgstr "Библиотека"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1879
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1887
 #, elixir-autogen, elixir-format
 msgid "Link to 1 photo"
 msgid_plural "Links to %{count} photos"
@@ -429,13 +429,13 @@ msgstr[2] "Ссылки на %{count} фото"
 msgid "Mosaic"
 msgstr "Мозаика"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1558
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1913
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1566
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1921
 #, elixir-autogen, elixir-format
 msgid "Move"
 msgstr "Переместить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1859
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1867
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to a library"
 msgid_plural "Move %{count} items to a library"
@@ -443,7 +443,7 @@ msgstr[0] "Переместить %{count} объект в библиотеку"
 msgstr[1] "Переместить %{count} объекта в библиотеку"
 msgstr[2] "Переместить %{count} объектов в библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1853
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1861
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to the trash?"
 msgid_plural "Move %{count} items to the trash?"
@@ -451,12 +451,12 @@ msgstr[0] "Переместить %{count} объект в корзину?"
 msgstr[1] "Переместить %{count} объекта в корзину?"
 msgstr[2] "Переместить %{count} объектов в корзину?"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1911
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1919
 #, elixir-autogen, elixir-format
 msgid "Move to trash"
 msgstr "Переместить в корзину"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1175
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1183
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item"
 msgid_plural "Moved %{count} items"
@@ -464,7 +464,7 @@ msgstr[0] "Перемещён %{count} объект"
 msgstr[1] "Перемещено %{count} объекта"
 msgstr[2] "Перемещено %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1166
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1174
 #, elixir-autogen, elixir-format
 msgid "Moved 1 item to the trash"
 msgid_plural "Moved %{count} items to the trash"
@@ -472,7 +472,7 @@ msgstr[0] "%{count} объект перемещён в корзину"
 msgstr[1] "%{count} объекта перемещено в корзину"
 msgstr[2] "%{count} объектов перемещено в корзину"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1883
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1891
 #, elixir-autogen, elixir-format
 msgid "Only people who may see the library can open them."
 msgstr "Открыть их смогут только те, кому видна библиотека."
@@ -482,12 +482,12 @@ msgstr "Открыть их смогут только те, кому видна 
 msgid "Prints"
 msgstr "Отпечатки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1649
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1657
 #, elixir-autogen, elixir-format
 msgid "Remove tags"
 msgstr "Удалить теги"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1169
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1177
 #, elixir-autogen, elixir-format
 msgid "Restored 1 item"
 msgid_plural "Restored %{count} items"
@@ -500,28 +500,28 @@ msgstr[2] "Восстановлено %{count} объектов"
 msgid "Rows"
 msgstr "Строки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1914
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1922
 #, elixir-autogen, elixir-format
 msgid "Save tags"
 msgstr "Сохранить теги"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1295
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1499
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1303
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1507
 #, elixir-autogen, elixir-format
 msgid "Select"
 msgstr "Выбрать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1292
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1300
 #, elixir-autogen, elixir-format
 msgid "Select photos"
 msgstr "Выбрать фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1246
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1254
 #, elixir-autogen, elixir-format
 msgid "Select this month"
 msgstr "Выбрать этот месяц"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1861
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1869
 #, elixir-autogen, elixir-format
 msgid "Tag 1 item"
 msgid_plural "Tag %{count} items"
@@ -529,7 +529,7 @@ msgstr[0] "Теги для %{count} объекта"
 msgstr[1] "Теги для %{count} объектов"
 msgstr[2] "Теги для %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1178
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1186
 #, elixir-autogen, elixir-format
 msgid "Tagged 1 item"
 msgid_plural "Tagged %{count} items"
@@ -537,17 +537,17 @@ msgstr[0] "Теги добавлены к %{count} объекту"
 msgstr[1] "Теги добавлены к %{count} объектам"
 msgstr[2] "Теги добавлены к %{count} объектам"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1559
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1567
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr "Теги"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1882
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1890
 #, elixir-autogen, elixir-format
 msgid "The originals go to the trash of this library."
 msgstr "Оригиналы попадут в корзину этой библиотеки."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1503
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1511
 #, elixir-autogen, elixir-format
 msgid "This day"
 msgstr "Этот день"
@@ -557,12 +557,12 @@ msgstr "Этот день"
 msgid "This library is shared with signed-in users. Every active account on this site can see what you add."
 msgstr "Эта библиотека открыта всем вошедшим пользователям. Всё, что вы добавите, увидит любой активный аккаунт на сайте."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1502
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1510
 #, elixir-autogen, elixir-format
 msgid "This moment"
 msgstr "Этот момент"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1562
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1570
 #, elixir-autogen, elixir-format
 msgid "Trash"
 msgstr "Корзина"
@@ -572,7 +572,7 @@ msgstr "Корзина"
 msgid "Uncropped"
 msgstr "Без обрезки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1959
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1967
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr "Отменить"
@@ -583,12 +583,12 @@ msgstr "Отменить"
 msgid "Uploads at once"
 msgstr "Загрузок одновременно"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1881
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1889
 #, elixir-autogen, elixir-format
 msgid "You can bring them back from the trash."
 msgstr "Их можно вернуть из корзины."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1633
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1641
 #, elixir-autogen, elixir-format
 msgid "You have no other library to add these to."
 msgstr "У вас нет другой библиотеки, куда их добавить."
@@ -639,7 +639,7 @@ msgstr "не в корзине"
 msgid "not yours to change"
 msgstr "вы не можете это изменить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1492
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1500
 #, elixir-autogen, elixir-format
 msgid "selected"
 msgstr "выбрано"
@@ -649,7 +649,7 @@ msgstr "выбрано"
 msgid "that library keeps its files elsewhere"
 msgstr "та библиотека хранит файлы в другом месте"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1494
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1502
 #, elixir-autogen, elixir-format
 msgid "the most at once"
 msgstr "больше за раз нельзя"
@@ -723,7 +723,7 @@ msgstr[0] "и ещё %{count} в пути"
 msgstr[1] "и ещё %{count} в пути"
 msgstr[2] "и ещё %{count} в пути"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1260
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1268
 #, elixir-autogen, elixir-format
 msgid "%{page} of %{count}"
 msgstr "%{page} из %{count}"
@@ -736,26 +736,26 @@ msgstr "Все её фото переносятся на эту дату вме�
 #: lib/phoenix_kit_photos/components/info_panel.ex:563
 #: lib/phoenix_kit_photos/components/info_panel.ex:605
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:640
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1560
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1668
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1568
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1676
 #: lib/phoenix_kit_photos/components/stack_edit.ex:188
 #, elixir-autogen, elixir-format
 msgid "Date"
 msgstr "Дата"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:338
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:427
 #: lib/phoenix_kit_photos/components/info_panel.ex:514
 #: lib/phoenix_kit_photos/components/stack_edit.ex:178
 #, elixir-autogen, elixir-format
 msgid "Description"
 msgstr "Описание"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1898
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1906
 #, elixir-autogen, elixir-format
 msgid "Each photo goes back to its own place in the timeline."
 msgstr "Каждое фото вернётся на своё место в ленте."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1262
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1270
 #, elixir-autogen, elixir-format
 msgid "Edit stack"
 msgstr "Изменить стопку"
@@ -765,12 +765,12 @@ msgstr "Изменить стопку"
 msgid "Make this the cover"
 msgstr "Сделать обложкой"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1264
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1272
 #, elixir-autogen, elixir-format
 msgid "Page %{page}"
 msgstr "Страница %{page}"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:397
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:498
 #: lib/phoenix_kit_photos/components/info_panel.ex:431
 #: lib/phoenix_kit_photos/components/info_panel.ex:585
 #: lib/phoenix_kit_photos/components/stack_edit.ex:261
@@ -778,18 +778,18 @@ msgstr "Страница %{page}"
 msgid "Save"
 msgstr "Сохранить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1261
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1269
 #, elixir-autogen, elixir-format
 msgid "Skip"
 msgstr "Пропустить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1563
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1917
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1571
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1925
 #, elixir-autogen, elixir-format
 msgid "Stack"
 msgstr "В стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1870
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1878
 #, elixir-autogen, elixir-format
 msgid "Stack 1 photo"
 msgid_plural "Stack %{count} photos"
@@ -797,7 +797,7 @@ msgstr[0] "Сложить в стопку %{count} фото"
 msgstr[1] "Сложить в стопку %{count} фото"
 msgstr[2] "Сложить в стопку %{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1247
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1255
 #, elixir-autogen, elixir-format
 msgid "Stack of %{count} photos"
 msgstr "Стопка: %{count} фото"
@@ -810,7 +810,7 @@ msgstr[0] "Стопка из %{count} фото"
 msgstr[1] "Стопка из %{count} фото"
 msgstr[2] "Стопка из %{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1187
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1195
 #, elixir-autogen, elixir-format
 msgid "Stacked 1 photo"
 msgid_plural "Stacked %{count} photos"
@@ -823,7 +823,7 @@ msgstr[2] "В стопку сложено %{count} фото"
 msgid "Take this photo out"
 msgstr "Убрать это фото"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:173
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:216
 #: lib/phoenix_kit_photos/components/stack_edit.ex:134
 #: lib/phoenix_kit_photos/components/stack_pick.ex:96
 #: lib/phoenix_kit_photos/details.ex:531
@@ -845,7 +845,7 @@ msgstr "Эта дата раньше 1826 года или в будущем."
 msgid "That is not a date."
 msgstr "Это не дата."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:169
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:212
 #: lib/phoenix_kit_photos/components/stack_edit.ex:133
 #: lib/phoenix_kit_photos/details.ex:528
 #: lib/phoenix_kit_photos/details.ex:530
@@ -853,7 +853,7 @@ msgstr "Это не дата."
 msgid "The title or the description is too long."
 msgstr "Название или описание слишком длинное."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1887
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1895
 #, elixir-autogen, elixir-format
 msgid "They become one tile in the timeline, in order of when they were taken. Stacks among them are joined."
 msgstr "В ленте они станут одной плиткой, по порядку съёмки. Стопки среди них объединятся."
@@ -864,13 +864,13 @@ msgid "This stack is no longer there."
 msgstr "Этой стопки больше нет."
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:570
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1675
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1683
 #: lib/phoenix_kit_photos/components/stack_edit.ex:203
 #, elixir-autogen, elixir-format
 msgid "Time"
 msgstr "Время"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:241
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:320
 #: lib/phoenix_kit_photos/components/info_panel.ex:503
 #: lib/phoenix_kit_photos/components/info_panel.ex:504
 #: lib/phoenix_kit_photos/components/stack_edit.ex:167
@@ -878,19 +878,19 @@ msgstr "Время"
 msgid "Title"
 msgstr "Название"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1773
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1781
 #, elixir-autogen, elixir-format
 msgid "Title (optional)"
 msgstr "Название (необязательно)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1564
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1919
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1572
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1927
 #: lib/phoenix_kit_photos/components/stack_edit.ex:248
 #, elixir-autogen, elixir-format
 msgid "Unstack"
 msgstr "Разобрать стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1876
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1884
 #, elixir-autogen, elixir-format
 msgid "Unstack 1 photo"
 msgid_plural "Unstack %{count} photos"
@@ -898,7 +898,7 @@ msgstr[0] "Убрать %{count} фото из стопки"
 msgstr[1] "Убрать %{count} фото из стопок"
 msgstr[2] "Убрать %{count} фото из стопок"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1193
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1201
 #, elixir-autogen, elixir-format
 msgid "Unstacked 1 photo"
 msgid_plural "Unstacked %{count} photos"
@@ -945,7 +945,7 @@ msgstr[0] "%{count} фото"
 msgstr[1] "%{count} фото"
 msgstr[2] "%{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1873
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1881
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a stack"
 msgid_plural "Add %{count} items to a stack"
@@ -958,17 +958,17 @@ msgstr[2] "Добавить %{count} объектов в стопку"
 msgid "Add to a stack"
 msgstr "Добавить в стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1529
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1537
 #, elixir-autogen, elixir-format
 msgid "Add to a stack…"
 msgstr "Добавить в стопку…"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1263
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1271
 #, elixir-autogen, elixir-format
 msgid "Add to stack"
 msgstr "Добавить в стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1190
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1198
 #, elixir-autogen, elixir-format
 msgid "Added 1 item to the stack"
 msgid_plural "Added %{count} items to the stack"
@@ -982,7 +982,7 @@ msgstr[2] "В стопку добавлено %{count} объектов"
 msgid "Find a stack by its title"
 msgstr "Найти стопку по названию"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1524
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1532
 #, elixir-autogen, elixir-format
 msgid "New stack"
 msgstr "Новая стопка"
@@ -1012,7 +1012,7 @@ msgstr "Этой стопки больше нет."
 msgid "There are no stacks here yet. Choose two or more photos and make one with New stack."
 msgstr "Стопок здесь пока нет. Выберите два фото или больше и создайте её через «Новая стопка»."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1893
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1901
 #, elixir-autogen, elixir-format
 msgid "They go in among its photos by when they were taken; its cover stays. A stack among them is joined."
 msgstr "Они встанут среди её фото по времени съёмки, обложка останется прежней. Стопка среди них объединится с этой."
@@ -1669,12 +1669,12 @@ msgid "Anyone signed in who can see the photos"
 msgstr "Все вошедшие, кому видны фото"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:616
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1915
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1923
 #, elixir-autogen, elixir-format
 msgid "Change the date"
 msgstr "Изменить дату"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1864
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1872
 #, elixir-autogen, elixir-format
 msgid "Change the date of 1 item"
 msgid_plural "Change the date of %{count} items"
@@ -1688,7 +1688,7 @@ msgstr[2] "Изменить дату %{count} объектов"
 msgid "Change the place"
 msgstr "Изменить место"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1181
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1189
 #, elixir-autogen, elixir-format
 msgid "Changed the date of 1 item"
 msgid_plural "Changed the date of %{count} items"
@@ -1696,7 +1696,7 @@ msgstr[0] "Дата изменена у %{count} объекта"
 msgstr[1] "Дата изменена у %{count} объектов"
 msgstr[2] "Дата изменена у %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1184
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1192
 #, elixir-autogen, elixir-format
 msgid "Changed the place of 1 item"
 msgid_plural "Changed the place of %{count} items"
@@ -1715,7 +1715,7 @@ msgid "Close (I)"
 msgstr "Закрыть (I)"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:340
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1272
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1280
 #, elixir-autogen, elixir-format
 msgid "Close the info panel"
 msgstr "Закрыть панель сведений"
@@ -1777,17 +1777,17 @@ msgid "Hide other languages"
 msgstr "Скрыть другие языки"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:335
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1271
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1279
 #, elixir-autogen, elixir-format
 msgid "Info"
 msgstr "Сведения"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1687
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1695
 #, elixir-autogen, elixir-format
 msgid "Instead, give them back their own dates"
 msgstr "Вместо этого вернуть им исходные даты"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1768
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1776
 #, elixir-autogen, elixir-format
 msgid "Instead, remove their place"
 msgstr "Вместо этого удалить их место"
@@ -1828,7 +1828,7 @@ msgstr "Примерно:"
 msgid "No comments are shown on this library's photos."
 msgstr "Под фото этой библиотеки комментарии не показываются."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1756
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1764
 #, elixir-autogen, elixir-format
 msgid "No place chosen yet"
 msgstr "Место ещё не выбрано"
@@ -1888,7 +1888,7 @@ msgstr "Не вошедшие в аккаунт тоже могут читать
 msgid "Phones record the exact spot in every photo. Downloaded originals can still carry it."
 msgstr "Телефоны записывают в каждое фото точное место. В скачанных оригиналах оно может сохраниться."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1561
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1569
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr "Место"
@@ -1908,7 +1908,7 @@ msgstr "То же место, что у фото, снятого примерн�
 msgid "Saturday"
 msgstr "Суббота"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1916
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1924
 #, elixir-autogen, elixir-format
 msgid "Save the place"
 msgstr "Сохранить место"
@@ -1925,24 +1925,24 @@ msgid "Saved"
 msgstr "Сохранено"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:686
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1711
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1719
 #, elixir-autogen, elixir-format
 msgid "Search"
 msgstr "Найти"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:681
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1703
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1711
 #, elixir-autogen, elixir-format
 msgid "Search for a place"
 msgstr "Поиск места"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:680
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1702
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1710
 #, elixir-autogen, elixir-format
 msgid "Search for a place or an address"
 msgstr "Поиск места или адреса"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1907
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1915
 #, elixir-autogen, elixir-format
 msgid "Search for the place, or click the map. They all get the same place."
 msgstr "Найдите место или нажмите на карту. Всем будет присвоено одно и то же место."
@@ -1971,7 +1971,7 @@ msgstr[0] "Дата стопки из %{count} фото"
 msgstr[1] "Дата стопки из %{count} фото"
 msgstr[2] "Дата стопки из %{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1902
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1910
 #, elixir-autogen, elixir-format
 msgid "The earliest gets this date and the others move with it, keeping their order and the time between them. A stack moves whole."
 msgstr "Самое раннее получит эту дату, остальные сдвинутся вместе с ним, сохраняя порядок и промежутки между собой. Стопка сдвигается целиком."
@@ -1996,7 +1996,7 @@ msgstr "Поиск по карте занят. Попробуйте чуть п�
 msgid "The owner and members see where each photo was taken. Nobody else does."
 msgstr "Владелец и участники видят, где снято каждое фото. Больше никто."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1755
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1763
 #, elixir-autogen, elixir-format
 msgid "The pin on the map"
 msgstr "Метка на карте"
@@ -2082,7 +2082,7 @@ msgstr "Когда снята стопка"
 msgid "Where it was taken"
 msgstr "Место съёмки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1867
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1875
 #, elixir-autogen, elixir-format
 msgid "Where was 1 item taken?"
 msgid_plural "Where were %{count} items taken?"
@@ -2192,7 +2192,7 @@ msgctxt "in a date"
 msgid "September"
 msgstr "сентября"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:249
+#: lib/phoenix_kit_photos/chapter_sections.ex:262
 #, elixir-autogen, elixir-format
 msgid "%{count} photo"
 msgid_plural "%{count} photos"
@@ -2200,119 +2200,119 @@ msgstr[0] "%{count} фото"
 msgstr[1] "%{count} фото"
 msgstr[2] "%{count} фото"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:293
+#: lib/phoenix_kit_photos/chapter_sections.ex:306
 #, elixir-autogen, elixir-format
 msgid "%{date} %{year}"
 msgstr "%{date} %{year}"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:295
+#: lib/phoenix_kit_photos/chapter_sections.ex:308
 #, elixir-autogen, elixir-format
 msgid "%{day}"
 msgstr "%{day}"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:300
+#: lib/phoenix_kit_photos/chapter_sections.ex:313
 #, elixir-autogen, elixir-format
 msgid "%{day} April"
 msgstr "%{day} апреля"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:304
+#: lib/phoenix_kit_photos/chapter_sections.ex:317
 #, elixir-autogen, elixir-format
 msgid "%{day} August"
 msgstr "%{day} августа"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:308
+#: lib/phoenix_kit_photos/chapter_sections.ex:321
 #, elixir-autogen, elixir-format
 msgid "%{day} December"
 msgstr "%{day} декабря"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:298
+#: lib/phoenix_kit_photos/chapter_sections.ex:311
 #, elixir-autogen, elixir-format
 msgid "%{day} February"
 msgstr "%{day} февраля"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:297
+#: lib/phoenix_kit_photos/chapter_sections.ex:310
 #, elixir-autogen, elixir-format
 msgid "%{day} January"
 msgstr "%{day} января"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:303
+#: lib/phoenix_kit_photos/chapter_sections.ex:316
 #, elixir-autogen, elixir-format
 msgid "%{day} July"
 msgstr "%{day} июля"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:302
+#: lib/phoenix_kit_photos/chapter_sections.ex:315
 #, elixir-autogen, elixir-format
 msgid "%{day} June"
 msgstr "%{day} июня"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:299
+#: lib/phoenix_kit_photos/chapter_sections.ex:312
 #, elixir-autogen, elixir-format
 msgid "%{day} March"
 msgstr "%{day} марта"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:301
+#: lib/phoenix_kit_photos/chapter_sections.ex:314
 #, elixir-autogen, elixir-format
 msgid "%{day} May"
 msgstr "%{day} мая"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:307
+#: lib/phoenix_kit_photos/chapter_sections.ex:320
 #, elixir-autogen, elixir-format
 msgid "%{day} November"
 msgstr "%{day} ноября"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:306
+#: lib/phoenix_kit_photos/chapter_sections.ex:319
 #, elixir-autogen, elixir-format
 msgid "%{day} October"
 msgstr "%{day} октября"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:305
+#: lib/phoenix_kit_photos/chapter_sections.ex:318
 #, elixir-autogen, elixir-format
 msgid "%{day} September"
 msgstr "%{day} сентября"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:283
-#: lib/phoenix_kit_photos/chapter_sections.ex:286
+#: lib/phoenix_kit_photos/chapter_sections.ex:296
+#: lib/phoenix_kit_photos/chapter_sections.ex:299
 #, elixir-autogen, elixir-format
 msgid "%{from} – %{to}"
 msgstr "%{from} – %{to}"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:278
+#: lib/phoenix_kit_photos/chapter_sections.ex:291
 #, elixir-autogen, elixir-format
 msgid "%{from}–%{to}"
 msgstr "%{from}–%{to}"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:155
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:198
 #, elixir-autogen, elixir-format
 msgid "A sub-chapter's days must be inside the days of the chapter it is part of."
 msgstr "Дни подглавы должны быть внутри дней главы, частью которой она является."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:363
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:464
 #, elixir-autogen, elixir-format
 msgid "Add a sub-chapter"
 msgstr "Добавить подглаву"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:177
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:235
 #, elixir-autogen, elixir-format
 msgid "Amber"
 msgstr "Янтарный"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1253
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1565
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1261
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1573
 #, elixir-autogen, elixir-format
 msgid "Chapter"
 msgstr "Глава"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:318
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:407
 #, elixir-autogen, elixir-format
 msgid "Colour"
 msgstr "Цвет"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:382
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:483
 #, elixir-autogen, elixir-format
 msgid "Delete"
 msgstr "Удалить"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:373
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:474
 #, elixir-autogen, elixir-format
 msgid "Delete this chapter and its sub-chapter? The photos stay."
 msgid_plural "Delete this chapter and its %{count} sub-chapters? The photos stay."
@@ -2320,169 +2320,171 @@ msgstr[0] "Удалить эту главу и её %{count} подглаву? �
 msgstr[1] "Удалить эту главу и её %{count} подглавы? Фото останутся."
 msgstr[2] "Удалить эту главу и её %{count} подглав? Фото останутся."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:378
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:479
 #, elixir-autogen, elixir-format
 msgid "Delete this chapter? The photos stay."
 msgstr "Удалить эту главу? Фото останутся."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:217
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1252
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:280
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1260
 #, elixir-autogen, elixir-format
 msgid "Edit chapter"
 msgstr "Изменить главу"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:216
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:279
 #, elixir-autogen, elixir-format
 msgid "Edit sub-chapter"
 msgstr "Изменить подглаву"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:230
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:309
 #, elixir-autogen, elixir-format
 msgid "Emoji"
 msgstr "Эмодзи"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:283
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:372
 #, elixir-autogen, elixir-format
 msgid "Ends on"
 msgstr "Конец"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:166
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:209
 #, elixir-autogen, elixir-format
 msgid "Give the chapter a start date."
 msgstr "Укажите дату начала главы."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:165
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:208
 #, elixir-autogen, elixir-format
 msgid "Give the chapter a title."
 msgstr "Дайте главе название."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:178
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:236
 #, elixir-autogen, elixir-format
 msgid "Green"
 msgstr "Зелёный"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:180
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:238
 #, elixir-autogen, elixir-format
 msgid "Grey"
 msgstr "Серый"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:223
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:286
 #, elixir-autogen, elixir-format
 msgid "Mark where something began: a trip, a move, a new job. It shows as a banner in the library."
 msgstr "Отметьте, где что-то началось: поездка, переезд, новая работа. В библиотеке это будет баннер."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:219
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:282
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:934
 #, elixir-autogen, elixir-format
 msgid "New chapter"
 msgstr "Новая глава"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:218
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:281
 #, elixir-autogen, elixir-format
 msgid "New sub-chapter"
 msgstr "Новая подглава"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:294
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:383
 #, elixir-autogen, elixir-format
 msgid "No end date: a moment that changed things, like a move, or a trip still going."
 msgstr "Без даты конца: момент, который всё изменил, как переезд, или поездка, которая ещё идёт."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:300
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:389
 #, elixir-autogen, elixir-format
 msgid "None: a chapter of its own"
 msgstr "Нет: отдельная глава"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:344
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:433
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:441
 #, elixir-autogen, elixir-format
 msgid "Optional"
 msgstr "Необязательно"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:298
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:387
 #, elixir-autogen, elixir-format
 msgid "Part of"
 msgstr "Часть главы"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1254
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1262
 #, elixir-autogen, elixir-format
 msgid "Part of %{chapter}"
 msgstr "Часть: %{chapter}"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:176
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:234
 #, elixir-autogen, elixir-format
 msgid "Rose"
 msgstr "Розовый"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:175
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:233
 #, elixir-autogen, elixir-format
 msgid "Sky"
 msgstr "Небесный"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:161
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:204
 #, elixir-autogen, elixir-format
 msgid "Some of its sub-chapters would fall outside these days."
 msgstr "Некоторые подглавы оказались бы вне этих дней."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:272
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:361
 #, elixir-autogen, elixir-format
 msgid "Starts on"
 msgstr "Начало"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:254
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:343
 #, elixir-autogen, elixir-format
 msgid "Suggested emoji"
 msgstr "Предлагаемые эмодзи"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:152
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:195
 #, elixir-autogen, elixir-format
 msgid "That chapter cannot hold a sub-chapter."
 msgstr "Эта глава не может содержать подглаву."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:168
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:211
 #, elixir-autogen, elixir-format
 msgid "That emoji is too long: one or two will do."
 msgstr "Слишком длинно: хватит одного-двух эмодзи."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:167
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:210
 #, elixir-autogen, elixir-format
 msgid "The end is before the start."
 msgstr "Конец раньше начала."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:158
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:201
 #, elixir-autogen, elixir-format
 msgid "This chapter has sub-chapters of its own, so it cannot be part of another."
 msgstr "У этой главы есть свои подглавы, поэтому она не может быть частью другой."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:151
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:194
 #, elixir-autogen, elixir-format
 msgid "This chapter is no longer there."
 msgstr "Этой главы больше нет."
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:248
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:327
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:338
 #, elixir-autogen, elixir-format
 msgid "Trip to France"
 msgstr "Поездка во Францию"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:179
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:237
 #, elixir-autogen, elixir-format
 msgid "Violet"
 msgstr "Фиолетовый"
 
-#: lib/phoenix_kit_photos/components/chapter_edit.ex:150
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:193
 #, elixir-autogen, elixir-format
 msgid "You may not change the chapters of this library."
 msgstr "Вы не можете менять главы этой библиотеки."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1255
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1263
 #, elixir-autogen, elixir-format
 msgid "after %{chapter}"
 msgstr "после: %{chapter}"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:248
+#: lib/phoenix_kit_photos/chapter_sections.ex:261
 #, elixir-autogen, elixir-format
 msgid "no photos yet"
 msgstr "фото пока нет"
 
-#: lib/phoenix_kit_photos/chapter_sections.ex:269
+#: lib/phoenix_kit_photos/chapter_sections.ex:282
 #, elixir-autogen, elixir-format
 msgid "since %{date}"
 msgstr "с %{date}"
@@ -2523,3 +2525,8 @@ msgstr "＋ Новая глава…"
 #, elixir-autogen, elixir-format
 msgid "a trip, a move, a new job"
 msgstr "поездка, переезд, новая работа"
+
+#: lib/phoenix_kit_photos/components/chapter_edit.ex:446
+#, elixir-autogen, elixir-format
+msgid "Left empty, readers in this language see the main language's text."
+msgstr "Если оставить пустым, читатели на этом языке увидят текст на основном языке."

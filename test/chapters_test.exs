@@ -100,6 +100,43 @@ defmodule PhoenixKitPhotos.ChaptersTest do
     end
   end
 
+  describe "languages" do
+    test "other languages are kept cleaned, and a reader falls back to the main one", ctx do
+      chapter =
+        chapter!(ctx, %{
+          "title" => "Reis Prantsusmaale",
+          "description" => "Kaks nädalat",
+          "starts_on" => "2026-07-12",
+          "translations" => %{
+            "ru" => %{"title" => "  Поездка   во Францию ", "description" => ""},
+            "en" => %{"title" => "", "description" => ""},
+            "x; drop" => %{"title" => "no"},
+            "de" => "not a map"
+          }
+        })
+
+      assert chapter.translations == %{"ru" => %{"title" => "Поездка во Францию"}}
+      assert Chapter.title(chapter, "ru") == "Поездка во Францию"
+      assert Chapter.title(chapter, "ru-RU") == "Поездка во Францию"
+      assert Chapter.title(chapter, "en") == "Reis Prantsusmaale"
+      assert Chapter.title(chapter, nil) == "Reis Prantsusmaale"
+      # No Russian description: the main language's.
+      assert Chapter.description(chapter, "ru") == "Kaks nädalat"
+
+      {:ok, changed} =
+        Chapters.update(ctx.scope, chapter, %{
+          "translations" => %{
+            "en" => %{"title" => "Trip to France", "description" => "Two weeks"}
+          }
+        })
+
+      assert Chapter.title(changed, "en") == "Trip to France"
+      assert Chapter.description(changed, "en") == "Two weeks"
+      # The translations sent are the whole set: Russian was not sent, so it is gone.
+      assert Chapter.title(changed, "ru") == "Reis Prantsusmaale"
+    end
+  end
+
   describe "sub-chapters" do
     setup ctx do
       trip =

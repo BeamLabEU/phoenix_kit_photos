@@ -9,12 +9,21 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
   were taken on as start and end (one day: no end), the first of them as the cover, and the
   chapter those days are in as its parent.
 
+  On a site with several languages the title and description have a tab per language
+  (core's `PhoenixKitWeb.Components.LanguageSwitcher`, as tabs): the main language's first
+  and required, the others optional (a reader in a language without one sees the main
+  language's). Every language's fields stay in the form, the tab only shows one, so Save
+  keeps them all (`PhoenixKitPhotos.Chapter`'s `translations`).
+
   Like the stack dialog it is a modal `<dialog>` opened by the `PhotoStackDialog` hook.
   """
 
   use Phoenix.Component
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  import PhoenixKitWeb.Components.LanguageSwitcher, only: [language_switcher: 1]
+
+  alias PhoenixKit.Utils.Multilang
   alias PhoenixKitPhotos.Chapter
   alias PhoenixKitPhotos.Chapters
 
@@ -50,7 +59,8 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
       "starts_on" => Date.to_iso8601(from),
       "ends_on" => if(to != from, do: Date.to_iso8601(to), else: ""),
       "parent_uuid" => (parent && parent.uuid) || "",
-      "cover_file_uuid" => first || ""
+      "cover_file_uuid" => first || "",
+      "translations" => %{}
     }
   end
 
@@ -66,7 +76,8 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
         "starts_on" => Date.to_iso8601(parent.starts_on),
         "ends_on" => "",
         "parent_uuid" => parent.uuid,
-        "cover_file_uuid" => ""
+        "cover_file_uuid" => "",
+        "translations" => %{}
       }
 
       state(nil, parent.library_uuid, params, Chapters.list(parent.library_uuid), 0)
@@ -87,7 +98,8 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
         "starts_on" => Date.to_iso8601(chapter.starts_on),
         "ends_on" => (chapter.ends_on && Date.to_iso8601(chapter.ends_on)) || "",
         "parent_uuid" => chapter.parent_uuid || "",
-        "cover_file_uuid" => chapter.cover_file_uuid || ""
+        "cover_file_uuid" => chapter.cover_file_uuid || "",
+        "translations" => chapter.translations || %{}
       }
 
       state(
@@ -104,8 +116,11 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
 
   defp state(chapter, library_uuid, params, chapters, subs) do
     except = chapter && chapter.uuid
+    languages = languages()
 
     %{
+      languages: languages,
+      lang: primary(languages),
       chapter: chapter,
       library_uuid: library_uuid,
       params: params,
@@ -113,6 +128,34 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
       sub_count: subs,
       error: nil
     }
+  end
+
+  # The site's languages as core lists them for tabs, the main one first; none on a site of
+  # one language (then there are no tabs).
+  defp languages do
+    case Multilang.build_language_tabs() do
+      [_, _ | _] = tabs -> tabs
+      _ -> []
+    end
+  rescue
+    _ -> []
+  end
+
+  defp primary([]), do: nil
+  defp primary(tabs), do: (Enum.find(tabs, & &1.is_primary) || hd(tabs)).code
+
+  @doc "Another language's tab: its title and description show, the rest stay in the form."
+  def lang(edit, code) do
+    if Enum.any?(edit.languages, &(&1.code == code)), do: %{edit | lang: code}, else: edit
+  end
+
+  @doc "Saving failed: say why, on the main language's tab when its title is missing."
+  def failed(edit, message) do
+    edit = %{edit | error: message}
+
+    if edit.languages != [] and String.trim(edit.params["title"] || "") == "",
+      do: %{edit | lang: primary(edit.languages)},
+      else: edit
   end
 
   @doc "The form changed: keep what was typed (an emoji button merges into it)."
@@ -172,6 +215,21 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
 
   def message(_other), do: gettext("That could not be done.")
 
+  # The tabs with a dot for each language that has a title.
+  defp language_tabs(edit) do
+    Enum.map(edit.languages, fn tab ->
+      text =
+        if tab.is_primary,
+          do: edit.params["title"],
+          else: get_in(edit.params, ["translations", tab.code, "title"])
+
+      Map.put(tab, :exists, is_binary(text) and String.trim(text) != "")
+    end)
+  end
+
+  defp blank_or(text, _fallback) when is_binary(text) and text != "", do: text
+  defp blank_or(_text, fallback), do: fallback
+
   defp color_label("sky"), do: gettext("Sky")
   defp color_label("rose"), do: gettext("Rose")
   defp color_label("amber"), do: gettext("Amber")
@@ -192,6 +250,11 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
       |> assign(:emoji, @emoji)
       |> assign(:colors, Chapter.colors())
       |> assign(:sub?, assigns.edit.params["parent_uuid"] not in [nil, ""])
+      |> assign(:languages, assigns.edit.languages)
+      |> assign(:primary, primary(assigns.edit.languages))
+      |> assign(:lang, assigns.edit.lang)
+      |> assign(:others, Enum.reject(assigns.edit.languages, & &1.is_primary))
+      |> assign(:tabs, language_tabs(assigns.edit))
 
     ~H"""
     <dialog
@@ -225,6 +288,22 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
           )}
         </p>
 
+        <%!-- A tab per language for the title and the description; a dot says which have text. --%>
+        <.language_switcher
+          :if={@languages != []}
+          id={"#{@id}-chapter-languages"}
+          languages={@tabs}
+          current_language={@lang}
+          on_click="timeline:chapter_lang"
+          phx_target={@myself}
+          variant={:tabs}
+          size={:sm}
+          show_status
+          show_primary
+          primary_divider
+          class="mt-4 w-full"
+        />
+
         <div class="mt-4 flex gap-2">
           <label class="w-20 shrink-0">
             <span class="mb-1 block text-sm">{gettext("Emoji")}</span>
@@ -242,12 +321,22 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
             <input
               name="title"
               value={@p["title"]}
-              class="input w-full"
+              class={["input w-full", @lang != @primary && "hidden"]}
               maxlength={Chapter.max_title()}
               autocomplete="off"
               placeholder={gettext("Trip to France")}
-              required
+              required={@languages == []}
               phx-mounted={Phoenix.LiveView.JS.focus()}
+            />
+            <input
+              :for={tab <- @others}
+              name={"translations[#{tab.code}][title]"}
+              value={get_in(@p, ["translations", tab.code, "title"])}
+              class={["input w-full", @lang != tab.code && "hidden"]}
+              maxlength={Chapter.max_title()}
+              autocomplete="off"
+              placeholder={@p["title"] |> blank_or(gettext("Trip to France"))}
+              lang={tab.code}
             />
           </label>
         </div>
@@ -338,12 +427,24 @@ defmodule PhoenixKitPhotos.Components.ChapterEdit do
           <span class="mb-1 block text-sm">{gettext("Description")}</span>
           <textarea
             name="description"
-            class="textarea w-full"
+            class={["textarea w-full", @lang != @primary && "hidden"]}
             rows="2"
             maxlength={Chapter.max_description()}
             placeholder={gettext("Optional")}
           >{@p["description"]}</textarea>
+          <textarea
+            :for={tab <- @others}
+            name={"translations[#{tab.code}][description]"}
+            class={["textarea w-full", @lang != tab.code && "hidden"]}
+            rows="2"
+            maxlength={Chapter.max_description()}
+            placeholder={@p["description"] |> blank_or(gettext("Optional"))}
+            lang={tab.code}
+          >{get_in(@p, ["translations", tab.code, "description"])}</textarea>
         </label>
+        <p :if={@languages != [] and @lang != @primary} class="mt-1 text-xs text-base-content/60">
+          {gettext("Left empty, readers in this language see the main language's text.")}
+        </p>
 
         <p :if={@edit.error} class="mt-3 text-sm text-error" role="alert">{@edit.error}</p>
 

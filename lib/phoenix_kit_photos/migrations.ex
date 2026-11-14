@@ -39,12 +39,18 @@ defmodule PhoenixKitPhotos.Migrations do
       start. A **sub-chapter** names its chapter in `parent_uuid` (one level; deleting a
       chapter deletes its sub-chapters).
 
+  ## V3: chapters in several languages
+
+    * **`phoenix_kit_photo_chapters.translations`** (`jsonb`, `{}`): a chapter's title
+      and description in the site's other languages, `%{"ru" => %{"title" => …,
+      "description" => …}}`; `title` and `description` stay the main language's.
+
   The version is a `pkphotos_schema:<N>` comment on `phoenix_kit_photo_fetches`; no
   table reads as 0.
 
   ## Down
 
-  To 1 drops the chapters. To 0 drops the three tables (fetch history, sources and saved logins go; the stored
+  To 2 drops the chapters' translations. To 1 drops the chapters. To 0 drops the three tables (fetch history, sources and saved logins go; the stored
   files stay in their libraries). These tables were never core's, so there is nothing
   to give back.
 
@@ -59,7 +65,7 @@ defmodule PhoenixKitPhotos.Migrations do
 
   alias PhoenixKit.Migrations.Postgres.Helpers
 
-  @current_version 2
+  @current_version 3
   @marker_prefix "pkphotos_schema:"
   @version_table "phoenix_kit_photo_fetches"
 
@@ -136,6 +142,7 @@ defmodule PhoenixKitPhotos.Migrations do
     List.flatten([
       v1_statements(p),
       if(target >= 2, do: v2_statements(p), else: []),
+      if(target >= 3, do: v3_statements(p), else: []),
       "COMMENT ON TABLE #{p}#{@version_table} IS '#{@marker_prefix}#{target}'"
     ])
   end
@@ -149,6 +156,12 @@ defmodule PhoenixKitPhotos.Migrations do
 
     if target >= 1 do
       List.flatten([
+        if(target == 2,
+          do: [
+            "ALTER TABLE IF EXISTS #{p}phoenix_kit_photo_chapters DROP COLUMN IF EXISTS translations"
+          ],
+          else: []
+        ),
         if(target < 2, do: ["DROP TABLE IF EXISTS #{p}phoenix_kit_photo_chapters"], else: []),
         "COMMENT ON TABLE #{p}#{@version_table} IS '#{@marker_prefix}#{min(target, @current_version)}'"
       ])
@@ -255,6 +268,14 @@ defmodule PhoenixKitPhotos.Migrations do
       )
       """,
       "CREATE INDEX IF NOT EXISTS phoenix_kit_photo_chapters_library_index ON #{p}phoenix_kit_photo_chapters (library_uuid, starts_on)"
+    ]
+  end
+
+  # ── V3 ────────────────────────────────────────────────────────────────────
+
+  defp v3_statements(p) do
+    [
+      "ALTER TABLE #{p}phoenix_kit_photo_chapters ADD COLUMN IF NOT EXISTS translations jsonb NOT NULL DEFAULT '{}'::jsonb"
     ]
   end
 

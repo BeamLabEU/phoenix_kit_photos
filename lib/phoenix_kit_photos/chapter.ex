@@ -8,6 +8,10 @@ defmodule PhoenixKitPhotos.Chapter do
   going. `parent_uuid` makes it a **sub-chapter** of another chapter of the same library, one
   level deep, inside that chapter's dates. `color` is one of `colors/0`: a name the
   timeline's CSS knows, never a value that reaches a stylesheet.
+
+  `title` and `description` are in the site's main language; `translations` holds them in
+  its other languages (V3), `%{"ru" => %{"title" => …, "description" => …}}`. `title/2`
+  and `description/2` read a language, falling back to the main one.
   """
 
   use Ecto.Schema
@@ -34,6 +38,7 @@ defmodule PhoenixKitPhotos.Chapter do
     field :ends_on, :date
     field :cover_file_uuid, UUIDv7
     field :created_by_uuid, UUIDv7
+    field :translations, :map, default: %{}
 
     timestamps(type: :naive_datetime)
   end
@@ -61,13 +66,15 @@ defmodule PhoenixKitPhotos.Chapter do
         :starts_on,
         :ends_on,
         :cover_file_uuid,
-        :parent_uuid
+        :parent_uuid,
+        :translations
       ],
       empty_values: [""]
     )
     |> update_change(:title, &squish/1)
     |> update_change(:emoji, &String.trim/1)
     |> update_change(:description, &String.trim/1)
+    |> update_change(:translations, &clean_translations/1)
     |> validate_required([:title, :starts_on], message: "can't be blank")
     |> validate_length(:title, min: 1, max: @max_title)
     |> validate_length(:emoji, max: @max_emoji, count: :bytes)
@@ -84,6 +91,59 @@ defmodule PhoenixKitPhotos.Chapter do
       do: add_error(changeset, :ends_on, "is before the start"),
       else: changeset
   end
+
+  # Only text, trimmed and within the limits; a language with nothing written is left out
+  # (it falls back to the main language).
+  defp clean_translations(translations) when is_map(translations) do
+    for {lang, %{} = text} <- translations,
+        is_binary(lang) and Regex.match?(~r/\A[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})?\z/, lang),
+        text = clean_text(text),
+        text != %{},
+        into: %{},
+        do: {lang, text}
+  end
+
+  defp clean_translations(_other), do: %{}
+
+  defp clean_text(text) do
+    [
+      {"title", text["title"] |> string() |> squish() |> String.slice(0, @max_title)},
+      {"description",
+       text["description"] |> string() |> String.trim() |> String.slice(0, @max_description)}
+    ]
+    |> Enum.reject(fn {_key, value} -> value == "" end)
+    |> Map.new()
+  end
+
+  defp string(value) when is_binary(value), do: value
+  defp string(_value), do: ""
+
+  @doc "The title in `lang` (a code like `\"ru\"` or `\"et-EE\"`), else the main language's."
+  @spec title(t(), String.t() | nil) :: String.t()
+  def title(%__MODULE__{} = chapter, lang),
+    do: translated(chapter, lang, "title") || chapter.title
+
+  @doc "The description in `lang`, else the main language's (nil when there is none)."
+  @spec description(t(), String.t() | nil) :: String.t() | nil
+  def description(%__MODULE__{} = chapter, lang),
+    do: translated(chapter, lang, "description") || chapter.description
+
+  defp translated(%{translations: %{} = translations}, lang, key) when is_binary(lang) do
+    base = lang_base(lang)
+
+    text =
+      translations[lang] ||
+        Enum.find_value(translations, fn {code, text} -> if lang_base(code) == base, do: text end)
+
+    case text do
+      %{^key => value} when is_binary(value) and value != "" -> value
+      _ -> nil
+    end
+  end
+
+  defp translated(_chapter, _lang, _key), do: nil
+
+  defp lang_base(code), do: code |> String.split(["-", "_"]) |> hd() |> String.downcase()
 
   defp squish(text) when is_binary(text), do: text |> String.split() |> Enum.join(" ")
   defp squish(other), do: other

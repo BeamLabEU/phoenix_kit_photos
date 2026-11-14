@@ -83,10 +83,29 @@ defmodule PhoenixKitPhotos.PhotoTimelineChaptersTest do
     assert_push_event(ctx.view, "timeline:test-timeline:selection", %{clear: true})
 
     html = render(ctx.view)
-    refute html =~ "New chapter"
+    refute has_element?(ctx.view, "#test-timeline-chapter-form")
     # The jump list: July once, the chapter by name.
     assert html =~ "◆ ✈️ Trip to France"
     assert length(Regex.scan(~r/>July 2026</, html)) == 1
+  end
+
+  test "New chapter… in the jump list: a chapter of days, with no photo chosen", ctx do
+    assert has_element?(ctx.view, "option[value='+chapter']", "New chapter…")
+
+    ctx.view
+    |> element("#test-timeline-jump")
+    |> render_change(%{"id" => "+chapter"})
+
+    assert has_element?(ctx.view, "#test-timeline-chapter-form")
+
+    ctx.view
+    |> element("#test-timeline-chapter-form")
+    |> render_submit(%{"title" => "School year", "starts_on" => "2026-09-01", "ends_on" => ""})
+
+    [chapter] = Chapters.list(ctx.library.uuid)
+
+    assert {chapter.starts_on, chapter.ends_on, chapter.cover_file_uuid} ==
+             {~D[2026-09-01], nil, nil}
   end
 
   test "the banner's pencil: change, add a sub-chapter, delete", ctx do
@@ -156,6 +175,7 @@ defmodule PhoenixKitPhotos.PhotoTimelineChaptersTest do
 
     refute html =~ "New chapter"
     refute html =~ ~s(data-bulk="chapter")
+    refute has_element?(view, "option[value='+chapter']")
   end
 
   test "a chapter made elsewhere reaches the page", ctx do

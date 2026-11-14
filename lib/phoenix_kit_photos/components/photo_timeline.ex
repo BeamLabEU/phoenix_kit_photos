@@ -133,6 +133,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   alias PhoenixKitPhotos.Uploads
 
   @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details calendar)
+  # The jump list's value for "New chapter…": no section id has this shape.
+  @new_chapter "+chapter"
   @layouts Map.new(@styles, &{String.to_atom(&1), &1}) |> Map.put(:square, "grid")
 
   @impl true
@@ -145,6 +147,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
      |> assign(:stack_edit, nil)
      |> assign(:stack_pick, nil)
      |> assign(:chapter_edit, nil)
+     |> assign(:jump_key, 0)
      |> assign(:running, nil)
      |> assign(:notice, nil)
      |> assign(:index, nil)
@@ -476,7 +479,14 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   # The jump list: each month once (a month cut by chapters is still one month to jump to,
-  # its first part) and each chapter, a sub-chapter under its chapter.
+  # its first part) and each chapter, a sub-chapter under its chapter; for someone who may
+  # make chapters, "New chapter…" last.
+  defp jump_options(sections, chapters?) do
+    if chapters?,
+      do: jump_options(sections) ++ [{@new_chapter, gettext("＋ New chapter…")}],
+      else: jump_options(sections)
+  end
+
   defp jump_options(sections) do
     {options, _seen} =
       Enum.flat_map_reduce(sections, MapSet.new(), fn
@@ -893,6 +903,21 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   def handle_event("timeline:chapter_close", _params, socket),
     do: {:noreply, assign(socket, :chapter_edit, nil)}
 
+  # The last line of the jump list: a chapter of nothing chosen, its dates picked in the
+  # dialog (a chapter is days, not photos: the photos added later fall into it).
+  def handle_event("timeline:jump", %{"id" => @new_chapter}, socket) do
+    socket = update(socket, :jump_key, &(&1 + 1))
+
+    if :chapter in menu_actions(socket) do
+      {:library, library_uuid} = socket.assigns.scope
+
+      {:noreply,
+       assign(socket, :chapter_edit, ChapterEdit.new(socket.assigns.auth, library_uuid, []))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_event("timeline:jump", %{"id" => id}, socket) do
     {:noreply, push_event(socket, event(socket, "jump"), %{id: id})}
   end
@@ -1298,8 +1323,11 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           phx-auto-recover="ignore"
           phx-target={@myself}
         >
-          <select name="id" class="select select-sm" aria-label="Jump to month">
-            <option :for={{id, label} <- jump_options(@sections)} value={id}>{label}</option>
+          <select id={"#{@id}-jump-select-#{@jump_key}"} name="id" class="select select-sm" aria-label="Jump to month">
+            <option
+              :for={{id, label} <- jump_options(@sections, @selectable and :chapter in menu_actions(%{assigns: assigns}))}
+              value={id}
+            >{label}</option>
           </select>
         </form>
 
@@ -1316,11 +1344,15 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
             <span id={"#{@id}-current"} data-current-section phx-update="ignore"></span>
             <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
             <select
+              id={"#{@id}-jump-select-#{@jump_key}"}
               name="id"
               class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               aria-label="Jump to month"
             >
-              <option :for={{id, label} <- jump_options(@sections)} value={id}>{label}</option>
+              <option
+              :for={{id, label} <- jump_options(@sections, @selectable and :chapter in menu_actions(%{assigns: assigns}))}
+              value={id}
+            >{label}</option>
             </select>
           </label>
         </form>

@@ -105,6 +105,28 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   Hosts subscribe using `on_mount {PhoenixKitPhotos.LiveUpdates, "library"}`;
   use the actual component ID in place of "library".
 
+  ## Views and places
+
+  With `view_path` as well (the address of a view with `:view` where its name goes,
+  `"/anna/private/v/:view"`), views have addresses of their own and a place in time has one
+  too. The header gets a switcher, Timeline (the library's own address) | Calendar, and
+  Calendar leaves the style menu: it is a place, and the style menu keeps the person's looks
+  for Timeline. `place` is what the host's address says beyond the library, `%{view, date}`:
+  `%{view: "calendar", date: "2022-02"}` is the calendar at that month,
+  `%{view: "calendar", date: "2022-02-24"}` that day's sheet over it, and
+  `%{view: nil, date: "2022-02-24"}` the timeline at that day. The host passes it as an
+  attribute and with `push_view/6` (`place:`) on every address.
+
+  In the calendar a click on a day opens its **sheet** (`assets/js/day_sheet.js`): all of the
+  day's photos, ‹ › to the days around it that have photos, ✕ (or Escape) back to the month.
+  The sheet is at the day's address (`<view_path>/2022-02-24`, a new history entry, turned to
+  another day in place), a photo opened from it at `<view_path>/2022-02-24/p/<code>`, and the
+  swipe viewer then turns that day's pages only. *Copy link to here* copies the address of
+  the place on screen: the day's sheet, the month of the calendar, or the timeline's day.
+
+  The host decides what search engines see; Fotki gives an in-day photo the canonical
+  address `/p/<code>` and its views and dated places `noindex`.
+
   ## When files arrive
 
   Storage announces file events to everyone, so the component first asks whether the files are in
@@ -133,6 +155,8 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   alias PhoenixKitPhotos.Uploads
 
   @styles ~w(grid rows columns mosaic whole feed prints film honeycomb details calendar)
+  # The views a host can give an address (`view_path`); Timeline is the library's own.
+  @views ~w(calendar)
   # The jump list's value for "New chapter…": no section id has this shape.
   @new_chapter "+chapter"
   @layouts Map.new(@styles, &{String.to_atom(&1), &1}) |> Map.put(:square, "grid")
@@ -251,6 +275,18 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       |> assign(:pager, pager_setting(Map.get(assigns, :pager, false)))
       |> assign(:photo_path, photo_path(Map.get(assigns, :photo_path)))
       |> assign(:library_path, local_path(Map.get(assigns, :library_path)))
+      |> assign(
+        :view_path,
+        view_path(Map.get(assigns, :view_path), Map.get(assigns, :library_path))
+      )
+      |> assign(:place, place(Map.get(assigns, :place)))
+      |> assign(:views, @views)
+      |> then(fn socket ->
+        # With views (Calendar has an address of its own) the style menu keeps the looks.
+        if socket.assigns.view_path,
+          do: update(socket, :styles, &List.delete(&1, "calendar")),
+          else: socket
+      end)
 
     socket =
       if socket.assigns[:loaded_for] == {scope, auth} && socket.assigns.index do
@@ -294,16 +330,20 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   The hook opens the viewer on the photo (or leaves one that already shows it alone), and does
   not change the address: it is already right.
+
+  `opts`: `place:` what the address says beyond the library, `%{view, date}` (see "Views
+  and places"): the hook shows that view, at that date, with that day's sheet open.
   """
   @spec push_view(
           Phoenix.LiveView.Socket.t(),
           String.t(),
           Timeline.scope(),
           Scope.t() | nil,
-          String.t() | nil
+          String.t() | nil,
+          keyword()
         ) ::
           Phoenix.LiveView.Socket.t()
-  def push_view(socket, id, scope, auth, file_uuid) do
+  def push_view(socket, id, scope, auth, file_uuid, opts \\ []) do
     payload =
       with uuid when is_binary(uuid) <- file_uuid,
            {:ok, position} <- Timeline.position(scope, uuid, auth) do
@@ -319,6 +359,11 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         _ -> %{id: nil, global: nil}
       end
 
+    payload =
+      if Keyword.has_key?(opts, :place),
+        do: Map.put(payload, :place, place(opts[:place])),
+        else: payload
+
     Phoenix.LiveView.push_event(socket, "timeline:#{id}:view", payload)
   end
 
@@ -332,6 +377,27 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   def local_path(_path), do: nil
+
+  @doc false
+  # `view_path` must say where the view goes, and needs the library's own address for
+  # Timeline.
+  def view_path(path, library_path) do
+    path = local_path(path)
+
+    if is_binary(path) and String.contains?(path, ":view") and is_binary(local_path(library_path)),
+      do: path
+  end
+
+  @doc false
+  # What the host's address says beyond the library: `%{view, date}` (see "Views and places").
+  def place(%{} = place) do
+    view = if Map.get(place, :view) in @views, do: Map.get(place, :view)
+    date = Map.get(place, :date)
+    date = if is_binary(date) and Regex.match?(~r/\A\d{4}-\d{2}(-\d{2})?\z/, date), do: date
+    %{view: view, date: date}
+  end
+
+  def place(_place), do: %{view: nil, date: nil}
 
   @doc false
   # `photo_path` must say where the code goes.
@@ -391,6 +457,10 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   end
 
   defp offered_styles(_none), do: []
+
+  defp view_label("calendar"), do: gettext("Calendar")
+
+  defp view_icon("calendar"), do: "hero-calendar-days"
 
   defp style_label("grid"), do: gettext("Grid")
   defp style_label("rows"), do: gettext("Rows")
@@ -1250,6 +1320,19 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       data-pager={to_string(@pager)}
       data-photo-path={@photo_path}
       data-library-path={@library_path}
+      data-view-path={@view_path}
+      data-place={Jason.encode!(@place)}
+      data-place-strings={
+        Jason.encode!(%{
+          day: gettext("%{count} photos", count: "%{count}"),
+          one: gettext("1 photo"),
+          prev: gettext("Previous day with photos"),
+          next: gettext("Next day with photos"),
+          close: gettext("Back to the month"),
+          copied: gettext("Link copied"),
+          copy: gettext("Copy link to here")
+        })
+      }
       data-download-path={@download_path}
       data-select-month-label={gettext("Select this month")}
       data-stack-label={gettext("Stack of %{count} photos", count: "%{count}")}
@@ -1286,12 +1369,54 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       <div
         :if={@sections != []}
         class={[
-          "flex items-center gap-2",
+          "flex items-center gap-1.5 sm:gap-2",
           @fill && "absolute right-3 z-10",
           !@fill && "justify-end"
         ]}
         style={@fill && "top: calc(var(--photo-timeline-inset-top, 0px) + 0.5rem)"}
       >
+        <%!-- The views: each its own address (`view_path`); Timeline is the library's. --%>
+        <nav
+          :if={@view_path}
+          id={"#{@id}-views"}
+          aria-label={gettext("Views")}
+          class="flex items-center rounded-full border border-base-content/10 bg-base-100/50 p-0.5 text-sm font-medium shadow-sm backdrop-blur-md"
+        >
+          <.link
+            patch={@library_path}
+            data-view-link="timeline"
+            aria-current={if @place.view == nil, do: "page"}
+            title={gettext("Timeline")}
+            class="flex items-center gap-1.5 rounded-full px-2.5 py-1 aria-[current=page]:bg-base-content/10 sm:px-3"
+          >
+            <span class="hero-squares-2x2 size-4 sm:hidden" aria-hidden="true"></span>
+            <span class="sr-only sm:not-sr-only">{gettext("Timeline")}</span>
+          </.link>
+          <.link
+            :for={view <- @views}
+            patch={String.replace(@view_path, ":view", view)}
+            data-view-link={view}
+            aria-current={if @place.view == view, do: "page"}
+            title={view_label(view)}
+            class="flex items-center gap-1.5 rounded-full px-2.5 py-1 aria-[current=page]:bg-base-content/10 sm:px-3"
+          >
+            <span class={[view_icon(view), "size-4 sm:hidden"]} aria-hidden="true"></span>
+            <span class="sr-only sm:not-sr-only">{view_label(view)}</span>
+          </.link>
+        </nav>
+
+        <button
+          :if={@view_path}
+          type="button"
+          id={"#{@id}-copy-place"}
+          data-copy-place
+          title={gettext("Copy link to here")}
+          aria-label={gettext("Copy link to here")}
+          class="hidden cursor-pointer items-center rounded-full border border-base-content/10 bg-base-100/50 p-2 shadow-sm backdrop-blur-md sm:flex"
+        >
+          <span class="hero-link size-4" aria-hidden="true"></span>
+        </button>
+
         <button
           :if={@selectable}
           id={"#{@id}-select"}
@@ -1303,7 +1428,12 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           {gettext("Select")}
         </button>
 
-        <div :if={@styles != []} id={"#{@id}-styles"} class="relative" phx-update="ignore">
+        <div
+          :if={@styles != []}
+          id={"#{@id}-styles"}
+          class={["relative", @place.view && "hidden"]}
+          phx-update="ignore"
+        >
           <button
             type="button"
             data-style-toggle
@@ -1358,7 +1488,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           phx-auto-recover="ignore"
           phx-target={@myself}
         >
-          <label class="relative flex cursor-pointer items-center gap-1 rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-3 pr-2 text-sm font-medium shadow-sm backdrop-blur-md">
+          <label class="relative flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-full border border-base-content/10 bg-base-100/50 py-1.5 pl-3 pr-2 text-sm font-medium shadow-sm backdrop-blur-md">
             <span id={"#{@id}-current"} data-current-section phx-update="ignore"></span>
             <span class="hero-chevron-down size-4 opacity-60" aria-hidden="true"></span>
             <select

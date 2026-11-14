@@ -23,6 +23,28 @@ defmodule PhoenixKitPhotos.PhotoTimelineTest do
     %{view: view, user: user, page_revision: page}
   end
 
+  test "a place is only a known view and a date; a view path needs :view and the library's" do
+    alias PhoenixKitPhotos.Components.PhotoTimeline
+
+    assert PhotoTimeline.place(%{view: "calendar", date: "2022-02-24"}) ==
+             %{view: "calendar", date: "2022-02-24"}
+
+    assert PhotoTimeline.place(%{view: "calendar", date: "2022-02"}) ==
+             %{view: "calendar", date: "2022-02"}
+
+    assert PhotoTimeline.place(%{view: "<script>", date: "2022-02-24\"><b>"}) ==
+             %{view: nil, date: nil}
+
+    assert PhotoTimeline.place(nil) == %{view: nil, date: nil}
+
+    assert PhotoTimeline.view_path("/anna/private/v/:view", "/anna/private") ==
+             "/anna/private/v/:view"
+
+    assert PhotoTimeline.view_path("/anna/private/v/calendar", "/anna/private") == nil
+    assert PhotoTimeline.view_path("//evil.example/v/:view", "/anna/private") == nil
+    assert PhotoTimeline.view_path("/anna/private/v/:view", nil) == nil
+  end
+
   test "hook handshake and targeted window events reach the component", %{view: view, user: user} do
     file = file_fixture(user, %{})
     view |> element("#test-timeline-viewport") |> render_hook("timeline:ready", %{})

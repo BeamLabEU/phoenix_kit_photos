@@ -17,6 +17,8 @@ import { SlideStore, wantWidth } from "./slides.js"
 import { StackedList } from "./stack_list.js"
 import { StackStrip } from "./stack_strip.js"
 import { InfoPanelController, typing } from "./info_panel.js"
+import { daysOf, dayAt, dayOn, monthOf, neighbour, placeOf } from "./days.js"
+import { DaySheet } from "./day_sheet.js"
 import { dialogOpen, engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
 import { VideoController } from "./viewer/video.js"
@@ -150,10 +152,17 @@ export const PhotoTimeline = {
     installTimelineCss()
     this.lang = document.documentElement.lang || navigator.language
     this.weekStart = weekStartFor(weekLocale(this.lang, navigator.languages || [navigator.language]))
+    // The view and date the page's address names (see "views and places" below).
+    this.place = this.readPlace()
+    this.placeApplied = null
     this.styleId = this.startingStyle()
     this.el.dataset.activeStyle = this.styleId
     this.bindStyleMenu()
     this.bindSelection()
+    this.onRootClick = (event) => {
+      if (event.target.closest?.("[data-copy-place]")) this.copyPlace()
+    }
+    this.root()?.addEventListener("click", this.onRootClick)
 
     this.mountBookmark()
     this.onPositionInput = event => this.beginPositionInput(event)
@@ -222,6 +231,12 @@ export const PhotoTimeline = {
     this.send("timeline:ready", this.readyPayload())
   },
 
+  // LiveView patches this element's own attributes (`phx-update="ignore"` keeps only its
+  // children), and drops the one the hook sets: the style on screen, which the looks' CSS reads.
+  updated() {
+    if (this.el.dataset.activeStyle !== this.styleId) this.el.dataset.activeStyle = this.styleId
+  },
+
   disconnected() {
     this.freezePosition()
   },
@@ -248,6 +263,8 @@ export const PhotoTimeline = {
     window.removeEventListener("resize", this.onResize)
     this.unbindStyleMenu()
     this.unbindSelection()
+    this.root()?.removeEventListener("click", this.onRootClick)
+    if (this.sheet) this.sheet.destroy()
     clearTimeout(this.aspectsTimer)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
@@ -290,6 +307,8 @@ export const PhotoTimeline = {
     const heightBefore = totalHeight(this.offsets)
 
     if (libraryChanged) this.rememberPosition()
+    // Another library: the place its address names is still to be taken.
+    if (libraryChanged) this.placeApplied = null
     this.library = payload.library
     if (payload.revision === this.revision && !libraryChanged) {
       this.openFromAddress()
@@ -346,6 +365,8 @@ export const PhotoTimeline = {
     this.handleScroll()
     this.markNew = false
     this.selectionChanged()
+    this.refreshDay()
+    this.applyPlace()
     this.openFromAddress()
   },
 
@@ -673,6 +694,8 @@ export const PhotoTimeline = {
     }
     const indices = visibleSections(this.offsets, this.el.scrollTop, this.el.clientHeight)
     this.needed = new Set()
+    // The day open in the sheet keeps its photos whatever the month behind shows.
+    if (this.sheetDay) for (const day of this.sheetDay.windows) this.needed.add(day)
     for (const i of indices) this.ensureVisibleDays(this.sections[i])
     for (const day of this.windows.keys()) {
       if (!this.needed.has(day)) {
@@ -730,6 +753,7 @@ export const PhotoTimeline = {
     const arrived = this.refreshing.delete(section)
     this.windows.set(section, items || [])
     this.fetchedAt.set(section, Date.now())
+    if (this.sheetDay && this.sheetDay.windows.includes(section)) this.fillSheet()
     this.noteArrivals(items || [], arrived)
     // Tiles that move because of what arrived glide to their places.
     this.gliding = arrived
@@ -1041,6 +1065,8 @@ export const PhotoTimeline = {
    */
   rebaseViewer(payload) {
     this.slideRevision = payload.revision
+    // The day the viewer is bound to moves with the new positions.
+    if (this.sheetDay) this.sheetDay = dayOn(daysOf(payload.sections), this.sheetDay.date) || this.sheetDay
     const open = this.pager !== true && this.pager.isOpen
     const index = open ? this.pager.index : -1
     // The viewer's position is in the list with stacks opened; the timeline's is the cover's.
@@ -1148,6 +1174,11 @@ export const PhotoTimeline = {
 
   /** A tile was clicked: the swipe viewer when the host asked for it, else the host's own. */
   openTile(id, global) {
+    // In the calendar a click opens its day (the sheet's own tiles open the viewer).
+    if (this.calendarDays() && !this.sheet?.isOpen && Number.isFinite(global)) {
+      const day = dayAt(this.days(), global)
+      if (day) return this.showDay(day.date, { address: true })
+    }
     if (!this.pagerEnabled() || !Number.isFinite(global)) {
       this.send("timeline:open", { id })
       return
@@ -1194,7 +1225,7 @@ export const PhotoTimeline = {
     }
 
     this.video = this.video || new VideoController()
-    this.pager = new Engine({
+    const host = {
       store: this.stacked(),
       video: this.video,
       thumbOf: (slideId) => this.thumbOf(slideId),
@@ -1223,7 +1254,9 @@ export const PhotoTimeline = {
         this.applyDeferred()
         this.leaveAddress()
       }
-    })
+    }
+    // Over a day's sheet the viewer turns that day's pages only.
+    this.pager = this.sheet?.isOpen ? boundPager(Engine, host, this.dayBounds()) : new Engine(host)
     this.pager.open(index)
     const opened = this.stacked().get(index)
     if (this.info && opened) this.whenViewerOpen(() => this.info && this.info.viewerOpened(this.info.host.current() || opened.id))
@@ -1418,6 +1451,11 @@ export const PhotoTimeline = {
 
   /** The two addresses the host gave, or null: then nothing here does anything. */
   addresses() {
+    // From a day's sheet a photo has the day's address, and closing goes back to the day.
+    if (this.sheet?.isOpen && this.viewPaths()) {
+      const day = this.placePath({ view: "calendar", date: this.sheetDay.date })
+      return { photo: `${day}/p/:code`, library: day }
+    }
     const root = this.el.closest(".phoenix-kit-photo-timeline")
     const photo = root && root.dataset.photoPath
     const library = root && root.dataset.libraryPath
@@ -1490,6 +1528,7 @@ export const PhotoTimeline = {
 
   /** The host says which photo its address names: `{ id, global }`, or `{ id: null }` for none. */
   applyView(payload) {
+    if (payload && payload.place) this.setPlace(payload.place)
     if (!this.addresses()) return
     const { id, global, page } = payload || {}
 
@@ -1539,21 +1578,259 @@ export const PhotoTimeline = {
     this.openPager(at)
   },
 
+  // --- views and places: the calendar's days, a date in the address ----------
+  //
+  // With `data-view-path` the host gives views an address (`/v/calendar`) and a date one too
+  // (`/v/calendar/2022-02`, the timeline's `/2022-02-24`); `data-place` and each `view` event
+  // say which (`{ view, date }`). The calendar then is a place, not a look: Calendar leaves the
+  // style menu, a click on a day opens that day's sheet (day_sheet.js) at the day's address,
+  // and the swipe viewer opened from the sheet turns that day's pages only.
+
+  /** What the page's address says beyond the library (`data-place`): `{ view, date }`. */
+  readPlace() {
+    try {
+      const place = JSON.parse(this.root()?.dataset.place || "null")
+      if (place && typeof place === "object") return { view: place.view || null, date: place.date || null }
+    } catch (_error) {
+      // an old page without it
+    }
+    return { view: null, date: null }
+  },
+
+  /** The host's addresses for views, or null when it gives them none. */
+  viewPaths() {
+    const root = this.root()
+    const view = root?.dataset.viewPath
+    const library = root?.dataset.libraryPath
+    return view && library && view.includes(":view") ? { view, library } : null
+  },
+
+  /** The address of `{ view, date }` on the host's site. */
+  placePath(place) {
+    const paths = this.viewPaths()
+    if (!paths) return null
+    const base = place.view ? paths.view.replace(":view", encodeURIComponent(place.view)) : paths.library
+    return place.date ? `${base}/${place.date}` : base
+  },
+
+  placeStrings() {
+    try {
+      return JSON.parse(this.root()?.dataset.placeStrings || "{}")
+    } catch (_error) {
+      return {}
+    }
+  },
+
+  /** Whether a click on a tile opens its day: the calendar, as a view with an address. */
+  calendarDays() {
+    return Boolean(this.viewPaths()) && this.place?.view === "calendar" && this.styleId === "calendar"
+  },
+
+  /** The library's days with photos (days.js), worked out once per index. */
+  days() {
+    if (this.daysFor !== this.sections) {
+      this.dayList = daysOf(this.sections)
+      this.daysFor = this.sections
+    }
+    return this.dayList
+  },
+
+  /** The host's address changed: show its view, at its date, with its day's sheet. */
+  setPlace(place) {
+    this.place = { view: place.view || null, date: place.date || null }
+    this.applyPlace()
+  },
+
+  applyPlace() {
+    if (!this.viewPaths() || !this.sections.length) return
+    const place = this.place
+    const key = `${place.view || ""}|${place.date || ""}`
+    if (key === this.placeApplied) return
+    const before = this.placeBefore || { view: null, date: null }
+    this.placeApplied = key
+    this.placeBefore = place
+    // An address this hook set itself coming back: nothing moves.
+    const echo = this.placeEcho === key
+    this.placeEcho = null
+
+    const styles = this.root() && document.getElementById(`${this.root().id}-styles`)
+    if (styles) styles.classList.toggle("hidden", Boolean(place.view))
+    const style = place.view === "calendar" ? "calendar" : this.styleId === "calendar" ? this.lookStyle() : this.styleId
+    if (style !== this.styleId) this.setStyle(style)
+
+    const day = place.view === "calendar" && place.date && place.date.length === 10 ? place.date : null
+    if (day) this.showDay(day)
+    else if (this.sheet?.isOpen) this.hideDay()
+
+    if (echo || !place.date) return
+    // The month behind a day's sheet, or the date itself; not again for the next day.
+    const at = day ? monthOf(day) : place.date
+    if (!(day && before.date && monthOf(before.date) === at)) this.standAt(at)
+  },
+
+  /** Scroll to a date: a month's heading, or a day's first photo, at the top. */
+  standAt(date) {
+    const at = placeOf(this.sections, date)
+    if (!at) return
+    const section = this.sections[at.section]
+    let top = this.offsets[at.section]
+    if (date.length === 10) top += Math.max(0, this.layoutOf(section).rect(at.item).y - this.metrics.gap)
+    this.frozenAnchor = null
+    this.positionInput = true
+    this.extendPositionInput()
+    this.el.scrollTop = Math.max(0, top - this.inset)
+    this.handleScroll()
+    this.bookmarkAnchor = this.captureAnchor()
+  },
+
+  /**
+   * Open the sheet on day `date` (`"2022-02-24"`), or turn it to that day. `address` when a
+   * person asked for it here (a click, ‹ ›): the address follows, a new entry for opening, the
+   * same one replaced for turning. Without it the address already names the day.
+   */
+  showDay(date, { address = false } = {}) {
+    const day = dayOn(this.days(), date)
+    if (!day) {
+      if (this.sheet?.isOpen) this.hideDay()
+      return
+    }
+    const turning = this.sheet?.isOpen ? this.sheetDay.date : null
+    if (turning === date) return
+    this.sheet = this.sheet || new DaySheet({
+      strings: this.placeStrings(),
+      lang: this.lang,
+      onClose: () => this.leaveDay(),
+      onStep: (step) => this.stepDay(step),
+      onOpen: (id, global) => this.openTile(id, global)
+    })
+    this.sheetDay = day
+    this.sheet.show(day, { prev: neighbour(this.days(), date, -1), next: neighbour(this.days(), date, 1) })
+    for (const window of day.windows) this.requestDay(window)
+    this.fillSheet()
+
+    if (address) {
+      if (!turning) {
+        this.sheetHistoryId = window.history.state?.id || null
+        this.sheetPushed = true
+      }
+      this.placeEcho = `calendar|${date}`
+      this.js().patch(this.placePath({ view: "calendar", date }), { replace: Boolean(turning) })
+    }
+  },
+
+  /** A new index under an open sheet: the day's photos may have moved, grown or gone. */
+  refreshDay() {
+    if (!this.sheet?.isOpen || !this.sheetDay) return
+    const day = dayOn(this.days(), this.sheetDay.date)
+    if (!day) return this.leaveDay()
+    this.sheetDay = day
+    this.sheet.show(day, { prev: neighbour(this.days(), day.date, -1), next: neighbour(this.days(), day.date, 1) })
+    for (const window of day.windows) this.requestDay(window)
+    this.fillSheet()
+  },
+
+  /** The day's photos as they arrive, in its windows' order. */
+  fillSheet() {
+    if (!this.sheet?.isOpen || !this.sheetDay) return
+    const items = []
+    this.sheetDay.windows.forEach((window, i) => {
+      const list = this.windows.get(window)
+      const size = this.sheetDay.sizes[i] || 0
+      for (let k = 0; k < size; k++) items.push(list ? list[k] : undefined)
+    })
+    this.sheet.fill(items)
+  },
+
+  stepDay(step) {
+    if (!this.sheetDay) return
+    const day = neighbour(this.days(), this.sheetDay.date, step)
+    if (day) this.showDay(day.date, { address: true })
+  },
+
+  /** ✕, Escape or the dimmed month: back to the month, the way the sheet came. */
+  leaveDay() {
+    if (!this.sheet?.isOpen) return
+    const date = this.sheetDay.date
+    const pushed = this.sheetPushed && this.sheetHistoryId === (window.history.state?.id || null)
+    this.hideDay()
+    if (pushed) {
+      window.history.back()
+    } else {
+      this.placeEcho = `calendar|${monthOf(date)}`
+      this.js().patch(this.placePath({ view: "calendar", date: monthOf(date) }), { replace: true })
+    }
+  },
+
+  hideDay() {
+    this.sheetPushed = false
+    this.sheetHistoryId = null
+    this.sheetDay = null
+    if (this.sheet) this.sheet.hide()
+  },
+
+  /** The day's slice of the viewer's list (stacks opened), for `boundPager`. */
+  dayBounds() {
+    const list = this.stacked()
+    return {
+      from: () => (this.sheetDay ? list.toView(this.sheetDay.start, 0) : 0),
+      to: () => (this.sheetDay ? list.toView(this.sheetDay.start + this.sheetDay.count, 0) : list.total)
+    }
+  },
+
+  /**
+   * Copy the address of where the person is: the day's sheet, the month of the calendar on
+   * screen, or the day of the first photo on screen in the timeline.
+   */
+  copyPlace() {
+    const paths = this.viewPaths()
+    if (!paths || !this.sections.length) return
+    let place
+    if (this.sheet?.isOpen) {
+      place = { view: "calendar", date: this.sheetDay.date }
+    } else {
+      const anchor = this.captureAnchor()
+      const section = anchor ? this.sections[anchor.index] : null
+      const start = anchor ? this.sectionStarts[anchor.index] + (anchor.item || 0) : 0
+      const day = dayAt(this.days(), start) || dayAt(this.days(), this.sectionStarts[anchor?.index || 0])
+      const month = section?.month || (day ? monthOf(day.date) : null)
+      place = this.place?.view === "calendar"
+        ? { view: "calendar", date: month }
+        : { view: null, date: day ? day.date : month }
+    }
+    const url = new URL(this.placePath(place), window.location.origin).toString()
+    const done = () => this.toast(this.placeStrings().copied || "Link copied")
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => window.prompt("", url))
+    else window.prompt("", url)
+  },
+
+  toast(text) {
+    const node = document.createElement("div")
+    node.setAttribute("role", "status")
+    node.textContent = text
+    node.style.cssText = "position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%);z-index:70;padding:.5rem .9rem;border-radius:999px;background:#000c;color:#fff;font-size:.875rem;pointer-events:none"
+    document.body.append(node)
+    setTimeout(() => node.remove(), 1800)
+  },
+
   thumbOf(id) {
     const node = this.pool.get(id)
-    const img = node && node.querySelector("img")
+    const img = (node && node.querySelector("img")) || this.sheet?.imgOf(id)
     return img ? img.currentSrc || img.src : undefined
   },
 
-  // The tile the viewer flies back to: a stack's page goes back to the stack's tile.
+  // The tile the viewer flies back to: a stack's page goes back to the stack's tile; over a
+  // day's sheet, the sheet's tile.
   tileImage(index) {
     const slide = this.slides.get(this.stacked().fromView(index).at)
+    if (slide && this.sheet?.isOpen) return this.sheet.imgOf(slide.id)
     const node = slide && this.pool.get(slide.id)
     return node ? node.querySelector("img") : null
   },
 
   /** Scroll the grid so the tile of `index` is on screen, for the viewer to fly back to. */
   reveal(index) {
+    // Over a day's sheet the month behind stays where it is.
+    if (this.sheet?.isOpen) return
     let found = -1
     for (let i = 0; i < this.sectionStarts.length; i++) {
       if (this.sectionStarts[i] <= index) found = i
@@ -1791,8 +2068,14 @@ export const PhotoTimeline = {
     return (this.el.dataset.styles || "").split(" ").filter(id => STYLES[id])
   },
 
-  /** What the person picked last, else what the host asks for, else the plain grid. */
+  /** The calendar when the address names it, else the person's own look. */
   startingStyle() {
+    if (this.viewPaths() && this.place?.view === "calendar") return "calendar"
+    return this.lookStyle()
+  },
+
+  /** What the person picked last, else what the host asks for, else the plain grid. */
+  lookStyle() {
     let stored = null
     try {
       stored = window.localStorage.getItem(STYLE_KEY)
@@ -1805,6 +2088,8 @@ export const PhotoTimeline = {
   },
 
   rememberStyle() {
+    // With views, the calendar is a place, not a look: the person's look stays theirs.
+    if (this.viewPaths() && this.styleId === "calendar") return
     try {
       window.localStorage.setItem(STYLE_KEY, this.styleId)
     } catch (_error) {
@@ -1993,6 +2278,8 @@ export const PhotoTimeline = {
     }
     if (this.pager || event.metaKey || event.ctrlKey || event.altKey) return
     if (event.key !== "v" && event.key !== "V") return
+    // A view other than Timeline (the calendar) is a place in the address, not a look.
+    if (this.viewPaths() && this.place?.view) return
     const target = event.target
     if (target && (/^(input|select|textarea)$/i.test(target.tagName || "") || target.isContentEditable)) return
     const offered = this.offeredStyles()
@@ -2050,6 +2337,55 @@ function reducedMotion() {
 
 function distance(a, b) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+}
+
+/**
+ * The swipe viewer over a day's sheet: the engine is given that day's slice of the list
+ * (`bounds.from()` to `bounds.to()`, in the list's own positions, worked out on every call as
+ * stacks open), and what the timeline asks of it is translated, so to the timeline it is the
+ * same pager as always.
+ */
+export function boundPager(Engine, host, bounds) {
+  const store = host.store
+  const from = () => bounds.from()
+  const inside = (i) => i >= from() && i < bounds.to()
+  const slice = {
+    get total() {
+      return Math.max(0, bounds.to() - from())
+    },
+    get: (i) => store.get(i + from()),
+    has: (i) => (store.has ? store.has(i + from()) : store.get(i + from()) !== null)
+  }
+  const actions = (host.actions || []).map((action) => ({
+    ...action,
+    shown: action.shown && ((i) => action.shown(i + from())),
+    run: action.run && ((i) => action.run(i + from()))
+  }))
+  const engine = new Engine({
+    ...host,
+    store: slice,
+    actions,
+    tileImage: (i) => host.tileImage(i + from()),
+    onChange: (i) => host.onChange(i + from())
+  })
+  return {
+    get isOpen() {
+      return engine.isOpen
+    },
+    get index() {
+      return engine.index + from()
+    },
+    open: (i) => engine.open(Math.min(Math.max(i - from(), 0), Math.max(slice.total - 1, 0))),
+    close: () => engine.close(),
+    goTo: engine.goTo && ((i) => inside(i) && engine.goTo(i - from())),
+    refresh: (indices) => engine.refresh((indices || []).filter(inside).map((i) => i - from())),
+    redraw: engine.redraw && (() => engine.redraw()),
+    syncActions: engine.syncActions && (() => engine.syncActions()),
+    whenOpen: engine.whenOpen && ((fn) => engine.whenOpen(fn)),
+    resize: engine.resize && (() => engine.resize()),
+    caption: engine.caption && (() => engine.caption()),
+    destroy: () => engine.destroy()
+  }
 }
 
 function dayIndexFor(days, itemIndex) {

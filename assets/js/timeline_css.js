@@ -4,6 +4,28 @@
 // and a host's Tailwind cannot see class names that are only ever set from here.
 
 const CSS = `
+.pkt-sheet-backdrop{position:fixed;inset:0;z-index:60;background:#0006;opacity:0;transition:opacity .2s}
+.pkt-sheet-backdrop.pkt-sheet-open{opacity:1}
+.pkt-sheet{position:fixed;left:0;right:0;bottom:0;z-index:61;display:flex;flex-direction:column;max-height:min(78vh,calc(100vh - 3rem));overflow-y:auto;overscroll-behavior:contain;margin:0 auto;width:min(64rem,100%);border-radius:1rem 1rem 0 0;background:var(--color-base-100,#fff);color:var(--color-base-content,#1f2937);box-shadow:0 -10px 40px #0004;transform:translateY(100%);transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+.pkt-sheet.pkt-sheet-open{transform:none}
+@media (prefers-reduced-motion:reduce){.pkt-sheet,.pkt-sheet-backdrop{transition:none}}
+.pkt-sheet-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:.25rem;padding:.75rem .75rem .5rem;background:inherit;border-radius:inherit}
+.pkt-sheet-titles{flex:1;min-width:0;text-align:center}
+.pkt-sheet-title{margin:0;font-size:1rem;font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pkt-sheet-count{margin:0;font-size:.8rem;opacity:.65}
+.pkt-sheet-step,.pkt-sheet-close{flex:none;width:2.25rem;height:2.25rem;border:0;border-radius:999px;background:transparent;color:inherit;font-size:1.4rem;line-height:1;cursor:pointer}
+.pkt-sheet-close{font-size:1rem}
+.pkt-sheet-step:hover:not(:disabled),.pkt-sheet-close:hover{background:color-mix(in oklab,currentColor 10%,transparent)}
+.pkt-sheet-step:disabled{opacity:.25;cursor:default}
+.pkt-sheet-step:focus-visible,.pkt-sheet-close:focus-visible,.pkt-sheet-tile:focus-visible{outline:2px solid var(--color-primary,#3b82f6);outline-offset:2px}
+.pkt-sheet:focus{outline:none}
+.pkt-sheet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(7.5rem,1fr));flex:none;gap:3px;padding:0 .75rem calc(.75rem + env(safe-area-inset-bottom,0px))}
+.pkt-sheet-tile{position:relative;align-self:start;width:100%;height:auto;aspect-ratio:1;padding:0;border:0;border-radius:3px;overflow:hidden;background:var(--color-base-200,#e5e7eb);cursor:pointer}
+.pkt-sheet-tile:disabled{cursor:default}
+.pkt-sheet-tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.pkt-sheet-badge,.pkt-sheet-stack{position:absolute;padding:1px 6px;border-radius:999px;background:#000a;color:#fff;font-size:11px;line-height:16px;font-variant-numeric:tabular-nums;pointer-events:none}
+.pkt-sheet-badge{right:5px;bottom:5px}
+.pkt-sheet-stack{right:5px;top:5px;font-weight:600}
 .pkt-tile{position:absolute;padding:0;margin:0;border:0;background:none;cursor:pointer;pointer-events:auto;color:inherit;-webkit-tap-highlight-color:transparent;contain:layout style}
 .pkt-tile:focus-visible{outline:2px solid var(--color-primary,#3b82f6);outline-offset:2px;z-index:4}
 .pkt-paper{position:absolute;inset:0;display:block;overflow:hidden;background-color:var(--color-base-200,#e5e7eb);transition:inset .42s cubic-bezier(.2,.8,.2,1),border-radius .42s,box-shadow .42s,transform .42s cubic-bezier(.2,.8,.2,1),background-color .42s,padding .42s}

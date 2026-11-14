@@ -11,6 +11,7 @@ import { drawCalendar, today, weekLocale, weekStartFor } from "./calendar.js"
 import { fillTile, markPending, markStack, pickSource, swapImage } from "./tiles.js"
 import { onPreviewOffered } from "./upload_previews.js"
 import { morph } from "./morph.js"
+import { bannerKey, chipsKey, drawBanner, drawChips } from "./chapters.js"
 import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
 import { StackedList } from "./stack_list.js"
@@ -28,7 +29,9 @@ const STACK_ADD_ICON =
   '<path d="M13.5 15.5v6M10.5 18.5h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>'
 
 // Defaults; the server may override them through the index payload.
-const DEFAULTS = { cell: 160, gap: 4, header: 40 }
+// `chapter` and `sub` are the heights of the banner of a chapter and of a sub-chapter, which
+// stands in for the header of the section that opens it.
+const DEFAULTS = { cell: 160, gap: 4, header: 40, chapter: 132, sub: 92 }
 
 // Links to private files run out after a few hours (three at least, with the default window).
 // A window older than this is asked for again when the tab wakes; failing tiles ask at most
@@ -529,8 +532,8 @@ export const PhotoTimeline = {
 
   /** Where everything in a section goes in the style on screen (see layouts.js). */
   layoutOf(section) {
-    const { cell, gap, header } = this.metrics
-    const key = `${this.styleId}:${this.columns}:${cell}:${gap}:${header}`
+    const { cell, gap, header, chapter, sub } = this.metrics
+    const key = `${this.styleId}:${this.columns}:${cell}:${gap}:${header}:${chapter}:${sub}`
     if (key !== this.layoutKey || !this.layouts) {
       this.layoutKey = key
       this.layouts = new WeakMap()
@@ -544,8 +547,9 @@ export const PhotoTimeline = {
         width: this.columns * (cell + gap) - gap,
         cell,
         gap,
-        header,
-        month: section.id,
+        header: this.headerOf(section),
+        month: section.month || section.id,
+        span: section.span,
         days: section.days_list,
         weekStart: this.weekStart,
         today: today()
@@ -553,6 +557,27 @@ export const PhotoTimeline = {
       this.layouts.set(section, layout)
     }
     return layout
+  },
+
+  /** The height of a section's header: a chapter's banner is taller than a month's name. */
+  headerOf(section) {
+    if (!section?.chapter) return this.metrics.header
+    return section.chapter.sub ? this.metrics.sub : this.metrics.chapter
+  },
+
+  /** The words of the banners and chips, from the component. */
+  chapterStrings() {
+    if (this.chapterWords) return this.chapterWords
+    try {
+      this.chapterWords = JSON.parse(this.root()?.dataset.chapterStrings || "{}")
+    } catch (_error) {
+      this.chapterWords = {}
+    }
+    return this.chapterWords
+  },
+
+  chapterEditable() {
+    return this.root()?.dataset.chapterEdit === "true"
   },
 
   /** The aspect ratio of each file of a section; the month's average while they are unknown. */
@@ -587,7 +612,7 @@ export const PhotoTimeline = {
       header: this.metrics.header,
       gap: this.metrics.gap,
       style: this.styleId,
-      headerOffset: Math.min(anchor.delta, this.metrics.header),
+      headerOffset: Math.min(anchor.delta, section ? this.headerOf(section) : this.metrics.header),
       // The place in the section as a count of tiles, so it survives a change of columns.
       item,
       rowFraction: fraction
@@ -1595,6 +1620,7 @@ export const PhotoTimeline = {
   },
 
   placeHeader(section, sectionIndex) {
+    if (section.chapter) return this.placeBanner(section, sectionIndex)
     const id = `header:${section.id}`
     let node = this.pool.get(id)
     if (!node) {
@@ -1617,6 +1643,11 @@ export const PhotoTimeline = {
       this.pool.set(id, node)
     }
     node.firstChild.textContent = section.label || section.id
+    const chips = chipsKey(section)
+    if (node.pktChips !== chips) {
+      node.pktChips = chips
+      drawChips(node, section, { strings: this.chapterStrings(), onJump: (chapterId) => this.jumpTo(`c:${chapterId}`) })
+    }
     const top = this.offsets[sectionIndex]
     if (this.gliding) glide(node, 0, top)
     node.style.position = "absolute"
@@ -1624,6 +1655,46 @@ export const PhotoTimeline = {
     node.style.top = `${top}px`
     node.style.height = `${this.metrics.header}px`
     node.style.lineHeight = `${this.metrics.header}px`
+  },
+
+  /** A chapter's banner, in place of its section's header (chapters.js draws it). */
+  placeBanner(section, sectionIndex) {
+    const id = `header:${section.id}`
+    let node = this.pool.get(id)
+    if (!node) {
+      node = document.createElement("div")
+      this.layer.appendChild(node)
+      this.pool.set(id, node)
+    }
+    const editable = this.chapterEditable()
+    const key = bannerKey(section, editable)
+    if (node.pktBanner !== key) {
+      node.pktBanner = key
+      const card = drawBanner(node, section, {
+        strings: this.chapterStrings(),
+        onEdit: editable ? (chapterId) => this.send("timeline:chapter_edit", { id: chapterId }) : null
+      })
+      if (this.fill) node.classList.add("pkt-banner-fill")
+      if (this.selectable()) {
+        const check = document.createElement("button")
+        check.type = "button"
+        check.className = "pkt-section-check"
+        check.dataset.sectionSelect = ""
+        check.setAttribute("aria-label", this.root()?.dataset.selectMonthLabel || "Select month")
+        check.addEventListener("click", (event) => {
+          event.stopPropagation()
+          this.selectSection(this.sections.findIndex(s => s.id === section.id))
+        })
+        card.append(check)
+      }
+    }
+    const top = this.offsets[sectionIndex]
+    if (this.gliding) glide(node, 0, top)
+    node.style.position = "absolute"
+    node.style.left = "0"
+    node.style.right = "0"
+    node.style.top = `${top}px`
+    node.style.height = `${this.headerOf(section)}px`
   },
 
   /**

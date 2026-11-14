@@ -481,6 +481,14 @@ function placeDay(rects, start, count, box, tile) {
   return shown
 }
 
+/** `[first, last]` days of a month, checked; null for the whole month. */
+function spanOf(span, monthLength) {
+  if (!Array.isArray(span) || span.length !== 2) return null
+  const first = Math.max(1, Math.min(monthLength, Math.floor(Number(span[0]) || 1)))
+  const last = Math.max(first, Math.min(monthLength, Math.floor(Number(span[1]) || monthLength)))
+  return first === 1 && last === monthLength ? null : [first, last]
+}
+
 /** A month as a wall calendar. Anything that is not a month falls back to the grid. */
 function calendar(options) {
   const month = parseMonth(options.month)
@@ -500,19 +508,26 @@ function calendar(options) {
   // weeks still to come would be the first thing a library opened at its end shows.
   const current = today && today.year === month.year && today.month === month.month
   const lastDay = current ? Math.max(today.day, ...counts.keys()) : monthLength
-  const length = Math.min(monthLength, lastDay + 6 - ((lead + lastDay - 1) % 7))
-  const weeks = Math.ceil((lead + length) / 7)
+  // A month cut by a chapter (`span`, its first and last day): only those days, so a day of
+  // another part of the month is never drawn empty here.
+  const span = spanOf(options.span, monthLength)
+  const firstDay = span ? span[0] : 1
+  const length = span
+    ? Math.min(span[1], current ? Math.max(lastDay, span[0]) : span[1])
+    : Math.min(monthLength, lastDay + 6 - ((lead + lastDay - 1) % 7))
+  const firstWeek = Math.floor((lead + firstDay - 1) / 7)
+  const weeks = Math.ceil((lead + length) / 7) - firstWeek
   // A phone at its furthest zoom (about 60 px a cell) fits four photos in a day.
   const tile = Math.max(CALENDAR_TILE_MIN, cell * 0.36)
 
   const rects = new Float32Array(count * 4)
   const cells = []
   let index = 0
-  for (let day = 1; day <= length; day++) {
+  for (let day = firstDay; day <= length; day++) {
     const slot = lead + day - 1
     const box = {
       x: (slot % 7) * (dayW + space),
-      y: top + Math.floor(slot / 7) * (dayH + space),
+      y: top + (Math.floor(slot / 7) - firstWeek) * (dayH + space),
       w: dayW,
       h: dayH
     }
@@ -539,7 +554,8 @@ const BUILDERS = { grid, rows, columns, mosaic, whole, feed, prints, film, honey
 /**
  * The layout of one section. `aspectAt(i)` gives the aspect ratio of its file `i`, `width` is the
  * width to fill, `columns` and `cell` come from the zoom (`cell` is the height of a row in `rows`).
- * The calendar also takes `month` (the section's id), `days` (its `days_list`), `weekStart`
+ * The calendar also takes `month` (the section's month), `span` (the days of it the section
+ * covers, when a chapter cut it), `days` (its `days_list`), `weekStart`
  * (0 Sunday … 6 Saturday) and `today` (`{ year, month, day }`: this month stops at its week).
  */
 export function buildLayout(style, options) {

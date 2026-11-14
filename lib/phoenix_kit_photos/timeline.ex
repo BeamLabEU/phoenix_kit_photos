@@ -41,6 +41,15 @@ defmodule PhoenixKitPhotos.Timeline do
   `:empty`, `:processing` (an upload is not active yet), or `:backfill`
   (capture dates are still being filled in).
 
+  ## Chapters
+
+  A library's chapters (`PhoenixKitPhotos.Chapters`) cut its months: a section opens where a
+  chapter starts (id `"c:<uuid>"`, with the chapter in `chapter`, its cover minted for this
+  reader) and the days after a chapter's end get one of their own. Every section says its
+  `month`, which days of it it covers (`span`, nil for all), the chapters it is inside
+  (`within`) and the one that just ended (`after`). `PhoenixKitPhotos.ChapterSections` has
+  the rules; `aspects/2` groups by the same sections.
+
   ## Stacks
 
   A stack (core's `PhoenixKit.Modules.Storage.Stacks`) takes one place in the timeline:
@@ -67,6 +76,8 @@ defmodule PhoenixKitPhotos.Timeline do
   alias PhoenixKit.RepoHelper
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKit.Utils.Multilang
+  alias PhoenixKitPhotos.Chapters
+  alias PhoenixKitPhotos.ChapterSections
 
   @window_limit 500
   @slide_limit 24
@@ -271,7 +282,12 @@ defmodule PhoenixKitPhotos.Timeline do
          :ok <- known_library(library_uuid),
          :ok <- reader(auth, library_uuid) do
       days = library_uuid |> listed(auth) |> day_rows()
-      sections = group_days(days)
+
+      sections =
+        days
+        |> ChapterSections.build(Chapters.list(library_uuid))
+        |> with_covers(library_uuid, auth)
+
       total = Enum.reduce(sections, 0, &(&1.count + &2))
 
       {:ok,
@@ -325,10 +341,22 @@ defmodule PhoenixKitPhotos.Timeline do
         })
         |> repo().all()
 
+      bytes = Map.new(rows)
+
+      # The sections of the index (chapters cut months), so the bytes of a section are its
+      # files in its order.
+      sections =
+        rows
+        |> Enum.map(fn {date, list} ->
+          %{taken_on: date, count: length(list), sum_aspect: 0.0}
+        end)
+        |> ChapterSections.build(Chapters.list(library_uuid))
+
       {:ok,
-       rows
-       |> Enum.group_by(fn {date, _bytes} -> month_id(date) end, fn {_date, bytes} -> bytes end)
-       |> Map.new(fn {id, days} -> {id, days |> List.flatten() |> :binary.list_to_bin()} end)}
+       for section <- sections, section.dates != [], into: %{} do
+         {section.id,
+          section.dates |> Enum.flat_map(&Map.fetch!(bytes, &1)) |> :binary.list_to_bin()}
+       end}
     end
   end
 
@@ -829,6 +857,57 @@ defmodule PhoenixKitPhotos.Timeline do
     :io_lib.format("~4..0B-~2..0B", [year, month]) |> IO.iodata_to_binary()
   end
 
+  # A banner's picture: the chapter's chosen cover when this reader may see it, else the first
+  # photo under the banner. One query for each kind, whatever the number of chapters.
+  defp with_covers(sections, library_uuid, auth) do
+    banners = for %{chapter: %{} = chapter} = section <- sections, do: {chapter, section}
+
+    if banners == [],
+      do: sections,
+      else: put_covers(sections, banners, library_uuid, auth)
+  end
+
+  defp put_covers(sections, banners, library_uuid, auth) do
+    chosen_ids = for {%{cover_file: id}, _} <- banners, is_binary(id), do: id
+    first_days = for {_, %{dates: [day | _]}} <- banners, do: day
+
+    chosen =
+      library_uuid
+      |> listed(auth)
+      |> where([f], f.uuid in ^chosen_ids)
+      |> all_unless([], chosen_ids)
+
+    firsts =
+      library_uuid
+      |> listed(auth)
+      |> where([f], f.taken_on in ^Enum.uniq(first_days))
+      |> distinct([f], asc: f.taken_on)
+      |> order_by([f], asc: f.taken_on, asc: f.taken_at, asc: f.uuid)
+      |> all_unless([], first_days)
+
+    items =
+      (chosen ++ firsts)
+      |> Enum.uniq_by(& &1.uuid)
+      |> repo().preload(instances: completed_instances())
+      |> to_items(library_uuid, auth)
+      |> Map.new(&{&1.id, &1})
+
+    by_day = Map.new(firsts, &{&1.taken_on, &1.uuid})
+    Enum.map(sections, &cover_section(&1, items, by_day))
+  end
+
+  defp all_unless(_query, empty, []), do: empty
+  defp all_unless(query, _empty, _ids), do: repo().all(query)
+
+  defp cover_section(%{chapter: %{} = chapter} = section, items, by_day) do
+    first = by_day[List.first(section.dates)]
+    item = items[chapter.cover_file] || items[first]
+    cover = item && (item.thumb || item.preview)
+    %{section | chapter: chapter |> Map.delete(:cover_file) |> Map.put(:cover, cover)}
+  end
+
+  defp cover_section(section, _items, _by_day), do: section
+
   defp day_rows(query) do
     query
     |> where([f], not is_nil(f.taken_on))
@@ -872,7 +951,8 @@ defmodule PhoenixKitPhotos.Timeline do
     |> repo().exists?()
   end
 
-  defp day_windows(%{taken_on: date, count: count}) do
+  @doc false
+  def day_windows(%{taken_on: date, count: count}) do
     day = Date.to_iso8601(date)
 
     if count > 0 do

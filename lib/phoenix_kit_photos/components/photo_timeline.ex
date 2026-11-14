@@ -124,6 +124,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   alias PhoenixKit.Modules.Storage.ManualDate
   alias PhoenixKit.Users.Auth.Scope
   alias PhoenixKitPhotos.Bulk
+  alias PhoenixKitPhotos.Components.ChapterEdit
   alias PhoenixKitPhotos.Components.InfoPanel
   alias PhoenixKitPhotos.Components.StackEdit
   alias PhoenixKitPhotos.Components.StackPick
@@ -143,6 +144,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
      |> assign(:bulk, nil)
      |> assign(:stack_edit, nil)
      |> assign(:stack_pick, nil)
+     |> assign(:chapter_edit, nil)
      |> assign(:running, nil)
      |> assign(:notice, nil)
      |> assign(:index, nil)
@@ -163,6 +165,11 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
       Map.has_key?(assigns, :file_uuids) and
           not Timeline.touches?(socket.assigns.scope, assigns.file_uuids) ->
+        {:ok, socket}
+
+      # Chapters changed in a library: this one's, or none of its business.
+      Map.has_key?(assigns, :library_uuid) and
+          socket.assigns.scope != {:library, assigns.library_uuid} ->
         {:ok, socket}
 
       socket.assigns[:refresh_queued] ->
@@ -422,7 +429,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
         library: library_uuid,
         total: index.total,
         sections: Enum.map(index.sections, &section_payload/1),
-        metrics: %{cell: 160, gap: socket.assigns.gap, header: 40},
+        metrics: %{cell: 160, gap: socket.assigns.gap, header: 40, chapter: 132, sub: 92},
         aspects: aspects
       })
     else
@@ -459,8 +466,35 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       count: section.count,
       sum_aspect: section.sum_aspect,
       days: section.days,
-      days_list: section.days_list
+      days_list: section.days_list,
+      month: section.month,
+      span: section.span,
+      chapter: section.chapter,
+      within: section.within,
+      after: section.after
     }
+  end
+
+  # The jump list: each month once (a month cut by chapters is still one month to jump to,
+  # its first part) and each chapter, a sub-chapter under its chapter.
+  defp jump_options(sections) do
+    {options, _seen} =
+      Enum.flat_map_reduce(sections, MapSet.new(), fn
+        %{chapter: %{} = chapter} = section, seen ->
+          mark = if chapter.sub, do: "   ↳ ", else: "◆ "
+
+          name =
+            [chapter.emoji, chapter.title] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" ")
+
+          {[{section.id, mark <> name}], seen}
+
+        section, seen ->
+          if MapSet.member?(seen, section.label),
+            do: {[], seen},
+            else: {[{section.id, section.label}], MapSet.put(seen, section.label)}
+      end)
+
+    options
   end
 
   @impl true
@@ -663,6 +697,19 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
 
   def handle_event("timeline:range", _params, socket), do: {:noreply, socket}
 
+  # A chapter made from what is chosen: its days and its first photo fill the dialog.
+  def handle_event("timeline:bulk", %{"action" => "chapter", "ids" => ids}, socket)
+      when is_list(ids) do
+    {:library, library_uuid} = socket.assigns.scope
+
+    if socket.assigns.selectable and :chapter in menu_actions(socket) do
+      {:noreply,
+       assign(socket, :chapter_edit, ChapterEdit.new(socket.assigns.auth, library_uuid, ids))}
+    else
+      {:noreply, socket}
+    end
+  end
+
   # An action on what is chosen: first what would happen, for the person to say yes to.
   def handle_event("timeline:bulk", %{"action" => name, "ids" => ids}, socket)
       when is_list(ids) do
@@ -777,6 +824,75 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     {:noreply, assign(socket, :notice, nil)}
   end
 
+  # A chapter's banner: its pencil.
+  def handle_event("timeline:chapter_edit", %{"id" => id}, socket) when is_binary(id) do
+    {:library, library_uuid} = socket.assigns.scope
+
+    {:noreply,
+     assign(socket, :chapter_edit, ChapterEdit.edit(socket.assigns.auth, id, library_uuid))}
+  end
+
+  def handle_event("timeline:chapter_new", _params, socket) do
+    {:library, library_uuid} = socket.assigns.scope
+
+    {:noreply,
+     assign(socket, :chapter_edit, ChapterEdit.new(socket.assigns.auth, library_uuid, []))}
+  end
+
+  def handle_event("timeline:chapter_sub", %{"id" => id}, socket) when is_binary(id) do
+    {:noreply, assign(socket, :chapter_edit, ChapterEdit.sub(socket.assigns.auth, id))}
+  end
+
+  def handle_event("timeline:chapter_change", params, socket) do
+    case socket.assigns.chapter_edit do
+      nil -> {:noreply, socket}
+      edit -> {:noreply, assign(socket, :chapter_edit, ChapterEdit.change(edit, params))}
+    end
+  end
+
+  def handle_event("timeline:chapter_emoji", %{"emoji" => emoji}, socket) do
+    case socket.assigns.chapter_edit do
+      nil ->
+        {:noreply, socket}
+
+      edit ->
+        {:noreply, assign(socket, :chapter_edit, ChapterEdit.change(edit, %{"emoji" => emoji}))}
+    end
+  end
+
+  def handle_event("timeline:chapter_" <> action, params, socket)
+      when action in ~w(save delete) do
+    case socket.assigns.chapter_edit do
+      nil ->
+        {:noreply, socket}
+
+      edit ->
+        edit = if action == "save", do: ChapterEdit.change(edit, params), else: edit
+
+        case ChapterEdit.apply(action, edit, socket.assigns.auth) do
+          {:ok, chapter} ->
+            socket =
+              socket
+              |> assign(:chapter_edit, nil)
+              |> load_index()
+              |> push_event(event(socket, "selection"), %{clear: true})
+
+            # A chapter just made or changed is shown: the timeline goes to its banner.
+            {:noreply,
+             if(action == "save",
+               do: push_event(socket, event(socket, "jump"), %{id: "c:" <> chapter.uuid}),
+               else: socket
+             )}
+
+          {:error, message} ->
+            {:noreply, assign(socket, :chapter_edit, %{edit | error: message})}
+        end
+    end
+  end
+
+  def handle_event("timeline:chapter_close", _params, socket),
+    do: {:noreply, assign(socket, :chapter_edit, nil)}
+
   def handle_event("timeline:jump", %{"id" => id}, socket) do
     {:noreply, push_event(socket, event(socket, "jump"), %{id: id})}
   end
@@ -819,7 +935,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       & &1
     ) ++
       if(editor,
-        do: [:move, :tag, :date, :place, :stack, :stack_add, :unstack, :trash],
+        do: [:move, :tag, :date, :place, :stack, :stack_add, :unstack, :chapter, :trash],
         else: []
       )
   end
@@ -1095,6 +1211,15 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       data-select-month-label={gettext("Select this month")}
       data-stack-label={gettext("Stack of %{count} photos", count: "%{count}")}
       data-stack-edit={to_string(:stack in menu_actions(%{assigns: assigns}))}
+      data-chapter-edit={to_string(:chapter in menu_actions(%{assigns: assigns}))}
+      data-chapter-strings={
+        Jason.encode!(%{
+          edit: gettext("Edit chapter"),
+          chapter: gettext("Chapter"),
+          sub: gettext("Part of %{chapter}", chapter: "%{chapter}"),
+          after: gettext("after %{chapter}", chapter: "%{chapter}")
+        })
+      }
       data-stack-strings={
         Jason.encode!(%{
           of: gettext("%{page} of %{count}", page: "%{page}", count: "%{count}"),
@@ -1174,7 +1299,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           phx-target={@myself}
         >
           <select name="id" class="select select-sm" aria-label="Jump to month">
-            <option :for={section <- @sections} value={section.id}>{section.label}</option>
+            <option :for={{id, label} <- jump_options(@sections)} value={id}>{label}</option>
           </select>
         </form>
 
@@ -1195,7 +1320,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
               class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               aria-label="Jump to month"
             >
-              <option :for={section <- @sections} value={section.id}>{section.label}</option>
+              <option :for={{id, label} <- jump_options(@sections)} value={id}>{label}</option>
             </select>
           </label>
         </form>
@@ -1282,6 +1407,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
       <.bulk_dialog :if={@bulk} bulk={@bulk} myself={@myself} id={@id} />
       <StackEdit.dialog :if={@stack_edit} edit={@stack_edit} myself={@myself} id={@id} />
       <StackPick.dialog :if={@stack_pick} pick={@stack_pick} myself={@myself} id={@id} />
+      <ChapterEdit.dialog :if={@chapter_edit} edit={@chapter_edit} myself={@myself} id={@id} />
       <.live_component
         :if={@pager != "false"}
         module={InfoPanel}
@@ -1394,6 +1520,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp bulk_label(:trash), do: gettext("Trash")
   defp bulk_label(:stack), do: gettext("Stack")
   defp bulk_label(:unstack), do: gettext("Unstack")
+  defp bulk_label(:chapter), do: gettext("Chapter")
 
   defp bulk_icon(:download), do: "hero-arrow-down-tray"
   defp bulk_icon(:links), do: "hero-link"
@@ -1405,6 +1532,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
   defp bulk_icon(:trash), do: "hero-trash"
   defp bulk_icon(:stack), do: "hero-square-2-stack"
   defp bulk_icon(:unstack), do: "hero-squares-2x2"
+  defp bulk_icon(:chapter), do: "hero-bookmark-square"
 
   attr :bulk, :map, required: true
   attr :myself, :any, required: true

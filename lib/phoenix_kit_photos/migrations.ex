@@ -28,12 +28,23 @@ defmodule PhoenixKitPhotos.Migrations do
       a login (one row per person and site), encrypted with core's
       `PhoenixKit.Integrations.Encryption` before they are written.
 
+  ## V2: chapters
+
+  `PhoenixKitPhotos.Chapter` (a stretch of a library's time with a name: a trip, a move):
+
+    * **`phoenix_kit_photo_chapters`**: the library (`library_uuid`, cascade), what it is
+      called (`title`, `emoji`, `description`, a preset `color`), when (`starts_on`, and
+      `ends_on` when it has an end), the photo chosen as its cover (`cover_file_uuid`,
+      `SET NULL`) and who made it (`created_by_uuid`, `SET NULL`). Indexed by library and
+      start. A **sub-chapter** names its chapter in `parent_uuid` (one level; deleting a
+      chapter deletes its sub-chapters).
+
   The version is a `pkphotos_schema:<N>` comment on `phoenix_kit_photo_fetches`; no
   table reads as 0.
 
   ## Down
 
-  To 0 drops the three tables (fetch history, sources and saved logins go; the stored
+  To 1 drops the chapters. To 0 drops the three tables (fetch history, sources and saved logins go; the stored
   files stay in their libraries). These tables were never core's, so there is nothing
   to give back.
 
@@ -48,7 +59,7 @@ defmodule PhoenixKitPhotos.Migrations do
 
   alias PhoenixKit.Migrations.Postgres.Helpers
 
-  @current_version 1
+  @current_version 2
   @marker_prefix "pkphotos_schema:"
   @version_table "phoenix_kit_photo_fetches"
 
@@ -124,6 +135,7 @@ defmodule PhoenixKitPhotos.Migrations do
 
     List.flatten([
       v1_statements(p),
+      if(target >= 2, do: v2_statements(p), else: []),
       "COMMENT ON TABLE #{p}#{@version_table} IS '#{@marker_prefix}#{target}'"
     ])
   end
@@ -136,11 +148,13 @@ defmodule PhoenixKitPhotos.Migrations do
     p = "#{prefix}."
 
     if target >= 1 do
-      [
+      List.flatten([
+        if(target < 2, do: ["DROP TABLE IF EXISTS #{p}phoenix_kit_photo_chapters"], else: []),
         "COMMENT ON TABLE #{p}#{@version_table} IS '#{@marker_prefix}#{min(target, @current_version)}'"
-      ]
+      ])
     else
       [
+        "DROP TABLE IF EXISTS #{p}phoenix_kit_photo_chapters",
         "DROP TABLE IF EXISTS #{p}phoenix_kit_photo_fetch_items",
         "DROP TABLE IF EXISTS #{p}phoenix_kit_photo_fetches",
         "DROP TABLE IF EXISTS #{p}phoenix_kit_photo_site_logins"
@@ -213,6 +227,34 @@ defmodule PhoenixKitPhotos.Migrations do
       )
       """,
       "CREATE UNIQUE INDEX IF NOT EXISTS phoenix_kit_photo_site_logins_user_site_index ON #{p}phoenix_kit_photo_site_logins (user_uuid, site)"
+    ]
+  end
+
+  # ── V2 ────────────────────────────────────────────────────────────────────
+
+  defp v2_statements(p) do
+    id = "#{p}uuid_generate_v7()"
+
+    [
+      """
+      CREATE TABLE IF NOT EXISTS #{p}phoenix_kit_photo_chapters (
+        uuid uuid PRIMARY KEY DEFAULT #{id},
+        library_uuid uuid NOT NULL REFERENCES #{p}phoenix_kit_storage_libraries(uuid) ON DELETE CASCADE,
+        parent_uuid uuid REFERENCES #{p}phoenix_kit_photo_chapters(uuid) ON DELETE CASCADE,
+        title character varying(120) NOT NULL,
+        emoji character varying(16),
+        description text,
+        color character varying(20),
+        starts_on date NOT NULL,
+        ends_on date,
+        cover_file_uuid uuid REFERENCES #{p}phoenix_kit_files(uuid) ON DELETE SET NULL,
+        created_by_uuid uuid REFERENCES #{p}phoenix_kit_users(uuid) ON DELETE SET NULL,
+        inserted_at timestamp(0) without time zone NOT NULL DEFAULT now(),
+        updated_at timestamp(0) without time zone NOT NULL DEFAULT now(),
+        CONSTRAINT phoenix_kit_photo_chapters_dates CHECK (ends_on IS NULL OR ends_on >= starts_on)
+      )
+      """,
+      "CREATE INDEX IF NOT EXISTS phoenix_kit_photo_chapters_library_index ON #{p}phoenix_kit_photo_chapters (library_uuid, starts_on)"
     ]
   end
 

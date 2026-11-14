@@ -21,6 +21,9 @@ defmodule PhoenixKitPhotos.LiveUpdates do
   And it relays a person's fetches from a link (`PhoenixKitPhotos.Fetches`) to the
   components that asked (`watch_fetches/3`: the library's `LinkFetcher`, the Fetches
   list), as `send_update(module, id: id, fetch_event: {:fetch, fetch} | {:removed, uuid})`.
+
+  A change to a library's chapters (`PhoenixKitPhotos.Chapters.topic/0`) reaches the page's
+  timelines as `refresh: true, library_uuid: uuid`; one showing another library ignores it.
   """
 
   alias PhoenixKit.Modules.Storage
@@ -92,6 +95,7 @@ defmodule PhoenixKitPhotos.LiveUpdates do
     if Phoenix.LiveView.connected?(socket) do
       Storage.subscribe_to_file_events()
       subscribe_file_changes()
+      PhoenixKitPhotos.Chapters.subscribe()
       subscribe_uploads()
     end
 
@@ -107,6 +111,18 @@ defmodule PhoenixKitPhotos.LiveUpdates do
 
         {:phoenix_kit_photos_fetch_removed, uuid}, socket ->
           tell_fetchers({:removed, uuid})
+          {:halt, socket}
+
+        # A library's chapters changed: its timelines read their index again.
+        {:phoenix_kit_photos_chapters_changed, library_uuid}, socket ->
+          for id <- List.wrap(ids) do
+            Phoenix.LiveView.send_update(PhotoTimeline,
+              id: id,
+              refresh: true,
+              library_uuid: library_uuid
+            )
+          end
+
           {:halt, socket}
 
         # Stacked, unstacked, dated by hand: the timeline is read again, like for an upload.

@@ -98,6 +98,48 @@ const CSS = `
 .pkt-section-check::after{content:"";position:absolute;left:4.5px;top:1.5px;width:6px;height:10px;border:solid color-mix(in oklab,var(--color-base-content,#000) 55%,transparent);border-width:0 2px 2px 0;transform:rotate(42deg)}
 @media (hover:hover){.pkt-header:hover .pkt-section-check,.pkt-section-check:focus-visible{opacity:1}}
 [data-selecting="true"] .pkt-section-check{opacity:1}
+.pkt-chapter--sky{--pkt-ch:#0ea5e9}
+.pkt-chapter--rose{--pkt-ch:#f43f5e}
+.pkt-chapter--amber{--pkt-ch:#f59e0b}
+.pkt-chapter--emerald{--pkt-ch:#10b981}
+.pkt-chapter--violet{--pkt-ch:#8b5cf6}
+.pkt-chapter--slate{--pkt-ch:#64748b}
+.pkt-banner-host{display:block;padding:14px 0 10px;pointer-events:none}
+.pkt-banner-host.pkt-banner-fill{padding-left:8px;padding-right:8px}
+.pkt-banner--sub{padding:10px 0 8px 18px}
+.pkt-banner-fill.pkt-banner--sub{padding-left:26px}
+.pkt-banner--sub::before{content:"";position:absolute;left:7px;top:0;bottom:8px;width:2px;border-radius:2px;background:color-mix(in oklab,var(--pkt-ch) 45%,transparent)}
+.pkt-banner-fill.pkt-banner--sub::before{left:15px}
+.pkt-banner{position:relative;display:flex;align-items:center;gap:14px;height:100%;padding:10px 44px 10px 10px;border-radius:18px;overflow:hidden;pointer-events:auto;
+  background:linear-gradient(105deg,color-mix(in oklab,var(--pkt-ch) 22%,var(--color-base-100,#fff)) 0%,color-mix(in oklab,var(--pkt-ch) 7%,var(--color-base-100,#fff)) 55%,var(--color-base-100,#fff) 100%);
+  border:1px solid color-mix(in oklab,var(--pkt-ch) 30%,transparent);box-shadow:0 1px 2px #0000000d,0 10px 24px -18px color-mix(in oklab,var(--pkt-ch) 80%,#000)}
+.pkt-banner::after{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pkt-ch)}
+.pkt-banner[data-chapter-edit]{cursor:pointer}
+@media (hover:hover){.pkt-banner[data-chapter-edit]:hover .pkt-banner-edit{opacity:1}}
+.pkt-banner-cover{position:relative;flex:none;width:84px;height:84px;margin-left:4px;border-radius:14px;overflow:hidden;display:grid;place-items:center;background:color-mix(in oklab,var(--pkt-ch) 18%,var(--color-base-100,#fff));box-shadow:0 0 0 1px color-mix(in oklab,var(--pkt-ch) 25%,transparent)}
+.pkt-banner-cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.pkt-banner-emoji{font-size:40px;line-height:1}
+.pkt-banner-badge{position:absolute;right:4px;bottom:4px;display:grid;place-items:center;min-width:26px;height:26px;padding:0 3px;border-radius:999px;background:var(--color-base-100,#fff);box-shadow:0 1px 3px #0004;font-size:15px;line-height:1}
+.pkt-banner-text{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.pkt-banner-kicker{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:color-mix(in oklab,var(--pkt-ch) 75%,var(--color-base-content,#000));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkt-banner-title{font-size:22px;font-weight:750;line-height:1.2;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkt-banner-meta{font-size:13px;line-height:1.35;opacity:.72;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkt-banner-desc{font-size:13px;line-height:1.35;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pkt-banner-edit{position:absolute;right:10px;top:50%;margin-top:-14px;display:grid;place-items:center;width:28px;height:28px;border-radius:999px;color:var(--color-base-content,#000);background:color-mix(in oklab,var(--color-base-100,#fff) 70%,transparent);opacity:.55;transition:opacity .14s}
+.pkt-banner .pkt-section-check{position:absolute;right:46px;top:50%;margin-top:-10px}
+.pkt-banner--sub .pkt-banner{gap:12px;padding:8px 44px 8px 8px;border-radius:14px}
+.pkt-banner--sub .pkt-banner-cover{width:54px;height:54px;border-radius:11px}
+.pkt-banner--sub .pkt-banner-emoji{font-size:26px}
+.pkt-banner--sub .pkt-banner-badge{min-width:20px;height:20px;font-size:11px;right:2px;bottom:2px}
+.pkt-banner--sub .pkt-banner-title{font-size:17px}
+.pkt-banner--sub .pkt-banner-kicker{text-transform:none;letter-spacing:0;font-weight:600;font-size:12px}
+.pkt-banner--sub .pkt-banner-meta{font-size:12px}
+@media (max-width:480px){.pkt-banner-cover{width:72px;height:72px}.pkt-banner-title{font-size:19px}.pkt-banner{gap:12px}}
+.pkt-chip{pointer-events:auto;display:inline-flex;align-items:center;max-width:14rem;padding:1px 9px;border-radius:999px;border:0;cursor:pointer;font-size:12px;font-weight:600;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:color-mix(in oklab,var(--pkt-ch) 70%,var(--color-base-content,#000));background:color-mix(in oklab,var(--pkt-ch) 16%,transparent)}
+.pkt-chip--after{font-weight:500;background:none;box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--pkt-ch) 35%,transparent)}
+.pkt-chapter-swatch{position:relative;display:block;width:30px;height:30px;border-radius:999px;cursor:pointer;background:var(--pkt-ch);box-shadow:0 0 0 2px var(--color-base-100,#fff),0 0 0 3px color-mix(in oklab,var(--pkt-ch) 40%,transparent)}
+.pkt-chapter-swatch:has(input:checked){box-shadow:0 0 0 2px var(--color-base-100,#fff),0 0 0 4px var(--pkt-ch)}
+.pkt-chapter-swatch:has(input:focus-visible){outline:2px solid var(--color-base-content,#000);outline-offset:4px}
 .pkt-pending{display:none}
 .pkt-tile[data-pending]{cursor:progress}
 .pkt-tile[data-pending] .pkt-paper{background-image:linear-gradient(100deg,transparent 30%,color-mix(in oklab,var(--color-base-100,#fff) 70%,transparent) 50%,transparent 70%);background-size:200% 100%;animation:pkt-shimmer 1.6s linear infinite}

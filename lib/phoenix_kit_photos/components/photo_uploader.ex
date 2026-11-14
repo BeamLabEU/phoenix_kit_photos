@@ -83,9 +83,17 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
   looks at it and fetches it on the server. The Paste button hands it a copied link the
   same way, when the clipboard holds a link and no picture.
 
+  ## A chapter
+
+  With `timeline` (the id of the page's `PhoenixKitPhotos.Components.PhotoTimeline`), a
+  person who may make chapters (`PhoenixKitPhotos.Chapters.can_edit?/2`) also finds
+  **New chapter** here: everything added to a library starts at the +. The timeline opens
+  its chapter dialog, the dates picked there (a chapter is days, not photos).
+
   ## Options
 
     * `:link_fetcher` — the id of the page's `LinkFetcher`, see above.
+    * `:timeline` — the id of the page's `PhotoTimeline`, see "A chapter".
     * `:on_stored` — an atom. When set, the parent LiveView gets
       `{on_stored, component_id, {:added | :duplicate | :elsewhere, file} | {:error, reason}}`
       for each finished file; it must have a clause for it. Unset, nothing is sent.
@@ -149,6 +157,8 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
        hide_token: nil,
        clipboard: nil,
        link_fetcher: nil,
+       timeline: nil,
+       chapters?: false,
        fetching?: false
      )}
   end
@@ -229,6 +239,12 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
         is_binary(assigns[:link_fetcher]) and PhoenixKitPhotos.Fetches.available?()
       )
       |> assign(:library_uuid, library_uuid)
+      |> assign(:timeline, assigns[:timeline])
+      |> assign(
+        :chapters?,
+        is_binary(assigns[:timeline]) and
+          PhoenixKitPhotos.Chapters.can_edit?(assigns[:auth], library_uuid)
+      )
       |> then(&if(changed?, do: forget(&1), else: &1))
       |> assign_library()
       |> show_blocked(socket.assigns.blocked)
@@ -571,6 +587,18 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
 
   def handle_event("fetch_link", _params, socket), do: {:noreply, socket}
 
+  # New chapter: the page's timeline opens its dialog (it checks the right again).
+  def handle_event("new_chapter", _params, %{assigns: %{chapters?: true}} = socket) do
+    Phoenix.LiveView.send_update(PhoenixKitPhotos.Components.PhotoTimeline,
+      id: socket.assigns.timeline,
+      chapter_new: true
+    )
+
+    {:noreply, assign(socket, :open, false)}
+  end
+
+  def handle_event("new_chapter", _params, socket), do: {:noreply, socket}
+
   def handle_event("open", _params, socket),
     do: {:noreply, assign(socket, open: true, expanded: true, hide_token: nil, clipboard: nil)}
 
@@ -890,6 +918,22 @@ defmodule PhoenixKitPhotos.Components.PhotoUploader do
                   {gettext("Fetch")}
                 </button>
               </div>
+            </div>
+
+            <%!-- A chapter: a trip, a move, a new job. Days, not photos, so it is added here
+                 like everything else; the page's timeline opens the dialog. --%>
+            <div :if={@chapters? && !@blocked} class="border-t border-base-300 pt-3">
+              <button
+                type="button"
+                id={"#{@id}-new-chapter"}
+                phx-click="new_chapter"
+                phx-target={@myself}
+                class="btn btn-ghost btn-sm w-full justify-start gap-2"
+              >
+                <.icon name="hero-bookmark-square" class="h-4 w-4 text-primary" />
+                <span>{gettext("New chapter")}</span>
+                <span class="ml-auto text-xs font-normal text-base-content/60">{gettext("a trip, a move, a new job")}</span>
+              </button>
             </div>
 
             <%!-- Purely the hook's: how many files it keeps in flight. The choice is kept

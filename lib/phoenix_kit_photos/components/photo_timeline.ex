@@ -197,6 +197,16 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
     {:ok, socket |> load_index() |> push_view(id, scope, auth, file_uuid)}
   end
 
+  # The uploader's New chapter (`PhotoUploader`'s `timeline`): the dialog, dates to pick.
+  def update(%{chapter_new: true}, socket) do
+    if Map.has_key?(socket.assigns, :scope) and :chapter in menu_actions(socket) do
+      {:library, library_uuid} = socket.assigns.scope
+      {:ok, assign(socket, :chapter_edit, ChapterEdit.new(socket.assigns.auth, library_uuid, []))}
+    else
+      {:ok, socket}
+    end
+  end
+
   def update(%{refresh_now: true}, socket) do
     {:ok, socket |> assign(:refresh_queued, false) |> load_index()}
   end

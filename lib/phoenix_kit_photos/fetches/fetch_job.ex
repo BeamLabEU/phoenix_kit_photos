@@ -13,7 +13,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   ## While it runs
 
   The tool runs in `PhoenixKitPhotos.Fetches.Runner`, in the fetch's own folder
-  (`Config.work_dir/1`), and every line it prints comes here. Progress is written to the
+  (`PhoenixKitPhotos.Fetches.Config.work_dir/1`), and every line it prints comes here. Progress is written to the
   row and broadcast at most once a second (`Fetches.subscribe/1`). Each file is stored
   as soon as it is finished (`Uploads.store/4`, as the person, who is read again and
   must still be allowed to add to the library), recorded as an `Item` with where it came

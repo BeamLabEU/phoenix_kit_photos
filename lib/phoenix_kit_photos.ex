@@ -28,7 +28,7 @@ defmodule PhoenixKitPhotos do
   `{:library, uuid}`. Capture date and the library partition live in
   PhoenixKit core (V200 and V202); this package does not migrate either.
 
-  The tables it does own (fetching from a link, `PhoenixKitPhotos.Fetch`) come from its
+  The tables it does own (fetching from a link, `PhoenixKitPhotos.Fetches.Fetch`) come from its
   own migration chain, `PhoenixKitPhotos.Migrations` (`migration_module/0`).
   """
 
@@ -65,6 +65,8 @@ defmodule PhoenixKitPhotos do
   @impl PhoenixKit.Module
   def required_modules, do: ["storage"]
 
+  # Documented (an `@impl` alone is hidden): `PhoenixKitPhotos.Migrations` links here.
+  @doc "The package's own migration chain, which core's `mix phoenix_kit.update` runs."
   @impl PhoenixKit.Module
   def migration_module, do: PhoenixKitPhotos.Migrations
 

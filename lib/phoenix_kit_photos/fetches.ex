@@ -63,7 +63,7 @@ defmodule PhoenixKitPhotos.Fetches do
 
   @type scope :: Scope.t()
 
-  @doc "Whether fetching is on and can run here (`Config.available/0`)."
+  @doc "Whether fetching is on and can run here (`PhoenixKitPhotos.Fetches.Config.available/0`)."
   @spec available?() :: boolean()
   defdelegate available?, to: Config
 

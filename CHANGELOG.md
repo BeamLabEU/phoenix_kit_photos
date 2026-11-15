@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Documentation links: `mix docs` builds with no warnings. `migration_module/0` is
+  documented, so `PhoenixKitPhotos.Migrations` links to it; `Config.work_dir/1` and
+  `Config.available/0` are named in full (`PhoenixKitPhotos.Fetches.Config`); and the
+  fetch schema is named `PhoenixKitPhotos.Fetches.Fetch`, not `PhoenixKitPhotos.Fetch`.
+
 ## 0.4.0 - 2026-11-15
 
 Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid`.

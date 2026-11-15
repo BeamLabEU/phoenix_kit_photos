@@ -9,7 +9,7 @@ defmodule PhoenixKitPhotos.Migrations do
 
   ## V1: fetching from a link
 
-  `PhoenixKitPhotos.Fetch` (a link pasted into a library, fetched on the server with
+  `PhoenixKitPhotos.Fetches.Fetch` (a link pasted into a library, fetched on the server with
   yt-dlp or gallery-dl):
 
     * **`phoenix_kit_photo_fetches`**: one row per link a person asked for. Who

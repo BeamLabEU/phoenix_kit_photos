@@ -9,18 +9,10 @@ alias PhoenixKitPhotos.TestRepo
 
 {:ok, _} = TestRepo.start_link()
 
-case TestRepo.query("SELECT taken_on FROM phoenix_kit_files LIMIT 0", []) do
-  {:ok, _} ->
-    :ok
-
-  {:error, reason} ->
-    raise """
-    phoenix_kit_files.taken_on is not readable (#{inspect(reason)}).
-
-    Point PGHOST/PGUSER/PGPASSWORD/PGDATABASE (or DB_*) at a database
-    already migrated to PhoenixKit V205. This role cannot create one.
-    """
-end
+# Core's chain first, up to whatever core this run resolved: a database left at an
+# older core (V227 against core 3.6's V232) otherwise fails half the suite on a
+# missing column. Idempotent; a current database is left as it is.
+PhoenixKit.Migration.ensure_current(TestRepo, log: false)
 
 # This package's own tables (`PhoenixKitPhotos.Migrations`): every statement is
 # `IF NOT EXISTS`, so a database that has them already is left as it is.

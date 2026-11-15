@@ -117,7 +117,7 @@ msgstr "Lisa fotod"
 #: lib/phoenix_kit_photos/components/info_panel.ex:433
 #: lib/phoenix_kit_photos/components/info_panel.ex:587
 #: lib/phoenix_kit_photos/components/info_panel.ex:756
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1950
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1952
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:983
 #: lib/phoenix_kit_photos/components/stack_edit.ex:259
 #: lib/phoenix_kit_photos/components/stack_pick.ex:191
@@ -138,9 +138,9 @@ msgstr "Tühjenda"
 #: lib/phoenix_kit_photos/components/fetch_list.ex:275
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:452
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:509
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1950
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1974
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2102
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1952
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1976
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2104
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:814
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:836
 #, elixir-autogen, elixir-format
@@ -277,36 +277,36 @@ msgstr "Ruumi pole enam: selle kogu salvestusruum on täis"
 msgid "%{count} already in this library"
 msgstr "%{count} juba selles kogus"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2050
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2056
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2052
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2058
 #: lib/phoenix_kit_photos/components/stack_pick.ex:194
 #, elixir-autogen, elixir-format
 msgid "Add"
 msgstr "Lisa"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1994
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1996
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a library"
 msgid_plural "Add %{count} items to a library"
 msgstr[0] "Lisa 1 üksus kogusse"
 msgstr[1] "Lisa %{count} üksust kogusse"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1776
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1778
 #, elixir-autogen, elixir-format
 msgid "Add tags (separate with commas)"
 msgstr "Lisa sildid (eralda komadega)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1695
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1697
 #, elixir-autogen, elixir-format
 msgid "Add to library"
 msgstr "Lisa kogusse"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1643
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1645
 #, elixir-autogen, elixir-format
 msgid "All photos"
 msgstr "Kõik fotod"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1642
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1644
 #, elixir-autogen, elixir-format
 msgid "All videos"
 msgstr "Kõik videod"
@@ -316,12 +316,12 @@ msgstr "Kõik videod"
 msgid "Cancel all"
 msgstr "Tühista kõik"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1442
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1444
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown"
 msgstr "Muuda fotode kuvamist"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1443
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1445
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown (V)"
 msgstr "Muuda fotode kuvamist (V)"
@@ -331,12 +331,12 @@ msgstr "Muuda fotode kuvamist (V)"
 msgid "Changes are saved automatically."
 msgstr "Muudatused salvestatakse automaatselt."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1623
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1625
 #, elixir-autogen, elixir-format
 msgid "Clear selection"
 msgstr "Tühista valik"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1624
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1626
 #, elixir-autogen, elixir-format
 msgid "Clear selection (Esc)"
 msgstr "Tühista valik (Esc)"
@@ -346,7 +346,7 @@ msgstr "Tühista valik (Esc)"
 msgid "Columns"
 msgstr "Veerud"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1956
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1958
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr "Kopeeritud"
@@ -358,12 +358,12 @@ msgid_plural "Copied %{count} items"
 msgstr[0] "1 üksus kopeeritud"
 msgstr[1] "%{count} üksust kopeeritud"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1959
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1961
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr "Kopeeri"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1694
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1696
 #, elixir-autogen, elixir-format
 msgid "Copy links"
 msgstr "Kopeeri lingid"
@@ -375,12 +375,12 @@ msgstr "Kopeeri lingid"
 msgid "Details"
 msgstr "Üksikasjad"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1693
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1695
 #, elixir-autogen, elixir-format
 msgid "Download"
 msgstr "Lae alla"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1644
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1646
 #, elixir-autogen, elixir-format
 msgid "Everything"
 msgstr "Kõik"
@@ -405,12 +405,12 @@ msgstr "Ruudustik"
 msgid "Honeycomb"
 msgstr "Kärjed"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1759
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1761
 #, elixir-autogen, elixir-format
 msgid "Library"
 msgstr "Kogu"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2017
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2019
 #, elixir-autogen, elixir-format
 msgid "Link to 1 photo"
 msgid_plural "Links to %{count} photos"
@@ -422,27 +422,27 @@ msgstr[1] "Lingid %{count} fotole"
 msgid "Mosaic"
 msgstr "Mosaiik"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1696
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2051
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1698
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2053
 #, elixir-autogen, elixir-format
 msgid "Move"
 msgstr "Liiguta"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1997
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1999
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to a library"
 msgid_plural "Move %{count} items to a library"
 msgstr[0] "Teisalda 1 üksus kogusse"
 msgstr[1] "Teisalda %{count} üksust kogusse"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1991
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1993
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to the trash?"
 msgid_plural "Move %{count} items to the trash?"
 msgstr[0] "Kas teisaldada 1 üksus prügikasti?"
 msgstr[1] "Kas teisaldada %{count} üksust prügikasti?"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2049
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2051
 #, elixir-autogen, elixir-format
 msgid "Move to trash"
 msgstr "Teisalda prügikasti"
@@ -461,7 +461,7 @@ msgid_plural "Moved %{count} items to the trash"
 msgstr[0] "1 üksus teisaldatud prügikasti"
 msgstr[1] "%{count} üksust teisaldatud prügikasti"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2021
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2023
 #, elixir-autogen, elixir-format
 msgid "Only people who may see the library can open them."
 msgstr "Neid saavad avada ainult need, kes kogu näevad."
@@ -471,7 +471,7 @@ msgstr "Neid saavad avada ainult need, kes kogu näevad."
 msgid "Prints"
 msgstr "Pildid"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1787
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1789
 #, elixir-autogen, elixir-format
 msgid "Remove tags"
 msgstr "Eemalda sildid"
@@ -488,28 +488,28 @@ msgstr[1] "%{count} üksust taastatud"
 msgid "Rows"
 msgstr "Read"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2052
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2054
 #, elixir-autogen, elixir-format
 msgid "Save tags"
 msgstr "Salvesta sildid"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1428
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1637
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1430
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1639
 #, elixir-autogen, elixir-format
 msgid "Select"
 msgstr "Vali"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1425
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1427
 #, elixir-autogen, elixir-format
 msgid "Select photos"
 msgstr "Vali fotod"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1337
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1339
 #, elixir-autogen, elixir-format
 msgid "Select this month"
 msgstr "Vali see kuu"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1999
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2001
 #, elixir-autogen, elixir-format
 msgid "Tag 1 item"
 msgid_plural "Tag %{count} items"
@@ -523,17 +523,17 @@ msgid_plural "Tagged %{count} items"
 msgstr[0] "1 üksus sildistatud"
 msgstr[1] "%{count} üksust sildistatud"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1697
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1699
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr "Sildid"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2020
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2022
 #, elixir-autogen, elixir-format
 msgid "The originals go to the trash of this library."
 msgstr "Originaalid lähevad selle kogu prügikasti."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1641
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1643
 #, elixir-autogen, elixir-format
 msgid "This day"
 msgstr "See päev"
@@ -543,12 +543,12 @@ msgstr "See päev"
 msgid "This library is shared with signed-in users. Every active account on this site can see what you add."
 msgstr "Seda kogu jagatakse sisseloginud kasutajatega. Iga selle saidi aktiivne konto näeb, mida lisate."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1640
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1642
 #, elixir-autogen, elixir-format
 msgid "This moment"
 msgstr "See hetk"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1700
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1702
 #, elixir-autogen, elixir-format
 msgid "Trash"
 msgstr "Prügikast"
@@ -558,7 +558,7 @@ msgstr "Prügikast"
 msgid "Uncropped"
 msgstr "Kärpimata"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2097
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2099
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr "Võta tagasi"
@@ -569,12 +569,12 @@ msgstr "Võta tagasi"
 msgid "Uploads at once"
 msgstr "Korraga üles laadida"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2019
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2021
 #, elixir-autogen, elixir-format
 msgid "You can bring them back from the trash."
 msgstr "Saate need prügikastist tagasi tuua."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1771
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1773
 #, elixir-autogen, elixir-format
 msgid "You have no other library to add these to."
 msgstr "Teil pole teist kogu, kuhu neid lisada."
@@ -625,7 +625,7 @@ msgstr "pole prügikastis"
 msgid "not yours to change"
 msgstr "pole teie muuta"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1630
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1632
 #, elixir-autogen, elixir-format
 msgid "selected"
 msgstr "valitud"
@@ -635,7 +635,7 @@ msgstr "valitud"
 msgid "that library keeps its files elsewhere"
 msgstr "see kogu hoiab oma faile mujal"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1632
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1634
 #, elixir-autogen, elixir-format
 msgid "the most at once"
 msgstr "korraga kõige rohkem"
@@ -707,7 +707,7 @@ msgid_plural "and %{count} more on their way"
 msgstr[0] "ja veel %{count} on teel"
 msgstr[1] "ja veel %{count} on teel"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1351
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1353
 #, elixir-autogen, elixir-format
 msgid "%{page} of %{count}"
 msgstr "%{page} / %{count}"
@@ -720,8 +720,8 @@ msgstr "Kõik selle fotod liiguvad koos sellele kuupäevale, säilitades oma jä
 #: lib/phoenix_kit_photos/components/info_panel.ex:563
 #: lib/phoenix_kit_photos/components/info_panel.ex:605
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:640
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1698
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1806
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1700
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1808
 #: lib/phoenix_kit_photos/components/stack_edit.ex:188
 #, elixir-autogen, elixir-format
 msgid "Date"
@@ -734,12 +734,12 @@ msgstr "Kuupäev"
 msgid "Description"
 msgstr "Kirjeldus"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2036
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2038
 #, elixir-autogen, elixir-format
 msgid "Each photo goes back to its own place in the timeline."
 msgstr "Iga foto läheb ajajoonel tagasi oma kohale."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1353
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1355
 #, elixir-autogen, elixir-format
 msgid "Edit stack"
 msgstr "Muuda virna"
@@ -749,7 +749,7 @@ msgstr "Muuda virna"
 msgid "Make this the cover"
 msgstr "Tee see kaanepildiks"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1355
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1357
 #, elixir-autogen, elixir-format
 msgid "Page %{page}"
 msgstr "Lehekülg %{page}"
@@ -762,25 +762,25 @@ msgstr "Lehekülg %{page}"
 msgid "Save"
 msgstr "Salvesta"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1352
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1354
 #, elixir-autogen, elixir-format
 msgid "Skip"
 msgstr "Jäta vahele"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1701
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2055
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1703
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2057
 #, elixir-autogen, elixir-format
 msgid "Stack"
 msgstr "Virnasta"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2008
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2010
 #, elixir-autogen, elixir-format
 msgid "Stack 1 photo"
 msgid_plural "Stack %{count} photos"
 msgstr[0] "Virnasta 1 foto"
 msgstr[1] "Virnasta %{count} fotot"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1338
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1340
 #, elixir-autogen, elixir-format
 msgid "Stack of %{count} photos"
 msgstr "Virn, %{count} fotot"
@@ -834,7 +834,7 @@ msgstr "See pole kuupäev."
 msgid "The title or the description is too long."
 msgstr "Pealkiri või kirjeldus on liiga pikk."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2025
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2027
 #, elixir-autogen, elixir-format
 msgid "They become one tile in the timeline, in order of when they were taken. Stacks among them are joined."
 msgstr "Need saavad ajajoonel üheks paaniks, pildistamise järjekorras. Nende hulgas olevad virnad liidetakse."
@@ -845,7 +845,7 @@ msgid "This stack is no longer there."
 msgstr "Seda virna pole enam olemas."
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:570
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1813
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1815
 #: lib/phoenix_kit_photos/components/stack_edit.ex:203
 #, elixir-autogen, elixir-format
 msgid "Time"
@@ -859,19 +859,19 @@ msgstr "Kellaaeg"
 msgid "Title"
 msgstr "Pealkiri"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1911
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1913
 #, elixir-autogen, elixir-format
 msgid "Title (optional)"
 msgstr "Pealkiri (valikuline)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1702
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2057
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1704
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2059
 #: lib/phoenix_kit_photos/components/stack_edit.ex:248
 #, elixir-autogen, elixir-format
 msgid "Unstack"
 msgstr "Lõhu virn"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2014
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2016
 #, elixir-autogen, elixir-format
 msgid "Unstack 1 photo"
 msgid_plural "Unstack %{count} photos"
@@ -924,7 +924,7 @@ msgid_plural "%{count} photos"
 msgstr[0] "1 foto"
 msgstr[1] "%{count} fotot"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2011
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2013
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a stack"
 msgid_plural "Add %{count} items to a stack"
@@ -936,12 +936,12 @@ msgstr[1] "Lisa %{count} üksust virna"
 msgid "Add to a stack"
 msgstr "Lisa virna"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1667
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1669
 #, elixir-autogen, elixir-format
 msgid "Add to a stack…"
 msgstr "Lisa virna…"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1354
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1356
 #, elixir-autogen, elixir-format
 msgid "Add to stack"
 msgstr "Lisa virna"
@@ -959,7 +959,7 @@ msgstr[1] "%{count} üksust lisatud virna"
 msgid "Find a stack by its title"
 msgstr "Otsi virna pealkirja järgi"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1662
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1664
 #, elixir-autogen, elixir-format
 msgid "New stack"
 msgstr "Uus virn"
@@ -989,7 +989,7 @@ msgstr "Seda virna pole enam olemas."
 msgid "There are no stacks here yet. Choose two or more photos and make one with New stack."
 msgstr "Siin pole veel ühtegi virna. Valige kaks või rohkem fotot ja looge virn nupuga „Uus virn“."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2031
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2033
 #, elixir-autogen, elixir-format
 msgid "They go in among its photos by when they were taken; its cover stays. A stack among them is joined."
 msgstr "Need paigutatakse selle fotode vahele pildistamise aja järgi; kaanepilt jääb samaks. Nende hulgas olev virn liidetakse."
@@ -1634,12 +1634,12 @@ msgid "Anyone signed in who can see the photos"
 msgstr "Kõik sisseloginud, kes fotosid näevad"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:616
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2053
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2055
 #, elixir-autogen, elixir-format
 msgid "Change the date"
 msgstr "Muuda kuupäeva"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2002
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2004
 #, elixir-autogen, elixir-format
 msgid "Change the date of 1 item"
 msgid_plural "Change the date of %{count} items"
@@ -1677,7 +1677,7 @@ msgid "Close (I)"
 msgstr "Sulge (I)"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:340
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1363
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1365
 #, elixir-autogen, elixir-format
 msgid "Close the info panel"
 msgstr "Sulge teabepaneel"
@@ -1739,17 +1739,17 @@ msgid "Hide other languages"
 msgstr "Peida teised keeled"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:335
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1362
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1364
 #, elixir-autogen, elixir-format
 msgid "Info"
 msgstr "Teave"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1825
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1827
 #, elixir-autogen, elixir-format
 msgid "Instead, give them back their own dates"
 msgstr "Selle asemel taasta nende enda kuupäevad"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1906
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1908
 #, elixir-autogen, elixir-format
 msgid "Instead, remove their place"
 msgstr "Selle asemel eemalda nende koht"
@@ -1790,7 +1790,7 @@ msgstr "Umbes:"
 msgid "No comments are shown on this library's photos."
 msgstr "Selle kogu fotode juures kommentaare ei näidata."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1894
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1896
 #, elixir-autogen, elixir-format
 msgid "No place chosen yet"
 msgstr "Kohta pole veel valitud"
@@ -1850,7 +1850,7 @@ msgstr "Sisse logimata inimesed saavad kommentaare lugeda."
 msgid "Phones record the exact spot in every photo. Downloaded originals can still carry it."
 msgstr "Telefonid salvestavad igasse fotosse täpse asukoha. Allalaaditud originaalides võib see endiselt olla."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1699
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1701
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr "Koht"
@@ -1870,7 +1870,7 @@ msgstr "Sama koht mis umbes samal ajal tehtud fotol"
 msgid "Saturday"
 msgstr "Laupäev"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2054
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2056
 #, elixir-autogen, elixir-format
 msgid "Save the place"
 msgstr "Salvesta koht"
@@ -1887,24 +1887,24 @@ msgid "Saved"
 msgstr "Salvestatud"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:686
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1849
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1851
 #, elixir-autogen, elixir-format
 msgid "Search"
 msgstr "Otsi"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:681
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1841
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1843
 #, elixir-autogen, elixir-format
 msgid "Search for a place"
 msgstr "Otsi kohta"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:680
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1840
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1842
 #, elixir-autogen, elixir-format
 msgid "Search for a place or an address"
 msgstr "Otsi kohta või aadressi"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2045
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2047
 #, elixir-autogen, elixir-format
 msgid "Search for the place, or click the map. They all get the same place."
 msgstr "Otsige kohta või klõpsake kaardil. Kõik saavad sama koha."
@@ -1932,7 +1932,7 @@ msgid_plural "The date of a stack of %{count} photos"
 msgstr[0] "%{count} fotoga virna kuupäev"
 msgstr[1] "%{count} fotoga virna kuupäev"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2040
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2042
 #, elixir-autogen, elixir-format
 msgid "The earliest gets this date and the others move with it, keeping their order and the time between them. A stack moves whole."
 msgstr "Kõige varasem saab selle kuupäeva ja teised liiguvad koos sellega, säilitades oma järjekorra ja vahed. Virn liigub tervikuna."
@@ -1957,7 +1957,7 @@ msgstr "Kaardiotsing on hõivatud. Proovige hetke pärast uuesti."
 msgid "The owner and members see where each photo was taken. Nobody else does."
 msgstr "Omanik ja liikmed näevad, kus iga foto on tehtud. Keegi teine seda ei näe."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1893
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1895
 #, elixir-autogen, elixir-format
 msgid "The pin on the map"
 msgstr "Nööpnõel kaardil"
@@ -2042,7 +2042,7 @@ msgstr "Virna pildistamise aeg"
 msgid "Where it was taken"
 msgstr "Pildistamise koht"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2005
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2007
 #, elixir-autogen, elixir-format
 msgid "Where was 1 item taken?"
 msgid_plural "Where were %{count} items taken?"
@@ -2254,8 +2254,8 @@ msgstr "Lisa alampeatükk"
 msgid "Amber"
 msgstr "Merevaik"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1344
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1703
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1346
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1705
 #, elixir-autogen, elixir-format
 msgid "Chapter"
 msgstr "Peatükk"
@@ -2283,7 +2283,7 @@ msgid "Delete this chapter? The photos stay."
 msgstr "Kustutada see peatükk? Fotod jäävad alles."
 
 #: lib/phoenix_kit_photos/components/chapter_edit.ex:280
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1343
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1345
 #, elixir-autogen, elixir-format
 msgid "Edit chapter"
 msgstr "Muuda peatükki"
@@ -2360,7 +2360,7 @@ msgstr "Valikuline"
 msgid "Part of"
 msgstr "Osa peatükist"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1345
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1347
 #, elixir-autogen, elixir-format
 msgid "Part of %{chapter}"
 msgstr "Osa: %{chapter}"
@@ -2431,7 +2431,7 @@ msgstr "Lilla"
 msgid "You may not change the chapters of this library."
 msgstr "Te ei saa selle kogu peatükke muuta."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1346
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1348
 #, elixir-autogen, elixir-format
 msgid "after %{chapter}"
 msgstr "pärast: %{chapter}"
@@ -2499,8 +2499,8 @@ msgid "Back to the month"
 msgstr "Tagasi kuu juurde"
 
 #: lib/phoenix_kit_photos/components/photo_timeline.ex:1333
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1413
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1414
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1415
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1416
 #, elixir-autogen, elixir-format
 msgid "Copy link to here"
 msgstr "Kopeeri link siia kohta"
@@ -2520,13 +2520,23 @@ msgstr "Järgmine päev fotodega"
 msgid "Previous day with photos"
 msgstr "Eelmine päev fotodega"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1389
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1393
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1391
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1395
 #, elixir-autogen, elixir-format
 msgid "Timeline"
 msgstr "Ajajoon"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1382
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1384
 #, elixir-autogen, elixir-format
 msgid "Views"
 msgstr "Vaated"
+
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1335
+#, elixir-autogen, elixir-format
+msgid "Copy link to this month"
+msgstr "Kopeeri selle kuu link"
+
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1334
+#, elixir-autogen, elixir-format
+msgid "More for %{month}"
+msgstr "Veel: %{month}"

@@ -121,6 +121,12 @@ of whatever is on screen.
 - **Copy link to here** (D4): a link button beside the switcher (hidden on a phone, where the
   row is full), copying the sheet's day, the calendar's month or the timeline's day on
   screen. Not yet in the header's Share, as D4 also named.
+- **A month's own link** (owner, 2026-11-15: "June 2026 ⋯"): every month heading has a ⋯
+  (`assets/js/month_menu.js`, a menu in `<body>` that follows its button and closes when it
+  leaves the screen) with *Copy link to this month*: `/<user>/<lib>/2026-06` in Timeline,
+  `/v/calendar/2026-06` in Calendar. It works on a phone, where the link button is hidden.
+  On a phone the floating bar used to cover the first heading; the first section now starts
+  below the bar when the bar reaches across it (`barClearance`, `[data-timeline-bar]`).
 - Found on the way: LiveView patches the viewport's own attributes despite
   `phx-update="ignore"` and dropped `data-active-style`, which the looks' CSS reads; the
   hook's `updated()` puts it back.

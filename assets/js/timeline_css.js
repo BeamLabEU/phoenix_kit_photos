@@ -120,6 +120,12 @@ const CSS = `
 .pkt-section-check::after{content:"";position:absolute;left:4.5px;top:1.5px;width:6px;height:10px;border:solid color-mix(in oklab,var(--color-base-content,#000) 55%,transparent);border-width:0 2px 2px 0;transform:rotate(42deg)}
 @media (hover:hover){.pkt-header:hover .pkt-section-check,.pkt-section-check:focus-visible{opacity:1}}
 [data-selecting="true"] .pkt-section-check{opacity:1}
+.pkt-month-more{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;margin-left:-4px;padding:0 6px;border:0;border-radius:999px;background:none;color:inherit;font:inherit;font-weight:700;letter-spacing:1px;line-height:1;cursor:pointer;opacity:.45;transition:opacity .14s,background-color .14s}
+.pkt-month-more:hover,.pkt-month-more:focus-visible,.pkt-month-more[aria-expanded="true"]{opacity:1;background:color-mix(in oklab,var(--color-base-content,#000) 10%,transparent)}
+.pkt-month-menu{position:fixed;z-index:60;min-width:12rem;padding:4px;border-radius:12px;border:1px solid color-mix(in oklab,var(--color-base-content,#000) 12%,transparent);background:var(--color-base-100,#fff);color:var(--color-base-content,#111);box-shadow:0 10px 30px #0003;font-size:.875rem}
+.pkt-month-menu-item{display:flex;width:100%;align-items:center;gap:8px;padding:8px 10px;border:0;border-radius:8px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;white-space:nowrap}
+.pkt-month-menu-item:hover,.pkt-month-menu-item:focus-visible{outline:none;background:color-mix(in oklab,var(--color-base-content,#000) 8%,transparent)}
+.pkt-month-menu-icon{width:16px;height:16px;opacity:.7}
 .pkt-chapter--sky{--pkt-ch:#0ea5e9}
 .pkt-chapter--rose{--pkt-ch:#f43f5e}
 .pkt-chapter--amber{--pkt-ch:#f59e0b}

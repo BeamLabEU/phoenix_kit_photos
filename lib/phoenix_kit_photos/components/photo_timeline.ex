@@ -1330,7 +1330,9 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
           next: gettext("Next day with photos"),
           close: gettext("Back to the month"),
           copied: gettext("Link copied"),
-          copy: gettext("Copy link to here")
+          copy: gettext("Copy link to here"),
+          more: gettext("More for %{month}", month: "%{month}"),
+          copy_month: gettext("Copy link to this month")
         })
       }
       data-download-path={@download_path}
@@ -1368,6 +1370,7 @@ defmodule PhoenixKitPhotos.Components.PhotoTimeline do
            as pills. --%>
       <div
         :if={@sections != []}
+        data-timeline-bar
         class={[
           "flex items-center gap-1.5 sm:gap-2",
           @fill && "absolute right-3 z-10",

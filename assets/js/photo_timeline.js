@@ -19,6 +19,7 @@ import { StackStrip } from "./stack_strip.js"
 import { InfoPanelController, typing } from "./info_panel.js"
 import { daysOf, dayAt, dayOn, monthOf, neighbour, placeOf } from "./days.js"
 import { DaySheet } from "./day_sheet.js"
+import { MonthMenu, monthMoreButton, moreLabel } from "./month_menu.js"
 import { dialogOpen, engineFor, loadEngine } from "./viewer/engine.js"
 import "./viewer/engines.js"
 import { VideoController } from "./viewer/video.js"
@@ -53,6 +54,9 @@ const HELLO_WAIT_MS = 3 * 1000
 
 // Zoom: the smallest tile a person can pinch down to, and where the choice is remembered.
 const MIN_CELL = 56
+// Width a month's heading takes at the left ("September 2026 ⋯"): a floating bar starting
+// nearer than this covers it.
+const HEADING_ROOM = 220
 const ZOOM_KEY = "phoenix_kit_photos:cell"
 
 // The style a person picked, and how long a style that shows whole photos waits for the aspect
@@ -265,6 +269,7 @@ export const PhotoTimeline = {
     this.unbindSelection()
     this.root()?.removeEventListener("click", this.onRootClick)
     if (this.sheet) this.sheet.destroy()
+    this.monthMenu?.destroy()
     clearTimeout(this.aspectsTimer)
     this.resizeObserver.disconnect()
     this.onResize.cancel()
@@ -655,6 +660,19 @@ export const PhotoTimeline = {
   },
 
   /**
+   * Room above the first heading for the floating bar (views, Select, style, jump) when it
+   * reaches across the heading, as on a phone: "March 2024 ⋯" below it, not under it.
+   */
+  barClearance() {
+    const bar = this.fill && this.root()?.querySelector?.("[data-timeline-bar]")
+    if (!bar || typeof bar.getBoundingClientRect !== "function") return 0
+    const box = bar.getBoundingClientRect()
+    const own = this.el.getBoundingClientRect()
+    if (!box.width || box.left - own.left > HEADING_ROOM) return 0
+    return Math.max(0, Math.round(box.bottom - own.top - this.inset))
+  },
+
+  /**
    * Columns for this width: fixed, or as many tiles of about the target size as fit. A size
    * the person chose by zooming wins over the host's, and may go down to one column.
    */
@@ -671,7 +689,7 @@ export const PhotoTimeline = {
       this.columns = this.columnsFor(this.el.clientWidth)
       this.metrics.cell = Math.max(1, (this.el.clientWidth - (this.columns - 1) * this.metrics.gap) / this.columns)
     }
-    this.offsets = buildOffsets(this.sections, (s) => this.measure(s), this.inset)
+    this.offsets = buildOffsets(this.sections, (s) => this.measure(s), this.inset + this.barClearance())
     if (this.spacer) this.spacer.style.height = `${totalHeight(this.offsets)}px`
     if (anchor && this.sections.length) {
       const found = this.sections.findIndex(s => s.id === anchor.id)
@@ -1782,8 +1800,7 @@ export const PhotoTimeline = {
    * screen, or the day of the first photo on screen in the timeline.
    */
   copyPlace() {
-    const paths = this.viewPaths()
-    if (!paths || !this.sections.length) return
+    if (!this.viewPaths() || !this.sections.length) return
     let place
     if (this.sheet?.isOpen) {
       place = { view: "calendar", date: this.sheetDay.date }
@@ -1797,7 +1814,32 @@ export const PhotoTimeline = {
         ? { view: "calendar", date: month }
         : { view: null, date: day ? day.date : month }
     }
-    const url = new URL(this.placePath(place), window.location.origin).toString()
+    this.copyLink(place)
+  },
+
+  /**
+   * A month heading's menu: the month's address in the view on screen (the calendar at that
+   * month, or the timeline at it). By id, since a refresh replaces the section objects.
+   */
+  openMonthMenu(button, sectionId) {
+    const strings = this.placeStrings()
+    this.monthMenu ||= new MonthMenu()
+    this.monthMenu.open(button, [{
+      label: strings.copy_month || "Copy link to this month",
+      icon: "hero-link",
+      run: () => {
+        const section = this.sections.find(s => s.id === sectionId)
+        if (!section) return
+        const month = section.month || section.id
+        this.copyLink({ view: this.place?.view === "calendar" ? "calendar" : null, date: month })
+      }
+    }])
+  },
+
+  copyLink(place) {
+    const path = this.placePath(place)
+    if (!path) return
+    const url = new URL(path, window.location.origin).toString()
     const done = () => this.toast(this.placeStrings().copied || "Link copied")
     if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => window.prompt("", url))
     else window.prompt("", url)
@@ -1906,6 +1948,13 @@ export const PhotoTimeline = {
         ? "pkt-header pointer-events-none px-3 text-base font-semibold"
         : "pkt-header pointer-events-none px-1 text-sm font-semibold"
       node.append(document.createElement("span"))
+      // "June 2026 ⋯": the month's own menu, where its link is copied (when the host gives
+      // the library addresses).
+      if (this.viewPaths()) {
+        const more = monthMoreButton(moreLabel(this.placeStrings().more, section.label || section.id))
+        more.addEventListener("click", () => this.openMonthMenu(more, section.id))
+        node.append(more)
+      }
       if (this.selectable()) {
         const check = document.createElement("button")
         check.type = "button"
@@ -1920,6 +1969,8 @@ export const PhotoTimeline = {
       this.pool.set(id, node)
     }
     node.firstChild.textContent = section.label || section.id
+    const more = node.querySelector("[data-month-more]")
+    if (more) more.setAttribute("aria-label", (more.title = moreLabel(this.placeStrings().more, section.label || section.id)))
     const chips = chipsKey(section)
     if (node.pktChips !== chips) {
       node.pktChips = chips

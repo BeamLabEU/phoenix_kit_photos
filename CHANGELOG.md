@@ -29,6 +29,9 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
   library page and pass the uploader `link_fetcher`.
 - `PhoenixKitPhotos.Migrations`: the package's own migration chain
   (`migration_module/0`), so `mix phoenix_kit.update` writes its wrapper.
+- `PhoenixKitPhotos.Timeline.shown_on/3`: the day the timeline lists a file on. That is
+  its own `taken_on`, or for a page of a stack the day of the cover the reader sees. A
+  host uses it to build a calendar day address, since a stack is one tile there.
 
 ### Fixed
 
@@ -81,6 +84,16 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
 - A fetch tool's 64 MB output cap now counts long lines whole.
 - `Uploads.still_preparing/1` checks only the files it is asked about, not every made
   variant on the site.
+- **Fetching: the 1 GiB file cap (`:max_file_bytes`) holds for every download.**
+  yt-dlp and gallery-dl apply their size flags only when the response has a
+  Content-Length and no Content-Encoding, so a chunked body or an HLS video was
+  stored whole. The cap is now also checked on the bytes the tool reports, on the
+  files in its folder, and again before a file is stored. Over the cap the tool is
+  stopped and the fetch ends `too_big`. A file the tool had already reported when
+  the person cancelled is still stored.
+- Two chapters that both start on the 1st of a month no longer hide the earlier
+  one's last day. The day before the 1st was read as a day of the previous month, so
+  a July trip ended on the 30th.
 - The test suite migrates its database to the resolved core's schema first
   (`PhoenixKit.Migration.ensure_current/2`). Dependencies are updated to core 3.6.0.
 

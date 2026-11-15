@@ -56,6 +56,10 @@ defmodule PhoenixKitPhotos.Fetches do
   @card_hours 24
   # A "running" row this much quieter than the stall limit lost its job.
   @dead_grace_s 15 * 60
+  # Not confirmed yet: being looked at, or waiting for the person.
+  @unconfirmed ["probing", "ready", "unavailable"]
+  # Confirmed and over: what Retry starts again from.
+  @ended ["failed", "cancelled", "done"]
 
   @type scope :: Scope.t()
 
@@ -290,26 +294,50 @@ defmodule PhoenixKitPhotos.Fetches do
       nil ->
         {:error, :not_found}
 
-      %Fetch{status: status} = fetch when status in ["probing", "ready", "unavailable"] ->
+      %Fetch{status: status} = fetch when status in @unconfirmed ->
         cancel_jobs(fetch.uuid)
-        repo().delete_all(from(f in Fetch, where: f.uuid == ^fetch.uuid))
-        Manager.broadcast(topic(fetch.user_uuid), {:phoenix_kit_photos_fetch_removed, fetch.uuid})
-        {:ok, :removed}
+
+        case repo().delete_all(
+               from(f in Fetch, where: f.uuid == ^fetch.uuid and f.status in @unconfirmed)
+             ) do
+          {1, _} ->
+            Manager.broadcast(
+              topic(fetch.user_uuid),
+              {:phoenix_kit_photos_fetch_removed, fetch.uuid}
+            )
+
+            {:ok, :removed}
+
+          # Confirmed meanwhile: it is on its way now, and is stopped like one.
+          {0, _} ->
+            cancel(scope, uuid)
+        end
 
       %Fetch{status: status} = fetch when status in ["queued", "running"] ->
-        Manager.broadcast(control_topic(fetch.uuid), :cancel)
-        cancel_jobs(fetch.uuid)
-
-        {:ok, ended} =
-          write(fetch, %{
-            status: "cancelled",
-            finished_at: now(),
-            progress: Map.put(fetch.progress || %{}, "phase", "cancelled")
-          })
-
-        {:ok, ended}
+        cancel_on_its_way(fetch)
 
       _ended ->
+        {:error, :ended}
+    end
+  end
+
+  # The row says "cancelled" before the job is told, and only if it was still on its way:
+  # a job that subscribes later finds the row ended and does not start (`FetchJob`), and
+  # one that is running hears `:cancel`. A job that ended it first keeps its ending.
+  defp cancel_on_its_way(fetch) do
+    attrs = %{
+      status: "cancelled",
+      finished_at: now(),
+      progress: Map.put(fetch.progress || %{}, "phase", "cancelled")
+    }
+
+    case transition(fetch, ["queued", "running"], attrs) do
+      {:ok, ended} ->
+        Manager.broadcast(control_topic(fetch.uuid), :cancel)
+        cancel_jobs(fetch.uuid)
+        {:ok, ended}
+
+      {:error, :moved_on} ->
         {:error, :ended}
     end
   end
@@ -344,7 +372,7 @@ defmodule PhoenixKitPhotos.Fetches do
   defp again(%Fetch{status: "unavailable"} = fetch),
     do: requeue(fetch, "probing", ProbeJob, %{info: %{}, progress: %{}})
 
-  defp again(%Fetch{status: status} = fetch) when status in ["failed", "cancelled", "done"] do
+  defp again(%Fetch{status: status} = fetch) when status in @ended do
     case missing_items(fetch) do
       [] ->
         {:error, :nothing_missing}
@@ -362,15 +390,25 @@ defmodule PhoenixKitPhotos.Fetches do
 
   defp again(_fetch), do: {:error, :not_ended}
 
+  # Only from the status it was retried in, and only with a job that will run it. The
+  # jobs are unique per fetch, so the insert can meet the fetch's last job instead. One
+  # still waiting will run the retried row when its turn comes. One still executing is
+  # the last run stopping (storing the file in hand, ending its tool): it will not look
+  # again, so the row would wait for a job that never comes. That retry is refused,
+  # `:stopping`, and the row is left as it was.
   defp requeue(fetch, status, worker, attrs) do
-    repo().transaction(fn ->
-      {:ok, fetch} =
-        write(fetch, Map.merge(attrs, %{status: status, error_code: nil, error: nil}),
-          broadcast: false
-        )
+    attrs = Map.merge(attrs, %{status: status, error_code: nil, error: nil})
 
-      {:ok, _} = Oban.insert(worker.new(%{"fetch" => fetch.uuid}))
-      fetch
+    repo().transaction(fn ->
+      with {:ok, fetch} <- transition(fetch, [fetch.status], attrs, broadcast: false),
+           {:ok, job} <- Oban.insert(worker.new(%{"fetch" => fetch.uuid})),
+           false <- job.conflict? and job.state == "executing" do
+        fetch
+      else
+        {:error, :moved_on} -> repo().rollback(:not_ended)
+        true -> repo().rollback(:stopping)
+        {:error, reason} -> repo().rollback(reason)
+      end
     end)
     |> tap(fn
       {:ok, fetch} -> broadcast(fetch)
@@ -678,7 +716,12 @@ defmodule PhoenixKitPhotos.Fetches do
     |> repo().all()
     |> Enum.each(fn fetch ->
       Logger.warning("[Fetches] fetch #{fetch.uuid} lost its job; marking it failed")
-      write(fetch, %{status: "failed", error_code: "stalled", finished_at: now()})
+
+      transition(fetch, ["running"], %{
+        status: "failed",
+        error_code: "stalled",
+        finished_at: now()
+      })
     end)
 
     :ok
@@ -700,6 +743,30 @@ defmodule PhoenixKitPhotos.Fetches do
       {:ok, fetch} -> if Keyword.get(opts, :broadcast, true), do: broadcast(fetch)
       _ -> :ok
     end)
+  end
+
+  @doc false
+  # Moves the fetch on only while its row is still in one of `from`: `{:ok, fresh}`, or
+  # `{:error, :moved_on}` when someone else got there first (the person cancelled or
+  # retried, a job ended it) or the row is gone (cancelled during the look). Every change
+  # of status goes through here, never through a `write/3` of a copy read earlier, so a
+  # job and the person cannot overwrite each other's ending.
+  @spec transition(Fetch.t(), [String.t()], map(), keyword()) ::
+          {:ok, Fetch.t()} | {:error, :moved_on}
+  def transition(%Fetch{uuid: uuid}, from, attrs, opts \\ []) when is_list(from) do
+    set = attrs |> Map.put(:updated_at, now()) |> Enum.to_list()
+
+    case repo().update_all(
+           from(f in Fetch, where: f.uuid == ^uuid and f.status in ^from, select: f),
+           set: set
+         ) do
+      {1, [fresh]} ->
+        if Keyword.get(opts, :broadcast, true), do: broadcast(fresh)
+        {:ok, fresh}
+
+      {0, _} ->
+        {:error, :moved_on}
+    end
   end
 
   @doc false

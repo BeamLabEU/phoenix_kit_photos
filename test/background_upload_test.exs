@@ -13,6 +13,7 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
 
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.Bucket
+  alias PhoenixKit.PubSub.Manager
   alias PhoenixKitPhotos.{StagingSweepJob, StoreUploadJob, UploadStaging}
 
   @endpoint PhoenixKitPhotos.TestEndpoint
@@ -279,7 +280,7 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
       owner = user_fixture("bg-unconfirmed-#{System.unique_integer([:positive])}@example.com")
       library = library_fixture(owner)
       topic = "phoenix_kit_photos:uploads:test-#{System.unique_integer([:positive])}"
-      PhoenixKit.PubSub.Manager.subscribe(topic)
+      Manager.subscribe(topic)
 
       job_args =
         args(staged, ctx, %{

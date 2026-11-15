@@ -118,4 +118,27 @@ defmodule PhoenixKitPhotos.Fetches.RunnerTest do
     Port.close(port)
     System.cmd("kill", ["-KILL", Integer.to_string(pid)])
   end
+
+  # Lines of exactly 1 MiB arrive as sixteen 64 KiB `:noeol` parts and an empty `:eol`
+  # tail: the cap on what a tool may print counts them whole.
+  test "the cap on all output counts long lines whole", %{dir: dir} do
+    tool =
+      script(dir, """
+      line=$(head -c 1048576 /dev/zero | tr '\\0' x)
+      i=0
+      while [ $i -lt 70 ]; do printf '%s\\n' "$line"; i=$((i+1)); done
+      """)
+
+    {_runner, ref} = Runner.start(tool, [], dir: dir)
+    assert {:exit, :too_much} = drain(ref)
+  end
+
+  defp drain(ref) do
+    receive do
+      {^ref, {:line, _line}} -> drain(ref)
+      {^ref, {:exit, _} = exit} -> exit
+    after
+      30_000 -> :timeout
+    end
+  end
 end

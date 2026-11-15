@@ -431,12 +431,9 @@ defmodule PhoenixKitPhotos.Bulk do
     end
   end
 
+  # A trashed file was refused above, as for every action but restore.
   defp check_action(action, file, rights, _target, _present) when action in [:date, :place] do
-    cond do
-      not is_nil(file.trashed_at) -> {:refused, :trashed}
-      may?(rights, file, :edit) -> :ok
-      true -> {:refused, :not_allowed}
-    end
+    if may?(rights, file, :edit), do: :ok, else: {:refused, :not_allowed}
   end
 
   defp check_action(:tag, file, rights, _target, _present) do

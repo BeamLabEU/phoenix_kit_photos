@@ -55,6 +55,16 @@ defmodule PhoenixKitPhotos.Fetches.Link do
   @second_levels ~w(co com net org gov ac edu)
 
   @doc """
+  The domains whose cookies make up a login for `site` (as `login_site/1` names it): the
+  site and every other name it goes by, so a cookies.txt exported on `twitter.com` is a
+  login for `x.com`.
+  """
+  @spec login_domains(String.t()) :: [String.t()]
+  def login_domains(site) when is_binary(site) do
+    [site | for({other, ^site} <- @aliases, do: other)]
+  end
+
+  @doc """
   The site a login is kept under: the registered domain of a link or a host, so
   `old.reddit.com` and `www.reddit.com` share `reddit.com`, with a few known aliases
   (`twitter.com` is `x.com`). Nil for something that is not a host.

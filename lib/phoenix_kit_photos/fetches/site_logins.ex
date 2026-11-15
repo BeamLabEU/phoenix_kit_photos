@@ -63,13 +63,14 @@ defmodule PhoenixKitPhotos.Fetches.SiteLogins do
     with user_uuid when is_binary(user_uuid) <- Scope.user_uuid(scope) || {:error, :not_allowed},
          site when is_binary(site) <- Link.login_site(site) || {:error, :invalid_site},
          true <- byte_size(text) <= @max_bytes || {:error, :too_big},
-         {:ok, kept, count} <- CookiesTxt.for_site(text, site) do
+         {:ok, kept, count} <- CookiesTxt.for_site(text, Link.login_domains(site)) do
       now = NaiveDateTime.utc_now() |> NaiveDateTime.truncate(:second)
+      cookies = Encryption.encrypt_value(kept)
 
       %SiteLogin{
         user_uuid: user_uuid,
         site: site,
-        cookies: Encryption.encrypt_value(kept),
+        cookies: cookies,
         cookie_count: count,
         inserted_at: now,
         updated_at: now
@@ -77,7 +78,7 @@ defmodule PhoenixKitPhotos.Fetches.SiteLogins do
       |> repo().insert(
         on_conflict: [
           set: [
-            cookies: Encryption.encrypt_value(kept),
+            cookies: cookies,
             cookie_count: count,
             updated_at: now,
             last_worked_at: nil,

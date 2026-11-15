@@ -98,37 +98,30 @@ defmodule PhoenixKitPhotos.Components.FetchList do
   # `only` (every fetch when nil) and kept for the others.
   defp find_shown(socket, only) do
     link = socket.assigns.photo_link
-
-    if is_function(link, 2) do
-      ended = Enum.filter(socket.assigns.fetches, &(&1.status in Fetch.ended_statuses()))
-
-      asked =
-        if only,
-          do: Enum.filter(ended, fn f -> Enum.any?(only, &(&1.uuid == f.uuid)) end),
-          else: ended
-
-      found = Fetches.first_files(asked)
-
-      shown =
-        Map.new(ended, fn fetch ->
-          if fetch in asked do
-            href =
-              case found[fetch.uuid] do
-                %{short_code: code} -> link.(to_string(fetch.library_uuid), code)
-                _ -> nil
-              end
-
-            {fetch.uuid, href}
-          else
-            {fetch.uuid, socket.assigns.shown[fetch.uuid]}
-          end
-        end)
-
-      assign(socket, :shown, shown)
-    else
-      socket
-    end
+    if is_function(link, 2), do: assign(socket, :shown, shown(socket, link, only)), else: socket
   end
+
+  defp shown(socket, link, only) do
+    ended = Enum.filter(socket.assigns.fetches, &(&1.status in Fetch.ended_statuses()))
+
+    asked =
+      if only,
+        do: Enum.filter(ended, fn f -> Enum.any?(only, &(&1.uuid == f.uuid)) end),
+        else: ended
+
+    found = Fetches.first_files(asked)
+
+    Map.new(ended, fn fetch ->
+      if fetch in asked,
+        do: {fetch.uuid, first_file_href(link, fetch, found[fetch.uuid])},
+        else: {fetch.uuid, socket.assigns.shown[fetch.uuid]}
+    end)
+  end
+
+  defp first_file_href(link, fetch, %{short_code: code}),
+    do: link.(to_string(fetch.library_uuid), code)
+
+  defp first_file_href(_link, _fetch, _none), do: nil
 
   defp label_libraries(socket) do
     link = socket.assigns.library_link
@@ -184,6 +177,14 @@ defmodule PhoenixKitPhotos.Components.FetchList do
 
       {:error, :nothing_missing} ->
         {:noreply, assign(socket, :notice, gettext("Everything from this link is already here."))}
+
+      {:error, :stopping} ->
+        {:noreply,
+         assign(
+           socket,
+           :notice,
+           gettext("The last run is still stopping. Try again in a moment.")
+         )}
 
       {:error, _} ->
         {:noreply,

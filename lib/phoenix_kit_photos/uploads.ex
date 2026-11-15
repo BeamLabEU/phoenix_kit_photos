@@ -244,17 +244,22 @@ defmodule PhoenixKitPhotos.Uploads do
   def still_preparing([]), do: []
 
   def still_preparing(uuids) do
-    made =
-      from(i in FileInstance,
-        where: i.variant_name != "original" and i.processing_status == "completed",
-        select: i.file_uuid
-      )
-
+    # Asked per file (an index lookup on `file_uuid`), never a scan of every made variant
+    # on the site, which `NOT IN (subquery)` was.
     from(f in StorageFile,
+      as: :file,
       where: f.uuid in ^uuids,
       where:
         f.status == "processing" or
-          (f.status == "active" and f.uuid not in subquery(made)),
+          (f.status == "active" and
+             not exists(
+               from(i in FileInstance,
+                 where:
+                   i.file_uuid == parent_as(:file).uuid and i.variant_name != "original" and
+                     i.processing_status == "completed",
+                 select: 1
+               )
+             )),
       select: f.uuid
     )
     |> PhoenixKit.RepoHelper.repo().all()

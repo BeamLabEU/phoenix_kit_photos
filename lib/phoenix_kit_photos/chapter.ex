@@ -118,7 +118,7 @@ defmodule PhoenixKitPhotos.Chapter do
   defp string(value) when is_binary(value), do: value
   defp string(_value), do: ""
 
-  @doc "The title in `lang` (a code like `\"ru\"` or `\"et-EE\"`), else the main language's."
+  @doc ~s[The title in `lang` (a code like `"ru"` or `"et-EE"`), else the main language's.]
   @spec title(t(), String.t() | nil) :: String.t()
   def title(%__MODULE__{} = chapter, lang),
     do: translated(chapter, lang, "title") || chapter.title

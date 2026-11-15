@@ -89,14 +89,25 @@ defmodule PhoenixKitPhotos.ChaptersTest do
       assert errors[:ends_on] && errors[:color]
     end
 
-    test "a cover from another library is refused", ctx do
+    test "a cover from another library is forgotten, and the chapter saved without one", ctx do
       elsewhere = file_fixture(ctx.owner, %{library_uuid: library_fixture(ctx.owner).uuid})
+      own = file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
 
-      assert Chapters.create(ctx.scope, ctx.library.uuid, %{
-               "title" => "x",
-               "starts_on" => "2026-07-12",
-               "cover_file_uuid" => elsewhere.uuid
-             }) == {:error, :not_found}
+      assert {:ok, chapter} =
+               Chapters.create(ctx.scope, ctx.library.uuid, %{
+                 "title" => "x",
+                 "starts_on" => "2026-07-12",
+                 "cover_file_uuid" => elsewhere.uuid
+               })
+
+      assert chapter.cover_file_uuid == nil
+
+      # On an update too: its own library's file is kept, another's forgotten.
+      {:ok, chapter} = Chapters.update(ctx.scope, chapter, %{"cover_file_uuid" => own.uuid})
+      assert chapter.cover_file_uuid == own.uuid
+
+      assert {:ok, %{cover_file_uuid: nil}} =
+               Chapters.update(ctx.scope, chapter, %{"cover_file_uuid" => elsewhere.uuid})
     end
   end
 

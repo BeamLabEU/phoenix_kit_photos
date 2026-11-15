@@ -87,10 +87,19 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   def perform(%Oban.Job{args: %{"fetch" => uuid}}) do
     case Fetches.get_any(uuid) do
       %Fetch{status: status} = fetch when status in ["queued", "running"] ->
-        case claim(fetch) do
-          {:ok, fetch} -> run(fetch)
-          :busy -> {:snooze, @snooze_s}
-          :gone -> :ok
+        # Listening before the row says "running": `Fetches.cancel/2` writes "cancelled"
+        # first and tells the job after, so a cancel either ends the row before `claim`
+        # (which then finds it gone) or reaches this mailbox. It is never missed.
+        Manager.subscribe(Fetches.control_topic(fetch.uuid))
+
+        try do
+          case claim(fetch) do
+            {:ok, fetch} -> run(fetch)
+            :busy -> {:snooze, @snooze_s}
+            :gone -> :ok
+          end
+        after
+          Manager.unsubscribe(Fetches.control_topic(fetch.uuid))
         end
 
       _ended_or_gone ->
@@ -108,6 +117,9 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
       {:ok, {:ok, fetch}} ->
         Fetches.broadcast(fetch)
         {:ok, fetch}
+
+      {:ok, {:error, :moved_on}} ->
+        :gone
 
       {:ok, other} ->
         other
@@ -147,9 +159,12 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
     )
   end
 
+  # From the copy read under the lock, but only while the row still says so: a cancel
+  # does not take the person's lock, and must not be written over.
   defp start_running(fetch) do
-    Fetches.write(
+    Fetches.transition(
       fetch,
+      ["queued", "running"],
       %{
         status: "running",
         started_at: fetch.started_at || Fetches.now(),
@@ -167,7 +182,6 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
     Runner.kill_leftover(dir)
     File.mkdir_p!(files)
     File.rm(Path.join(dir, "stderr.log"))
-    Manager.subscribe(Fetches.control_topic(fetch.uuid))
 
     try do
       case scope_for(fetch) do
@@ -178,7 +192,6 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
           finish(fetch, "failed", code, nil, %{})
       end
     after
-      Manager.unsubscribe(Fetches.control_topic(fetch.uuid))
       File.rm(Path.join(dir, "cookies.txt"))
       ended = Fetches.get_any(fetch.uuid)
       if is_nil(ended) or ended.status not in ["queued", "running"], do: File.rm_rf(dir)
@@ -650,7 +663,9 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
       finished_at: Fetches.now()
     }
 
-    case Fetches.write(fetch, attrs) do
+    # Over this run's own "running", or over the person's "cancelled" (with the counts of
+    # what it kept). Anything else is no longer this run's to end.
+    case Fetches.transition(fetch, ["running", "cancelled"], attrs) do
       {:ok, ended} ->
         Logger.info(
           "[Fetches] #{ended.uuid} (#{ended.site}) ended #{status}#{if code, do: " (#{code})"}"
@@ -658,8 +673,8 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
 
         Notify.finished(ended)
 
-      _ ->
-        :ok
+      {:error, :moved_on} ->
+        Logger.info("[Fetches] #{fetch.uuid} moved on before its run ended; leaving it")
     end
   end
 

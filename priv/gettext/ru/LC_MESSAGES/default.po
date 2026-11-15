@@ -119,7 +119,7 @@ msgstr "Добавить фото"
 #: lib/phoenix_kit_photos/components/info_panel.ex:433
 #: lib/phoenix_kit_photos/components/info_panel.ex:587
 #: lib/phoenix_kit_photos/components/info_panel.ex:756
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1952
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1953
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:983
 #: lib/phoenix_kit_photos/components/stack_edit.ex:259
 #: lib/phoenix_kit_photos/components/stack_pick.ex:191
@@ -137,12 +137,12 @@ msgstr "Выбрать файлы"
 msgid "Clear"
 msgstr "Очистить"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:275
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:452
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:509
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1952
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1976
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2104
+#: lib/phoenix_kit_photos/components/fetch_list.ex:283
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:456
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:513
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1953
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1977
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2105
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:814
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:836
 #, elixir-autogen, elixir-format
@@ -164,27 +164,27 @@ msgstr "Фото, видео или целые папки"
 msgid "That folder is very large; only the first part was taken. Drop the rest again."
 msgstr "Папка очень большая, взята только первая часть. Перетащите остальное ещё раз."
 
-#: lib/phoenix_kit_photos/uploads.ex:424
+#: lib/phoenix_kit_photos/uploads.ex:429
 #, elixir-autogen, elixir-format
 msgid "The server could not save it"
 msgstr "Сервер не смог его сохранить"
 
-#: lib/phoenix_kit_photos/uploads.ex:419
+#: lib/phoenix_kit_photos/uploads.ex:424
 #, elixir-autogen, elixir-format
 msgid "The upload was lost on the way"
 msgstr "Загрузка потерялась по пути"
 
-#: lib/phoenix_kit_photos/uploads.ex:408
+#: lib/phoenix_kit_photos/uploads.ex:413
 #, elixir-autogen, elixir-format
 msgid "This file could not be uploaded"
 msgstr "Не удалось загрузить этот файл"
 
-#: lib/phoenix_kit_photos/uploads.ex:418
+#: lib/phoenix_kit_photos/uploads.ex:423
 #, elixir-autogen, elixir-format
 msgid "This kind of file is not supported"
 msgstr "Этот тип файлов не поддерживается"
 
-#: lib/phoenix_kit_photos/uploads.ex:405
+#: lib/phoenix_kit_photos/uploads.ex:410
 #, elixir-autogen, elixir-format
 msgid "This kind of file is not supported (photos and videos only)"
 msgstr "Этот тип файлов не поддерживается (только фото и видео)"
@@ -194,12 +194,12 @@ msgstr "Этот тип файлов не поддерживается (толь
 msgid "This library is public. Everything you add to it can be seen by anyone."
 msgstr "Это публичная библиотека. Всё, что вы в неё добавите, сможет увидеть любой."
 
-#: lib/phoenix_kit_photos/uploads.ex:402
+#: lib/phoenix_kit_photos/uploads.ex:407
 #, elixir-autogen, elixir-format
 msgid "Too large (the limit is %{mb} MB)"
 msgstr "Слишком большой (предел — %{mb} МБ)"
 
-#: lib/phoenix_kit_photos/uploads.ex:407
+#: lib/phoenix_kit_photos/uploads.ex:412
 #, elixir-autogen, elixir-format
 msgid "Too many files at once"
 msgstr "Слишком много файлов сразу"
@@ -212,7 +212,7 @@ msgstr[0] "Загрузить %{count} файл"
 msgstr[1] "Загрузить %{count} файла"
 msgstr[2] "Загрузить %{count} файлов"
 
-#: lib/phoenix_kit_photos/uploads.ex:413
+#: lib/phoenix_kit_photos/uploads.ex:418
 #, elixir-autogen, elixir-format
 msgid "You may not add to this library"
 msgstr "Вы не можете добавлять в эту библиотеку"
@@ -271,7 +271,7 @@ msgstr "Как открываются фото этой библиотеки"
 msgid "Could not save the viewer"
 msgstr "Не удалось сохранить способ просмотра"
 
-#: lib/phoenix_kit_photos/uploads.ex:422
+#: lib/phoenix_kit_photos/uploads.ex:427
 #, elixir-autogen, elixir-format
 msgid "There is no room left: this library's storage is full"
 msgstr "Места не осталось: хранилище этой библиотеки заполнено"
@@ -281,14 +281,14 @@ msgstr "Места не осталось: хранилище этой библи
 msgid "%{count} already in this library"
 msgstr "Уже в этой библиотеке: %{count}"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2052
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2058
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2053
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2059
 #: lib/phoenix_kit_photos/components/stack_pick.ex:194
 #, elixir-autogen, elixir-format
 msgid "Add"
 msgstr "Добавить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1996
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1997
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a library"
 msgid_plural "Add %{count} items to a library"
@@ -296,22 +296,22 @@ msgstr[0] "Добавить %{count} объект в библиотеку"
 msgstr[1] "Добавить %{count} объекта в библиотеку"
 msgstr[2] "Добавить %{count} объектов в библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1778
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1779
 #, elixir-autogen, elixir-format
 msgid "Add tags (separate with commas)"
 msgstr "Добавьте теги (через запятую)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1697
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1698
 #, elixir-autogen, elixir-format
 msgid "Add to library"
 msgstr "В библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1645
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1646
 #, elixir-autogen, elixir-format
 msgid "All photos"
 msgstr "Все фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1644
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1645
 #, elixir-autogen, elixir-format
 msgid "All videos"
 msgstr "Все видео"
@@ -321,12 +321,12 @@ msgstr "Все видео"
 msgid "Cancel all"
 msgstr "Отменить все"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1444
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1445
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown"
 msgstr "Изменить вид"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1445
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1446
 #, elixir-autogen, elixir-format
 msgid "Change how photos are shown (V)"
 msgstr "Изменить вид (V)"
@@ -336,12 +336,12 @@ msgstr "Изменить вид (V)"
 msgid "Changes are saved automatically."
 msgstr "Изменения сохраняются автоматически."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1625
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1626
 #, elixir-autogen, elixir-format
 msgid "Clear selection"
 msgstr "Снять выбор"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1626
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1627
 #, elixir-autogen, elixir-format
 msgid "Clear selection (Esc)"
 msgstr "Снять выбор (Esc)"
@@ -351,7 +351,7 @@ msgstr "Снять выбор (Esc)"
 msgid "Columns"
 msgstr "Столбцы"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1958
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1959
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr "Скопировано"
@@ -364,12 +364,12 @@ msgstr[0] "Скопирован %{count} объект"
 msgstr[1] "Скопировано %{count} объекта"
 msgstr[2] "Скопировано %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1961
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1962
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr "Копировать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1696
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1697
 #, elixir-autogen, elixir-format
 msgid "Copy links"
 msgstr "Копировать ссылки"
@@ -381,12 +381,12 @@ msgstr "Копировать ссылки"
 msgid "Details"
 msgstr "Детали"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1695
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1696
 #, elixir-autogen, elixir-format
 msgid "Download"
 msgstr "Скачать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1646
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1647
 #, elixir-autogen, elixir-format
 msgid "Everything"
 msgstr "Всё"
@@ -411,12 +411,12 @@ msgstr "Сетка"
 msgid "Honeycomb"
 msgstr "Соты"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1761
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1762
 #, elixir-autogen, elixir-format
 msgid "Library"
 msgstr "Библиотека"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2019
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2020
 #, elixir-autogen, elixir-format
 msgid "Link to 1 photo"
 msgid_plural "Links to %{count} photos"
@@ -429,13 +429,13 @@ msgstr[2] "Ссылки на %{count} фото"
 msgid "Mosaic"
 msgstr "Мозаика"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1698
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2053
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1699
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2054
 #, elixir-autogen, elixir-format
 msgid "Move"
 msgstr "Переместить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1999
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2000
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to a library"
 msgid_plural "Move %{count} items to a library"
@@ -443,7 +443,7 @@ msgstr[0] "Переместить %{count} объект в библиотеку"
 msgstr[1] "Переместить %{count} объекта в библиотеку"
 msgstr[2] "Переместить %{count} объектов в библиотеку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1993
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1994
 #, elixir-autogen, elixir-format
 msgid "Move 1 item to the trash?"
 msgid_plural "Move %{count} items to the trash?"
@@ -451,7 +451,7 @@ msgstr[0] "Переместить %{count} объект в корзину?"
 msgstr[1] "Переместить %{count} объекта в корзину?"
 msgstr[2] "Переместить %{count} объектов в корзину?"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2051
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2052
 #, elixir-autogen, elixir-format
 msgid "Move to trash"
 msgstr "Переместить в корзину"
@@ -472,7 +472,7 @@ msgstr[0] "%{count} объект перемещён в корзину"
 msgstr[1] "%{count} объекта перемещено в корзину"
 msgstr[2] "%{count} объектов перемещено в корзину"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2023
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2024
 #, elixir-autogen, elixir-format
 msgid "Only people who may see the library can open them."
 msgstr "Открыть их смогут только те, кому видна библиотека."
@@ -482,7 +482,7 @@ msgstr "Открыть их смогут только те, кому видна 
 msgid "Prints"
 msgstr "Отпечатки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1789
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1790
 #, elixir-autogen, elixir-format
 msgid "Remove tags"
 msgstr "Удалить теги"
@@ -500,18 +500,18 @@ msgstr[2] "Восстановлено %{count} объектов"
 msgid "Rows"
 msgstr "Строки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2054
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2055
 #, elixir-autogen, elixir-format
 msgid "Save tags"
 msgstr "Сохранить теги"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1430
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1639
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1431
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1640
 #, elixir-autogen, elixir-format
 msgid "Select"
 msgstr "Выбрать"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1427
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1428
 #, elixir-autogen, elixir-format
 msgid "Select photos"
 msgstr "Выбрать фото"
@@ -521,7 +521,7 @@ msgstr "Выбрать фото"
 msgid "Select this month"
 msgstr "Выбрать этот месяц"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2001
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2002
 #, elixir-autogen, elixir-format
 msgid "Tag 1 item"
 msgid_plural "Tag %{count} items"
@@ -537,17 +537,17 @@ msgstr[0] "Теги добавлены к %{count} объекту"
 msgstr[1] "Теги добавлены к %{count} объектам"
 msgstr[2] "Теги добавлены к %{count} объектам"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1699
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1700
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr "Теги"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2022
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2023
 #, elixir-autogen, elixir-format
 msgid "The originals go to the trash of this library."
 msgstr "Оригиналы попадут в корзину этой библиотеки."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1643
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1644
 #, elixir-autogen, elixir-format
 msgid "This day"
 msgstr "Этот день"
@@ -557,12 +557,12 @@ msgstr "Этот день"
 msgid "This library is shared with signed-in users. Every active account on this site can see what you add."
 msgstr "Эта библиотека открыта всем вошедшим пользователям. Всё, что вы добавите, увидит любой активный аккаунт на сайте."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1642
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1643
 #, elixir-autogen, elixir-format
 msgid "This moment"
 msgstr "Этот момент"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1702
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1703
 #, elixir-autogen, elixir-format
 msgid "Trash"
 msgstr "Корзина"
@@ -572,7 +572,7 @@ msgstr "Корзина"
 msgid "Uncropped"
 msgstr "Без обрезки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2099
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2100
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr "Отменить"
@@ -583,88 +583,88 @@ msgstr "Отменить"
 msgid "Uploads at once"
 msgstr "Загрузок одновременно"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2021
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2022
 #, elixir-autogen, elixir-format
 msgid "You can bring them back from the trash."
 msgstr "Их можно вернуть из корзины."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1773
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1774
 #, elixir-autogen, elixir-format
 msgid "You have no other library to add these to."
 msgstr "У вас нет другой библиотеки, куда их добавить."
 
-#: lib/phoenix_kit_photos/bulk.ex:933
+#: lib/phoenix_kit_photos/bulk.ex:930
 #, elixir-autogen, elixir-format
 msgid "already in that library"
 msgstr "уже в той библиотеке"
 
-#: lib/phoenix_kit_photos/bulk.ex:932
+#: lib/phoenix_kit_photos/bulk.ex:929
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:1157
 #, elixir-autogen, elixir-format
 msgid "already in this library"
 msgstr "уже в этой библиотеке"
 
-#: lib/phoenix_kit_photos/bulk.ex:948
+#: lib/phoenix_kit_photos/bulk.ex:945
 #, elixir-autogen, elixir-format
 msgid "could not be done"
 msgstr "не удалось выполнить"
 
-#: lib/phoenix_kit_photos/bulk.ex:935
+#: lib/phoenix_kit_photos/bulk.ex:932
 #, elixir-autogen, elixir-format
 msgid "in the trash"
 msgstr "в корзине"
 
-#: lib/phoenix_kit_photos/bulk.ex:936
+#: lib/phoenix_kit_photos/bulk.ex:933
 #, elixir-autogen, elixir-format
 msgid "no library chosen"
 msgstr "библиотека не выбрана"
 
-#: lib/phoenix_kit_photos/bulk.ex:930
+#: lib/phoenix_kit_photos/bulk.ex:927
 #, elixir-autogen, elixir-format
 msgid "no longer there"
 msgstr "больше не существует"
 
-#: lib/phoenix_kit_photos/bulk.ex:939
+#: lib/phoenix_kit_photos/bulk.ex:936
 #, elixir-autogen, elixir-format
 msgid "no room left in that library"
 msgstr "в той библиотеке нет места"
 
-#: lib/phoenix_kit_photos/bulk.ex:934
+#: lib/phoenix_kit_photos/bulk.ex:931
 #, elixir-autogen, elixir-format
 msgid "not in the trash"
 msgstr "не в корзине"
 
-#: lib/phoenix_kit_photos/bulk.ex:931
+#: lib/phoenix_kit_photos/bulk.ex:928
 #, elixir-autogen, elixir-format
 msgid "not yours to change"
 msgstr "вы не можете это изменить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1632
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1633
 #, elixir-autogen, elixir-format
 msgid "selected"
 msgstr "выбрано"
 
-#: lib/phoenix_kit_photos/bulk.ex:940
+#: lib/phoenix_kit_photos/bulk.ex:937
 #, elixir-autogen, elixir-format
 msgid "that library keeps its files elsewhere"
 msgstr "та библиотека хранит файлы в другом месте"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1634
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1635
 #, elixir-autogen, elixir-format
 msgid "the most at once"
 msgstr "больше за раз нельзя"
 
-#: lib/phoenix_kit_photos/web/download.ex:148
+#: lib/phoenix_kit_photos/web/download.ex:159
 #, elixir-autogen, elixir-format
 msgid "These files could not be read just now, and are not in this archive:"
 msgstr "Эти файлы сейчас не удалось прочитать, и их нет в архиве:"
 
-#: lib/phoenix_kit_photos/bulk.ex:937
+#: lib/phoenix_kit_photos/bulk.ex:934
 #, elixir-autogen, elixir-format
 msgid "edited here, so it can be copied but not moved"
 msgstr "изменён здесь, поэтому его можно скопировать, но не переместить"
 
-#: lib/phoenix_kit_photos/bulk.ex:938
+#: lib/phoenix_kit_photos/bulk.ex:935
 #, elixir-autogen, elixir-format
 msgid "in use elsewhere on the site"
 msgstr "используется в другом месте сайта"
@@ -736,9 +736,9 @@ msgstr "Все её фото переносятся на эту дату вме�
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:563
 #: lib/phoenix_kit_photos/components/info_panel.ex:605
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:640
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1700
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1808
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:644
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1701
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1809
 #: lib/phoenix_kit_photos/components/stack_edit.ex:188
 #, elixir-autogen, elixir-format
 msgid "Date"
@@ -751,7 +751,7 @@ msgstr "Дата"
 msgid "Description"
 msgstr "Описание"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2038
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2039
 #, elixir-autogen, elixir-format
 msgid "Each photo goes back to its own place in the timeline."
 msgstr "Каждое фото вернётся на своё место в ленте."
@@ -784,13 +784,13 @@ msgstr "Сохранить"
 msgid "Skip"
 msgstr "Пропустить"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1703
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2057
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1704
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2058
 #, elixir-autogen, elixir-format
 msgid "Stack"
 msgstr "В стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2010
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2011
 #, elixir-autogen, elixir-format
 msgid "Stack 1 photo"
 msgid_plural "Stack %{count} photos"
@@ -832,14 +832,14 @@ msgstr "Убрать это фото"
 msgid "That could not be done."
 msgstr "Не удалось это сделать."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:420
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:424
 #: lib/phoenix_kit_photos/components/stack_edit.ex:129
 #: lib/phoenix_kit_photos/details.ex:518
 #, elixir-autogen, elixir-format
 msgid "That date is before 1826 or in the future."
 msgstr "Эта дата раньше 1826 года или в будущем."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:419
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:423
 #: lib/phoenix_kit_photos/components/stack_edit.ex:130
 #: lib/phoenix_kit_photos/details.ex:519
 #, elixir-autogen, elixir-format
@@ -854,7 +854,7 @@ msgstr "Это не дата."
 msgid "The title or the description is too long."
 msgstr "Название или описание слишком длинное."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2027
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2028
 #, elixir-autogen, elixir-format
 msgid "They become one tile in the timeline, in order of when they were taken. Stacks among them are joined."
 msgstr "В ленте они станут одной плиткой, по порядку съёмки. Стопки среди них объединятся."
@@ -865,7 +865,7 @@ msgid "This stack is no longer there."
 msgstr "Этой стопки больше нет."
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:570
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1815
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1816
 #: lib/phoenix_kit_photos/components/stack_edit.ex:203
 #, elixir-autogen, elixir-format
 msgid "Time"
@@ -879,19 +879,19 @@ msgstr "Время"
 msgid "Title"
 msgstr "Название"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1913
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1914
 #, elixir-autogen, elixir-format
 msgid "Title (optional)"
 msgstr "Название (необязательно)"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1704
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2059
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1705
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2060
 #: lib/phoenix_kit_photos/components/stack_edit.ex:248
 #, elixir-autogen, elixir-format
 msgid "Unstack"
 msgstr "Разобрать стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2016
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2017
 #, elixir-autogen, elixir-format
 msgid "Unstack 1 photo"
 msgid_plural "Unstack %{count} photos"
@@ -918,22 +918,22 @@ msgstr "Вернуть исходные даты фото"
 msgid "You may not change this stack."
 msgstr "Вы не можете изменить эту стопку."
 
-#: lib/phoenix_kit_photos/bulk.ex:942
+#: lib/phoenix_kit_photos/bulk.ex:939
 #, elixir-autogen, elixir-format
 msgid "a stack needs at least two photos"
 msgstr "в стопке должно быть хотя бы два фото"
 
-#: lib/phoenix_kit_photos/bulk.ex:944
+#: lib/phoenix_kit_photos/bulk.ex:941
 #, elixir-autogen, elixir-format
 msgid "not all in one library"
 msgstr "не все в одной библиотеке"
 
-#: lib/phoenix_kit_photos/bulk.ex:941
+#: lib/phoenix_kit_photos/bulk.ex:938
 #, elixir-autogen, elixir-format
 msgid "not in a stack"
 msgstr "не в стопке"
 
-#: lib/phoenix_kit_photos/bulk.ex:943
+#: lib/phoenix_kit_photos/bulk.ex:940
 #, elixir-autogen, elixir-format
 msgid "too many photos for one stack"
 msgstr "слишком много фото для одной стопки"
@@ -947,7 +947,7 @@ msgstr[0] "%{count} фото"
 msgstr[1] "%{count} фото"
 msgstr[2] "%{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2013
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2014
 #, elixir-autogen, elixir-format
 msgid "Add 1 item to a stack"
 msgid_plural "Add %{count} items to a stack"
@@ -960,7 +960,7 @@ msgstr[2] "Добавить %{count} объектов в стопку"
 msgid "Add to a stack"
 msgstr "Добавить в стопку"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1669
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1670
 #, elixir-autogen, elixir-format
 msgid "Add to a stack…"
 msgstr "Добавить в стопку…"
@@ -984,7 +984,7 @@ msgstr[2] "В стопку добавлено %{count} объектов"
 msgid "Find a stack by its title"
 msgstr "Найти стопку по названию"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1664
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1665
 #, elixir-autogen, elixir-format
 msgid "New stack"
 msgstr "Новая стопка"
@@ -1014,7 +1014,7 @@ msgstr "Этой стопки больше нет."
 msgid "There are no stacks here yet. Choose two or more photos and make one with New stack."
 msgstr "Стопок здесь пока нет. Выберите два фото или больше и создайте её через «Новая стопка»."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2033
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2034
 #, elixir-autogen, elixir-format
 msgid "They go in among its photos by when they were taken; its cover stays. A stack among them is joined."
 msgstr "Они встанут среди её фото по времени съёмки, обложка останется прежней. Стопка среди них объединится с этой."
@@ -1029,12 +1029,12 @@ msgstr "Стопка без названия"
 msgid "You may not change that stack."
 msgstr "Вы не можете изменить эту стопку."
 
-#: lib/phoenix_kit_photos/bulk.ex:946
+#: lib/phoenix_kit_photos/bulk.ex:943
 #, elixir-autogen, elixir-format
 msgid "already in that stack"
 msgstr "уже в этой стопке"
 
-#: lib/phoenix_kit_photos/bulk.ex:945
+#: lib/phoenix_kit_photos/bulk.ex:942
 #, elixir-autogen, elixir-format
 msgid "no stack chosen"
 msgstr "стопка не выбрана"
@@ -1064,7 +1064,7 @@ msgstr "Мы отправили ссылку для подтверждения �
 msgid "We sent you a confirmation link. Open it, and you can add photos here."
 msgstr "Мы отправили вам ссылку для подтверждения. Откройте её, и вы сможете добавлять сюда фото."
 
-#: lib/phoenix_kit_photos/uploads.ex:416
+#: lib/phoenix_kit_photos/uploads.ex:421
 #, elixir-autogen, elixir-format
 msgid "Your email is not confirmed yet"
 msgstr "Ваш email ещё не подтверждён"
@@ -1089,7 +1089,7 @@ msgstr "Буфер обмена не прочитан. Нажмите «Вста
 msgid "There is no photo on the clipboard. Copy one first, then paste."
 msgstr "В буфере обмена нет фото. Сначала скопируйте его, затем вставьте."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:305
+#: lib/phoenix_kit_photos/components/fetch_list.ex:313
 #, elixir-autogen, elixir-format
 msgid "%{count} cookie"
 msgid_plural "%{count} cookies"
@@ -1129,7 +1129,7 @@ msgstr[0] "Сохранён %{count} файл."
 msgstr[1] "Сохранено %{count} файла."
 msgstr[2] "Сохранено %{count} файлов."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:552
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:556
 #, elixir-autogen, elixir-format
 msgid "%{count} item"
 msgid_plural "%{count} items"
@@ -1158,7 +1158,7 @@ msgstr[2] "%{count} уже были здесь"
 msgid "%{item} of %{items}"
 msgstr "%{item} из %{items}"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:567
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:571
 #, elixir-autogen, elixir-format
 msgid "%{picked} of %{count} chosen"
 msgstr "Выбрано %{picked} из %{count}"
@@ -1178,7 +1178,7 @@ msgstr "%{site} отказался отвечать серверу или поп
 msgid "%{time} left"
 msgstr "осталось %{time}"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:554
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:558
 #, elixir-autogen, elixir-format
 msgid "(the first %{count}; fetch again later for more)"
 msgstr "(первые %{count}; за остальными зайдите позже)"
@@ -1188,17 +1188,17 @@ msgstr "(первые %{count}; за остальными зайдите поз�
 msgid "A live stream cannot be fetched."
 msgstr "Прямую трансляцию скачать нельзя."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:626
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:630
 #, elixir-autogen, elixir-format
 msgid "About %{size}"
 msgstr "Около %{size}"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:569
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:573
 #, elixir-autogen, elixir-format
 msgid "All"
 msgstr "Все"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:620
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:624
 #, elixir-autogen, elixir-format
 msgid "Best available, %{height}p"
 msgstr "Наилучшее доступное, %{height}p"
@@ -1225,13 +1225,13 @@ msgstr "Скачивание"
 msgid "Everything from this link is already here."
 msgstr "Всё по этой ссылке уже здесь."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:712
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:716
 #: lib/phoenix_kit_photos/components/photo_uploader.ex:918
 #, elixir-autogen, elixir-format
 msgid "Fetch"
 msgstr "Скачать"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:710
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:714
 #, elixir-autogen, elixir-format
 msgid "Fetch %{count} item"
 msgid_plural "Fetch %{count} items"
@@ -1239,7 +1239,7 @@ msgstr[0] "Скачать %{count} объект"
 msgstr[1] "Скачать %{count} объекта"
 msgstr[2] "Скачать %{count} объектов"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:504
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:508
 #, elixir-autogen, elixir-format
 msgid "Fetch from a link"
 msgstr "Скачать по ссылке"
@@ -1265,7 +1265,7 @@ msgstr[2] "Скачано с %{site}: %{title} (%{count} файлов)."
 msgid "Fetched from %{site}: everything was already in your library."
 msgstr "Скачано с %{site}: всё уже было в вашей библиотеке."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:266
+#: lib/phoenix_kit_photos/components/fetch_list.ex:274
 #, elixir-autogen, elixir-format
 msgid "Fetched from links"
 msgstr "Скачано по ссылкам"
@@ -1285,18 +1285,18 @@ msgstr "Скачать с %{site} не удалось: %{reason}"
 msgid "Fetching from a link is not available right now."
 msgstr "Скачивание по ссылке сейчас недоступно."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:442
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:446
 #, elixir-autogen, elixir-format
 msgid "Fetching from links"
 msgstr "Скачивание по ссылкам"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:271
+#: lib/phoenix_kit_photos/components/fetch_list.ex:279
 #, elixir-autogen, elixir-format
 msgid "Fetching from links is not available on this site right now."
 msgstr "Скачивание по ссылкам на этом сайте сейчас недоступно."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:318
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:674
+#: lib/phoenix_kit_photos/components/fetch_list.ex:326
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:678
 #, elixir-autogen, elixir-format
 msgid "Forget"
 msgstr "Забыть"
@@ -1307,7 +1307,7 @@ msgstr "Забыть"
 msgid "Forget this link"
 msgstr "Забыть эту ссылку"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:316
+#: lib/phoenix_kit_photos/components/fetch_list.ex:324
 #, elixir-autogen, elixir-format
 msgid "Forget your %{site} login?"
 msgstr "Забыть ваш вход на %{site}?"
@@ -1322,12 +1322,12 @@ msgstr "Найдено. Ждём вашего подтверждения."
 msgid "From a link"
 msgstr "По ссылке"
 
-#: lib/phoenix_kit_photos/fetches.ex:74
+#: lib/phoenix_kit_photos/fetches.ex:78
 #, elixir-autogen, elixir-format
 msgid "I own this, or its owner (or the law) allows me to keep a copy. I am responsible for what I save."
 msgstr "Это моё, или владелец (либо закон) разрешает мне хранить копию. Я отвечаю за то, что сохраняю."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:325
+#: lib/phoenix_kit_photos/components/fetch_list.ex:333
 #, elixir-autogen, elixir-format
 msgid "Install a browser extension that exports cookies as cookies.txt, such as \"Get cookies.txt LOCALLY\" (Chrome, Edge) or \"cookies.txt\" (Firefox)."
 msgstr "Установите расширение браузера, которое экспортирует cookies в формате cookies.txt, например \"Get cookies.txt LOCALLY\" (Chrome, Edge) или \"cookies.txt\" (Firefox)."
@@ -1342,7 +1342,7 @@ msgstr "Объединение видео и звука"
 msgid "Looking at the link…"
 msgstr "Смотрим ссылку…"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:517
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:521
 #, elixir-autogen, elixir-format
 msgid "Looking at what is at %{site}…"
 msgstr "Смотрим, что есть на %{site}…"
@@ -1352,17 +1352,17 @@ msgstr "Смотрим, что есть на %{site}…"
 msgid "No photos or videos were found at this link."
 msgstr "По этой ссылке не найдено ни фото, ни видео."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:570
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:574
 #, elixir-autogen, elixir-format
 msgid "None"
 msgstr "Ни одного"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:253
+#: lib/phoenix_kit_photos/components/fetch_list.ex:261
 #, elixir-autogen, elixir-format
 msgid "None of these cookies is for that site. Export them while you are on the site, logged in."
 msgstr "Ни одна из этих cookies не относится к этому сайту. Экспортируйте их, находясь на сайте и войдя в аккаунт."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:279
+#: lib/phoenix_kit_photos/components/fetch_list.ex:287
 #, elixir-autogen, elixir-format
 msgid "Nothing fetched yet."
 msgstr "Пока ничего не скачано."
@@ -1377,22 +1377,22 @@ msgstr "Здесь нечего скачать: Fotki не умеет читат
 msgid "Nothing was found at this link. It may have been removed, or it is private."
 msgstr "По этой ссылке ничего не найдено. Возможно, содержимое удалено или закрыто."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:326
+#: lib/phoenix_kit_photos/components/fetch_list.ex:334
 #, elixir-autogen, elixir-format
 msgid "Open the site and log in, then export its cookies with the extension."
 msgstr "Откройте сайт и войдите, затем экспортируйте его cookies с помощью расширения."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:268
+#: lib/phoenix_kit_photos/components/fetch_list.ex:276
 #, elixir-autogen, elixir-format
 msgid "Paste a link to a photo, an album or a video into one of your libraries, and it is fetched on the server: you can close the page meanwhile."
 msgstr "Вставьте ссылку на фото, альбом или видео в одну из своих библиотек, и она скачается на сервере: страницу тем временем можно закрыть."
 
-#: lib/phoenix_kit_photos/fetches.ex:598
+#: lib/phoenix_kit_photos/fetches.ex:636
 #, elixir-autogen, elixir-format
 msgid "Posted:"
 msgstr "Опубликовано:"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:609
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:613
 #, elixir-autogen, elixir-format
 msgid "Quality"
 msgstr "Качество"
@@ -1408,12 +1408,12 @@ msgstr "Убрать из списка"
 msgid "Review and fetch"
 msgstr "Проверить и скачать"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:342
+#: lib/phoenix_kit_photos/components/fetch_list.ex:350
 #, elixir-autogen, elixir-format
 msgid "Save login"
 msgstr "Сохранить вход"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:217
+#: lib/phoenix_kit_photos/components/fetch_list.ex:225
 #, elixir-autogen, elixir-format
 msgid "Saved %{count} cookies for %{site}."
 msgstr "Сохранено cookies для %{site}: %{count}."
@@ -1423,23 +1423,23 @@ msgstr "Сохранено cookies для %{site}: %{count}."
 msgid "Saving"
 msgstr "Сохранение"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:330
+#: lib/phoenix_kit_photos/components/fetch_list.ex:338
 #, elixir-autogen, elixir-format
 msgid "Site"
 msgstr "Сайт"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:294
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:529
+#: lib/phoenix_kit_photos/components/fetch_list.ex:302
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:533
 #, elixir-autogen, elixir-format
 msgid "Site logins"
 msgstr "Входы на сайты"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:296
+#: lib/phoenix_kit_photos/components/fetch_list.ex:304
 #, elixir-autogen, elixir-format
 msgid "Some sites, like Instagram and X, show posts only to someone logged in. To fetch from them, give Fotki your own login for that site, as your browser's cookies."
 msgstr "Некоторые сайты, например Instagram и X, показывают публикации только вошедшим. Чтобы скачивать с них, дайте Fotki свой вход на этот сайт в виде cookies вашего браузера."
 
-#: lib/phoenix_kit_photos/fetches.ex:604
+#: lib/phoenix_kit_photos/fetches.ex:642
 #, elixir-autogen, elixir-format
 msgid "Source:"
 msgstr "Источник:"
@@ -1469,7 +1469,7 @@ msgstr "Остановлено."
 msgid "That is not a link to fetch from. Paste one link that starts with https://"
 msgstr "Это не ссылка для скачивания. Вставьте одну ссылку, начинающуюся с https://"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:243
+#: lib/phoenix_kit_photos/components/fetch_list.ex:251
 #, elixir-autogen, elixir-format
 msgid "That is too much text for one site's cookies."
 msgstr "Слишком много текста для cookies одного сайта."
@@ -1479,12 +1479,12 @@ msgstr "Слишком много текста для cookies одного са�
 msgid "The download stopped moving and was ended."
 msgstr "Загрузка перестала продвигаться и была прервана."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:257
+#: lib/phoenix_kit_photos/components/fetch_list.ex:265
 #, elixir-autogen, elixir-format
 msgid "The login could not be saved."
 msgstr "Не удалось сохранить вход."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:338
+#: lib/phoenix_kit_photos/components/fetch_list.ex:346
 #, elixir-autogen, elixir-format
 msgid "The site may limit or block an account used this way. Your login is used only for what you fetch, and you can forget it here at any time."
 msgstr "Сайт может ограничить или заблокировать аккаунт, используемый так. Ваш вход используется только для того, что вы скачиваете, и его можно забыть здесь в любой момент."
@@ -1504,7 +1504,7 @@ msgstr "В хранилище этой библиотеки не осталос�
 msgid "This address cannot be fetched."
 msgstr "Этот адрес скачать нельзя."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:190
+#: lib/phoenix_kit_photos/components/fetch_list.ex:198
 #, elixir-autogen, elixir-format
 msgid "This fetch cannot be tried again right now."
 msgstr "Это скачивание сейчас нельзя повторить."
@@ -1514,12 +1514,12 @@ msgstr "Это скачивание сейчас нельзя повторить
 msgid "This file is larger than fetching allows."
 msgstr "Этот файл больше, чем разрешено для скачивания."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:247
+#: lib/phoenix_kit_photos/components/fetch_list.ex:255
 #, elixir-autogen, elixir-format
 msgid "This is not a cookies.txt export. Export the cookies in the Netscape (cookies.txt) format and paste all of it."
 msgstr "Это не экспорт cookies.txt. Экспортируйте cookies в формате Netscape (cookies.txt) и вставьте всё целиком."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:654
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:658
 #, elixir-autogen, elixir-format
 msgid "This library is shared. Everyone who can see it will see what you fetch, with where it came from."
 msgstr "Это общая библиотека. Все, кто её видит, увидят то, что вы скачаете, вместе с источником."
@@ -1550,12 +1550,12 @@ msgid "Tick the box to confirm you may keep a copy."
 msgstr "Отметьте галочкой, что вы вправе хранить копию."
 
 #: lib/phoenix_kit_photos/components/fetch_cards.ex:110
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:684
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:688
 #, elixir-autogen, elixir-format
 msgid "Try again"
 msgstr "Повторить"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:613
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:617
 #, elixir-autogen, elixir-format
 msgid "Up to %{height}p"
 msgstr "До %{height}p"
@@ -1578,17 +1578,17 @@ msgstr[0] "Ожидание: впереди %{count} скачивание"
 msgstr[1] "Ожидание: впереди %{count} скачивания"
 msgstr[2] "Ожидание: впереди %{count} скачиваний"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:241
+#: lib/phoenix_kit_photos/components/fetch_list.ex:249
 #, elixir-autogen, elixir-format
 msgid "Write the site as its address, like instagram.com."
 msgstr "Укажите сайт его адресом, например instagram.com."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:327
+#: lib/phoenix_kit_photos/components/fetch_list.ex:335
 #, elixir-autogen, elixir-format
 msgid "Write the site below and paste everything the export holds. Only that site's cookies are kept, encrypted."
 msgstr "Укажите сайт ниже и вставьте всё содержимое экспорта. Сохраняются только cookies этого сайта, в зашифрованном виде."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:561
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:565
 #, elixir-autogen, elixir-format
 msgid "You fetched this link into this library before (%{date}). What is already here is not added twice."
 msgstr "Вы уже скачивали эту ссылку в эту библиотеку (%{date}). То, что уже здесь, не добавится повторно."
@@ -1599,18 +1599,18 @@ msgstr "Вы уже скачивали эту ссылку в эту библи�
 msgid "You may not add to this library."
 msgstr "Вы не можете добавлять в эту библиотеку."
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:305
+#: lib/phoenix_kit_photos/components/fetch_list.ex:313
 #, elixir-autogen, elixir-format
 msgid "added %{date}"
 msgstr "добавлено %{date}"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:545
-#: lib/phoenix_kit_photos/fetches.ex:591
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:549
+#: lib/phoenix_kit_photos/fetches.ex:629
 #, elixir-autogen, elixir-format
 msgid "by %{author}"
 msgstr "автор: %{author}"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:334
+#: lib/phoenix_kit_photos/components/fetch_list.ex:342
 #, elixir-autogen, elixir-format
 msgid "cookies.txt"
 msgstr "cookies.txt"
@@ -1620,12 +1620,12 @@ msgstr "cookies.txt"
 msgid "https://… a post, an album or a video"
 msgstr "https://… публикация, альбом или видео"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:307
+#: lib/phoenix_kit_photos/components/fetch_list.ex:315
 #, elixir-autogen, elixir-format
 msgid "refused %{date}: export them again"
 msgstr "отклонено %{date}: экспортируйте их заново"
 
-#: lib/phoenix_kit_photos/components/fetch_list.ex:306
+#: lib/phoenix_kit_photos/components/fetch_list.ex:314
 #, elixir-autogen, elixir-format
 msgid "worked %{date}"
 msgstr "сработало %{date}"
@@ -1671,12 +1671,12 @@ msgid "Anyone signed in who can see the photos"
 msgstr "Все вошедшие, кому видны фото"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:616
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2055
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2056
 #, elixir-autogen, elixir-format
 msgid "Change the date"
 msgstr "Изменить дату"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2004
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2005
 #, elixir-autogen, elixir-format
 msgid "Change the date of 1 item"
 msgid_plural "Change the date of %{count} items"
@@ -1784,12 +1784,12 @@ msgstr "Скрыть другие языки"
 msgid "Info"
 msgstr "Сведения"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1827
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1828
 #, elixir-autogen, elixir-format
 msgid "Instead, give them back their own dates"
 msgstr "Вместо этого вернуть им исходные даты"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1908
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1909
 #, elixir-autogen, elixir-format
 msgid "Instead, remove their place"
 msgstr "Вместо этого удалить их место"
@@ -1830,7 +1830,7 @@ msgstr "Примерно:"
 msgid "No comments are shown on this library's photos."
 msgstr "Под фото этой библиотеки комментарии не показываются."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1896
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1897
 #, elixir-autogen, elixir-format
 msgid "No place chosen yet"
 msgstr "Место ещё не выбрано"
@@ -1890,7 +1890,7 @@ msgstr "Не вошедшие в аккаунт тоже могут читать
 msgid "Phones record the exact spot in every photo. Downloaded originals can still carry it."
 msgstr "Телефоны записывают в каждое фото точное место. В скачанных оригиналах оно может сохраниться."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1701
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1702
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr "Место"
@@ -1910,7 +1910,7 @@ msgstr "То же место, что у фото, снятого примерн�
 msgid "Saturday"
 msgstr "Суббота"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2056
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2057
 #, elixir-autogen, elixir-format
 msgid "Save the place"
 msgstr "Сохранить место"
@@ -1927,24 +1927,24 @@ msgid "Saved"
 msgstr "Сохранено"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:686
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1851
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1852
 #, elixir-autogen, elixir-format
 msgid "Search"
 msgstr "Найти"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:681
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1843
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1844
 #, elixir-autogen, elixir-format
 msgid "Search for a place"
 msgstr "Поиск места"
 
 #: lib/phoenix_kit_photos/components/info_panel.ex:680
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1842
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1843
 #, elixir-autogen, elixir-format
 msgid "Search for a place or an address"
 msgstr "Поиск места или адреса"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2047
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2048
 #, elixir-autogen, elixir-format
 msgid "Search for the place, or click the map. They all get the same place."
 msgstr "Найдите место или нажмите на карту. Всем будет присвоено одно и то же место."
@@ -1973,7 +1973,7 @@ msgstr[0] "Дата стопки из %{count} фото"
 msgstr[1] "Дата стопки из %{count} фото"
 msgstr[2] "Дата стопки из %{count} фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2042
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2043
 #, elixir-autogen, elixir-format
 msgid "The earliest gets this date and the others move with it, keeping their order and the time between them. A stack moves whole."
 msgstr "Самое раннее получит эту дату, остальные сдвинутся вместе с ним, сохраняя порядок и промежутки между собой. Стопка сдвигается целиком."
@@ -1998,7 +1998,7 @@ msgstr "Поиск по карте занят. Попробуйте чуть п�
 msgid "The owner and members see where each photo was taken. Nobody else does."
 msgstr "Владелец и участники видят, где снято каждое фото. Больше никто."
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1895
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1896
 #, elixir-autogen, elixir-format
 msgid "The pin on the map"
 msgstr "Метка на карте"
@@ -2084,7 +2084,7 @@ msgstr "Когда снята стопка"
 msgid "Where it was taken"
 msgstr "Место съёмки"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:2007
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:2008
 #, elixir-autogen, elixir-format
 msgid "Where was 1 item taken?"
 msgid_plural "Where were %{count} items taken?"
@@ -2117,7 +2117,7 @@ msgstr "Язык оригинала: %{language}"
 msgid "You may not change this photo."
 msgstr "Вы не можете изменить это фото."
 
-#: lib/phoenix_kit_photos/bulk.ex:947
+#: lib/phoenix_kit_photos/bulk.ex:944
 #, elixir-autogen, elixir-format
 msgid "that date is before 1826 or in the future"
 msgstr "эта дата раньше 1826 года или в будущем"
@@ -2299,7 +2299,7 @@ msgid "Amber"
 msgstr "Янтарный"
 
 #: lib/phoenix_kit_photos/components/photo_timeline.ex:1346
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1705
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1706
 #, elixir-autogen, elixir-format
 msgid "Chapter"
 msgstr "Глава"
@@ -2491,12 +2491,12 @@ msgstr "фото пока нет"
 msgid "since %{date}"
 msgstr "с %{date}"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:636
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:640
 #, elixir-autogen, elixir-format
 msgid "Otherwise each file keeps its own date, or the date it was posted."
 msgstr "Иначе у каждого файла останется своя дата или дата публикации."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:633
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:637
 #, elixir-autogen, elixir-format
 msgid "Set the date myself"
 msgstr "Указать дату самому"
@@ -2508,12 +2508,12 @@ msgstr "Указать дату самому"
 msgid "Show"
 msgstr "Показать"
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:648
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:652
 #, elixir-autogen, elixir-format
 msgid "The earliest file gets this date; the others move with it and keep their order."
 msgstr "Самый ранний файл получит эту дату; остальные сдвинутся вместе с ним и сохранят порядок."
 
-#: lib/phoenix_kit_photos/components/link_fetcher.ex:644
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:648
 #, elixir-autogen, elixir-format
 msgid "Time (optional)"
 msgstr "Время (необязательно)"
@@ -2544,8 +2544,8 @@ msgid "Back to the month"
 msgstr "Вернуться к месяцу"
 
 #: lib/phoenix_kit_photos/components/photo_timeline.ex:1333
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1415
 #: lib/phoenix_kit_photos/components/photo_timeline.ex:1416
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1417
 #, elixir-autogen, elixir-format
 msgid "Copy link to here"
 msgstr "Копировать ссылку на это место"
@@ -2565,13 +2565,13 @@ msgstr "Следующий день с фото"
 msgid "Previous day with photos"
 msgstr "Предыдущий день с фото"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1391
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1395
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1392
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1396
 #, elixir-autogen, elixir-format
 msgid "Timeline"
 msgstr "Хронология"
 
-#: lib/phoenix_kit_photos/components/photo_timeline.ex:1384
+#: lib/phoenix_kit_photos/components/photo_timeline.ex:1385
 #, elixir-autogen, elixir-format
 msgid "Views"
 msgstr "Виды"
@@ -2585,3 +2585,9 @@ msgstr "Скопировать ссылку на этот месяц"
 #, elixir-autogen, elixir-format
 msgid "More for %{month}"
 msgstr "Ещё: %{month}"
+
+#: lib/phoenix_kit_photos/components/fetch_list.ex:193
+#: lib/phoenix_kit_photos/components/link_fetcher.ex:421
+#, elixir-autogen, elixir-format
+msgid "The last run is still stopping. Try again in a moment."
+msgstr "Прошлый запуск ещё останавливается. Попробуйте чуть позже."

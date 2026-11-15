@@ -47,10 +47,21 @@ defmodule PhoenixKitPhotos.Web.Download do
     scope = conn.assigns[:phoenix_kit_current_scope]
     signed_in? = Libraries.authenticated_reader?(scope)
     ids = conn.params |> Map.get("ids") |> requested_ids()
-    ids = if signed_in?, do: ids, else: Enum.take(ids, @visitor_files)
 
     if signed_in? or allowed?(conn) do
-      answer(conn, Bulk.plan(:download, Bulk.whole_stacks(ids, :download, scope), scope).files)
+      # A visitor's cap counts files, so it is taken after each stack cover has become all
+      # of its files (200 covers could otherwise be thousands of files). The ids asked
+      # about are capped first too, so a visitor cannot make the expansion itself large.
+      ids =
+        if signed_in?,
+          do: Bulk.whole_stacks(ids, :download, scope),
+          else:
+            ids
+            |> Enum.take(@visitor_files)
+            |> Bulk.whole_stacks(:download, scope)
+            |> Enum.take(@visitor_files)
+
+      answer(conn, Bulk.plan(:download, ids, scope).files)
     else
       conn |> send_resp(429, "") |> halt()
     end

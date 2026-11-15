@@ -24,6 +24,7 @@ defmodule PhoenixKitPhotos.BulkTest do
 
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
+  alias PhoenixKit.Modules.Storage.ManualLocation
   alias PhoenixKitPhotos.Bulk
 
   # Core reads a member's role with `String.to_existing_atom/1`, and no module it loads here
@@ -533,7 +534,7 @@ defmodule PhoenixKitPhotos.BulkTest do
       assert plan.place == {:set, {58.38, 26.72}, "Tartu"}
       assert %{done: [_, _]} = Bulk.run(plan)
       assert {reload(a).latitude, reload(b).longitude} == {58.38, 26.72}
-      assert PhoenixKit.Modules.Storage.ManualLocation.place_name(reload(a)) == "Tartu"
+      assert ManualLocation.place_name(reload(a)) == "Tartu"
 
       assert Bulk.plan(:place, [a.uuid], ctx.scope, %{"lat" => "200", "lon" => "0"}).place == nil
 

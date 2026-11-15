@@ -19,6 +19,7 @@ defmodule PhoenixKitPhotos.ChapterSections do
 
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  alias PhoenixKit.Modules.Languages
   alias PhoenixKitPhotos.Chapter
   alias PhoenixKitPhotos.Timeline
 
@@ -228,7 +229,7 @@ defmodule PhoenixKitPhotos.ChapterSections do
   # The reader's language (the request's; this runs in their LiveView), for a chapter's
   # title and description in it.
   defp reader_lang do
-    PhoenixKit.Modules.Languages.request_locale() || Gettext.get_locale(PhoenixKitPhotos.Gettext)
+    Languages.request_locale() || Gettext.get_locale(PhoenixKitPhotos.Gettext)
   rescue
     _ -> nil
   end

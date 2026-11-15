@@ -6,6 +6,11 @@ defmodule PhoenixKitPhotos.API do
   what would happen and to which files, and nothing here deletes for good.
 
   A key acts as its owner: `ctx.scope` is checked for each file, whatever the key's scopes say.
+
+  Ids are single files, as `photos.find_files` lists them: every file of a stack, not only its
+  cover. So a stack is not expanded here, unlike a person's choice on the timeline, where a
+  cover stands for its whole stack (`Bulk.whole_stacks/3`). Trashing a cover trashes that file,
+  and the stack's next file becomes its cover.
   """
 
   import Ecto.Query, warn: false

@@ -91,14 +91,14 @@ defmodule PhoenixKitPhotos.Fetches.ProbeJob do
 
     case limit(info) do
       :ok ->
-        Fetches.write(fetch, %{
+        looked_at(fetch, %{
           status: "ready",
           tool: tool,
           info: Map.put(info, "previous", previous(fetch))
         })
 
       {:error, code} ->
-        Fetches.write(fetch, %{status: "unavailable", tool: tool, info: info, error_code: code})
+        looked_at(fetch, %{status: "unavailable", tool: tool, info: info, error_code: code})
     end
     |> looked()
   end
@@ -110,9 +110,13 @@ defmodule PhoenixKitPhotos.Fetches.ProbeJob do
     Logger.info("[Fetches] look at #{fetch.site} found nothing to fetch (#{code}): #{detail}")
 
     fetch
-    |> Fetches.write(%{status: "unavailable", error_code: code, error: detail})
+    |> looked_at(%{status: "unavailable", error_code: code, error: detail})
     |> looked()
   end
+
+  # Only while the row is still being looked at: a person who cancelled during the look
+  # deleted it, and there is nothing to write to (nor anyone to tell).
+  defp looked_at(fetch, attrs), do: Fetches.transition(fetch, ["probing"], attrs)
 
   defp looked({:ok, fetch}), do: Notify.looked(fetch)
   defp looked(_), do: :ok

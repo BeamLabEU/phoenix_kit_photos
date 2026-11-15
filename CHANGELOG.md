@@ -63,6 +63,27 @@
 - A bulk copy or move that fails for a file now says why in the log (the file and the
   error); the person was told "failed" and the log said nothing.
 
+- **Fetching: cancel and Retry no longer race the job.** A fetch's status now changes
+  only from the status it was in (`Fetches.transition/4`). A cancel that landed while a
+  job was starting could be missed, and the whole collection still downloaded. A Retry
+  pressed while the cancelled run was still stopping left the fetch "queued" with no
+  job, and was then marked cancelled again. It now says "The last run is still
+  stopping. Try again in a moment." Cancelling during the look no longer crashes the
+  look's job.
+- A signed-out visitor's 200-file download limit now counts files after stack covers
+  become their stacks.
+- A cookies.txt exported on a site's other name (`twitter.com` for `x.com`, `fb.com`)
+  is now a login for that site. Before, all of its cookies were thrown away.
+- A chapter whose cover is not a file of its library is saved without the cover
+  instead of refused with "This chapter is no longer there."
+- A fetch tool's 64 MB output cap now counts long lines whole.
+- `Uploads.still_preparing/1` checks only the files it is asked about, not every made
+  variant on the site.
+- The test suite migrates its database to the resolved core's schema first
+  (`PhoenixKit.Migration.ensure_current/2`). Dependencies are updated to core 3.6.0.
+
+See `dev_docs/reviews/2026-11-15-since-0.3.0.md`.
+
 ### Added
 
 - `PhoenixKitPhotos.StoreUploadJob` (Oban queue `photo_uploads`): add

@@ -188,7 +188,8 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
     receive do
       {^port, {:data, {:eol, chunk}}} ->
         line = IO.iodata_to_binary(Enum.reverse([chunk | state.partial]))
-        state = %{state | partial: [], partial_bytes: 0, total: state.total + byte_size(chunk)}
+        # The whole line counts, its earlier `:noeol` parts too.
+        state = %{state | partial: [], partial_bytes: 0, total: state.total + byte_size(line)}
 
         if state.total > @max_output_bytes do
           stop(state, :too_much)

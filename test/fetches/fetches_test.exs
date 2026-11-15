@@ -16,6 +16,7 @@ defmodule PhoenixKitPhotos.FetchesTest do
   alias PhoenixKit.Modules.Storage.Bucket
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
   alias PhoenixKit.Modules.Storage.FileDetails
+  alias PhoenixKit.Modules.Storage.ManualDate
   alias PhoenixKitPhotos.Fetches
   alias PhoenixKitPhotos.Fetches.{Fetch, FetchJob, Item, Notify, ProbeJob, SiteLogin, SiteLogins}
 
@@ -402,7 +403,7 @@ defmodule PhoenixKitPhotos.FetchesTest do
 
       earliest =
         files
-        |> Enum.map(&PhoenixKit.Modules.Storage.ManualDate.local/1)
+        |> Enum.map(&ManualDate.local/1)
         |> Enum.min(NaiveDateTime)
 
       assert NaiveDateTime.to_date(earliest) == ~D[1999-12-31]
@@ -603,6 +604,36 @@ defmodule PhoenixKitPhotos.FetchesTest do
       stat = File.read("/proc/#{child}/stat")
       assert match?({:error, _}, stat) or elem(stat, 1) =~ ~r/\) Z/
     end
+
+    test "cancelling during the look: the look ends with no row to write, and no crash", ctx do
+      assert {:ok, fetch} = Fetches.start(ctx.scope, ctx.library.uuid, "https://site.example/a/1")
+      assert {:ok, :removed} = Fetches.cancel(ctx.scope, fetch.uuid)
+
+      # The job that was already looking finishes its look now.
+      assert :ok = ProbeJob.probe(fetch)
+      refute TestRepo.get(Fetch, fetch.uuid)
+    end
+
+    test "a job's copy read before the cancel does not undo it", ctx do
+      fetch = started!(ctx)
+      {:ok, queued} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true})
+      assert {:ok, %{status: "cancelled"}} = Fetches.cancel(ctx.scope, fetch.uuid)
+
+      # What `FetchJob.start_running` writes, from the copy it read before.
+      assert {:error, :moved_on} =
+               Fetches.transition(queued, ["queued", "running"], %{status: "running"})
+
+      assert %{status: "cancelled"} = TestRepo.get!(Fetch, fetch.uuid)
+    end
+
+    test "a fetch its job already ended is not cancelled over", ctx do
+      fetch = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true})
+      done = run!(fetch)
+      assert done.status == "done"
+      assert {:error, :ended} = Fetches.cancel(ctx.scope, fetch.uuid)
+      assert %{status: "done"} = TestRepo.get!(Fetch, fetch.uuid)
+    end
   end
 
   describe "retry/2" do
@@ -618,6 +649,33 @@ defmodule PhoenixKitPhotos.FetchesTest do
       assert {:ok, queued} = Fetches.retry(ctx.scope, done.uuid)
       assert queued.status == "queued"
       assert queued.choices["items"] == [2]
+    end
+
+    test "refused while the last run is still stopping, and the row is left as it was", ctx do
+      fetch = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true})
+      assert {:ok, %{status: "cancelled"}} = Fetches.cancel(ctx.scope, fetch.uuid)
+
+      # The cancelled run is still storing the file in hand: its job is executing.
+      TestRepo.update_all(
+        from(j in Oban.Job,
+          where:
+            j.worker == "PhoenixKitPhotos.Fetches.FetchJob" and
+              fragment("?->>'fetch' = ?", j.args, ^fetch.uuid)
+        ),
+        set: [state: "executing"]
+      )
+
+      assert {:error, :stopping} = Fetches.retry(ctx.scope, fetch.uuid)
+      assert %{status: "cancelled"} = TestRepo.get!(Fetch, fetch.uuid)
+
+      # Once it has stopped, Retry queues a job of its own.
+      TestRepo.update_all(
+        from(j in Oban.Job, where: fragment("?->>'fetch' = ?", j.args, ^fetch.uuid)),
+        set: [state: "completed"]
+      )
+
+      assert {:ok, %{status: "queued"}} = Fetches.retry(ctx.scope, fetch.uuid)
     end
 
     test "a look that failed is looked at again", ctx do
@@ -682,6 +740,21 @@ defmodule PhoenixKitPhotos.FetchesTest do
       assert {:error, :empty} = SiteLogins.put(ctx.scope, "x.com", @cookies)
       assert :ok = SiteLogins.delete(ctx.scope, "site.example")
       assert [] == SiteLogins.list(ctx.scope)
+    end
+
+    test "a cookies.txt exported on a site's other name is a login for the site", ctx do
+      cookies =
+        ".twitter.com\tTRUE\t/\tTRUE\t0\tauth_token\tt0ken\n" <>
+          ".x.com\tTRUE\t/\tTRUE\t0\tct0\tcsrf\n.bank.example\tTRUE\t/\tTRUE\t0\ts\tnope\n"
+
+      assert {:ok, login} = SiteLogins.put(ctx.scope, "https://twitter.com/someone", cookies)
+      assert login.site == "x.com"
+      assert login.cookie_count == 2
+
+      dir = Path.join(ctx.work, "tw")
+      path = SiteLogins.cookie_file(to_string(ctx.owner.uuid), "https://twitter.com/a/1", dir)
+      assert File.read!(path) =~ "auth_token\tt0ken"
+      refute File.read!(path) =~ "nope"
     end
   end
 

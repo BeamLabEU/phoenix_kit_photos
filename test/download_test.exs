@@ -6,6 +6,7 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
   alias PhoenixKitPhotos.Web.Download
 
   setup do
+    _ = start_supervised(PhoenixKit.PubSub.Manager)
     owner = user_fixture("dl-owner-#{System.unique_integer([:positive])}@example.com")
     %{owner: owner, library: library_fixture(owner)}
   end
@@ -70,6 +71,23 @@ defmodule PhoenixKitPhotos.Web.DownloadTest do
     fillers = for _ <- 1..200, do: Ecto.UUID.generate()
     assert post_ids(fillers ++ [file.uuid], nil).status == 404
     assert post_ids([file.uuid], nil).status == 200
+  end
+
+  # The cap counts files, and a stack cover asks for all of its files.
+  test "a visitor's cap holds after stack covers become their stacks", ctx do
+    alias PhoenixKit.Modules.Storage.Stacks
+
+    ctx.library |> Ecto.Changeset.change(visibility: "site") |> TestRepo.update!()
+    files = for _ <- 1..201, do: file_fixture(ctx.owner, %{library_uuid: ctx.library.uuid})
+    {stacked, singles} = Enum.split(files, 3)
+    {:ok, _} = Stacks.create(Enum.map(stacked, & &1.uuid), scope_for(ctx.owner))
+
+    # 1 cover + 198 singles = 199 ids, 201 files once the cover is its stack.
+    ids = [hd(stacked).uuid | Enum.map(Enum.take(singles, 198), & &1.uuid)]
+    conn = post_ids(ids, nil)
+    assert conn.status == 200
+    assert {:ok, [{_name, note}]} = :zip.unzip(conn.resp_body, [:memory])
+    assert note |> String.split("\r\n", trim: true) |> tl() |> length() == 200
   end
 
   # A session is minted for an account nobody confirmed, so signing up with any address must not

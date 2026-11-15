@@ -189,8 +189,8 @@ defmodule PhoenixKitPhotos.Chapters do
 
   defp save(changeset, write) do
     with :ok <- valid(changeset),
+         changeset = drop_foreign_cover(changeset),
          chapter = Ecto.Changeset.apply_changes(changeset),
-         :ok <- check_cover(chapter),
          :ok <- check_parent(chapter),
          :ok <- check_children(chapter),
          {:ok, saved} <- write.(changeset) do
@@ -202,15 +202,19 @@ defmodule PhoenixKitPhotos.Chapters do
   defp valid(%Ecto.Changeset{valid?: true}), do: :ok
   defp valid(changeset), do: {:error, changeset}
 
-  # A cover is a file of the library; any other is forgotten rather than refused.
-  defp check_cover(%Chapter{cover_file_uuid: nil}), do: :ok
+  # A cover is a file of the library; any other (moved to another library since it was
+  # chosen, or sent by a stale form) is forgotten rather than refused, and the chapter is
+  # saved without one.
+  defp drop_foreign_cover(changeset) do
+    cover = Ecto.Changeset.get_field(changeset, :cover_file_uuid)
+    library = Ecto.Changeset.get_field(changeset, :library_uuid)
 
-  defp check_cover(%Chapter{cover_file_uuid: cover, library_uuid: library}) do
-    if repo().exists?(
-         from(f in StorageFile, where: f.uuid == ^cover and f.library_uuid == ^library)
-       ),
-       do: :ok,
-       else: {:error, :not_found}
+    if is_nil(cover) or
+         repo().exists?(
+           from(f in StorageFile, where: f.uuid == ^cover and f.library_uuid == ^library)
+         ),
+       do: changeset,
+       else: Ecto.Changeset.put_change(changeset, :cover_file_uuid, nil)
   end
 
   defp check_parent(%Chapter{parent_uuid: nil}), do: :ok

@@ -14,18 +14,21 @@ defmodule PhoenixKitPhotos.Fetches.CookiesTxt do
   @header "# Netscape HTTP Cookie File"
 
   @doc """
-  The lines of `text` for `site` (`"instagram.com"`), as a cookies.txt the tools read,
-  with how many cookies it holds: `{:ok, text, count}`, or `{:error, :empty}` when
-  none is for that site, or `{:error, :not_cookies_txt}` when the text is not in this
-  format at all.
+  The lines of `text` for `site` (`"instagram.com"`), or for any of a list of domains
+  one site goes by (`["x.com", "twitter.com"]`), as a cookies.txt the tools read, with
+  how many cookies it holds: `{:ok, text, count}`, or `{:error, :empty}` when none is
+  for that site, or `{:error, :not_cookies_txt}` when the text is not in this format at
+  all.
   """
-  @spec for_site(String.t(), String.t()) ::
+  @spec for_site(String.t(), String.t() | [String.t()]) ::
           {:ok, String.t(), pos_integer()} | {:error, :empty | :not_cookies_txt}
-  def for_site(text, site) when is_binary(text) and is_binary(site) do
-    lines = parse(text)
-    site = site |> String.downcase() |> String.replace_prefix("www.", "")
+  def for_site(text, site) when is_binary(site), do: for_site(text, [site])
 
-    case {lines, Enum.filter(lines, &for_site?(&1, site))} do
+  def for_site(text, sites) when is_binary(text) and is_list(sites) do
+    lines = parse(text)
+    sites = Enum.map(sites, &(&1 |> String.downcase() |> String.replace_prefix("www.", "")))
+
+    case {lines, Enum.filter(lines, fn line -> Enum.any?(sites, &for_site?(line, &1)) end)} do
       {[], _} ->
         {:error, :not_cookies_txt}
 

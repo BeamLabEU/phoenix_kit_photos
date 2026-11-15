@@ -8,6 +8,7 @@ defmodule PhoenixKitPhotos.PhotoTimelineChaptersTest do
   use PhoenixKitPhotos.DataCase, async: false
   import Phoenix.LiveViewTest
 
+  alias PhoenixKit.Utils.Multilang
   alias PhoenixKitPhotos.Chapters
 
   @endpoint PhoenixKitPhotos.TestEndpoint
@@ -120,7 +121,7 @@ defmodule PhoenixKitPhotos.PhotoTimelineChaptersTest do
       })
 
     assert [%{code: "et", is_primary: true}, _, _] =
-             PhoenixKit.Utils.Multilang.build_language_tabs()
+             Multilang.build_language_tabs()
 
     ctx.view
     |> element("#test-timeline-jump")

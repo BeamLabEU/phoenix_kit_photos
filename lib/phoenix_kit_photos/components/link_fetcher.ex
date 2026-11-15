@@ -57,6 +57,7 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
 
   alias PhoenixKit.Modules.Storage.Libraries
   alias PhoenixKit.Users.Auth.Scope
+  alias PhoenixKitPhotos.Components.PhotoTimeline
   alias PhoenixKitPhotos.{Fetches, LiveUpdates, Uploads}
   alias PhoenixKitPhotos.Fetches.Fetch
 
@@ -118,7 +119,7 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
       |> assign(:logins_path, assigns[:logins_path])
       |> assign(
         :photo_path,
-        PhoenixKitPhotos.Components.PhotoTimeline.photo_path(assigns[:photo_path])
+        PhotoTimeline.photo_path(assigns[:photo_path])
       )
       |> assign(:library_uuid, library_uuid)
       |> assign(:enabled, enabled)
@@ -416,6 +417,10 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
   defp confirm_error(:no_items), do: gettext("Choose at least one item to fetch.")
   defp confirm_error(:nothing_missing), do: gettext("Everything from this link is already here.")
   defp confirm_error(:not_ready), do: gettext("This link is not ready to fetch any more.")
+
+  defp confirm_error(:stopping),
+    do: gettext("The last run is still stopping. Try again in a moment.")
+
   defp confirm_error(:bad_date), do: gettext("That is not a date.")
   defp confirm_error(:implausible_date), do: gettext("That date is before 1826 or in the future.")
   defp confirm_error(reason), do: start_error(reason)

@@ -794,10 +794,10 @@ defmodule PhoenixKitPhotos.Timeline do
 
     %{
       file_uuid: file.uuid,
-      filename: file.original_file_name || file.file_name,
+      filename: file.original_file_name,
       file_type: file.file_type,
       mime_type: file.mime_type,
-      size: file.size || 0,
+      size: file.size,
       inserted_at: file.inserted_at,
       width: file.width,
       height: file.height,

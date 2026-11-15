@@ -201,7 +201,7 @@ defmodule PhoenixKitPhotos.Fetches.ProbeJob do
   # "Unavailable": a login is what shows it, unless the look already had the person's login
   # (then it is not there for them), or the reason says it is gone.
   defp gallery_dl_code(reported, stderr, with_login) do
-    text = Enum.join(List.wrap(reported) ++ [stderr || ""], "\n")
+    text = Enum.join(List.wrap(reported) ++ [stderr], "\n")
 
     case Errors.classify(text) do
       "failed" when is_binary(reported) ->

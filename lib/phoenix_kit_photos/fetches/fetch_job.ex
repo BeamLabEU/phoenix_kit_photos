@@ -387,10 +387,8 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
     now = System.monotonic_time(:millisecond)
 
     if force or now - state.written_at >= @write_every_ms do
-      case Fetches.put_progress(state.fetch, state.progress) do
-        {:ok, fetch} -> %{state | fetch: fetch, written_at: now}
-        _ -> %{state | written_at: now}
-      end
+      {:ok, fetch} = Fetches.put_progress(state.fetch, state.progress)
+      %{state | fetch: fetch, written_at: now}
     else
       state
     end

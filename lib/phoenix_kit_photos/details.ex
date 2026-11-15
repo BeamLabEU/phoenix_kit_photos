@@ -93,9 +93,8 @@ defmodule PhoenixKitPhotos.Details do
   end
 
   defp source_language(file, shown) do
-    data = if is_map(file.data), do: file.data, else: %{}
-
-    Enum.find_value(Enum.sort(data), fn
+    # `data` is NOT NULL (default `{}`), so always a map.
+    Enum.find_value(Enum.sort(file.data), fn
       {code, %{} = entry} ->
         if (present?(shown.title) and entry["title"] == shown.title) or
              (present?(shown.description) and entry["description"] == shown.description),
@@ -274,7 +273,7 @@ defmodule PhoenixKitPhotos.Details do
     exif = (file.metadata || %{})["exif"] || %{}
 
     %{
-      name: file.original_file_name || file.file_name,
+      name: file.original_file_name,
       type: file.file_type,
       size: file.size,
       width: file.width,

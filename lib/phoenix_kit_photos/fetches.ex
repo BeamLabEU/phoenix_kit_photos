@@ -771,7 +771,9 @@ defmodule PhoenixKitPhotos.Fetches do
 
   @doc false
   # Writes `progress` alone and tells the pages with the row as it now is: a job's own
-  # copy may be stale (the person cancelled meanwhile), and must not undo that.
+  # copy may be stale (the person cancelled meanwhile), and must not undo that. Always
+  # `{:ok, _}`: a row gone meanwhile answers with the job's copy.
+  @spec put_progress(Fetch.t(), map()) :: {:ok, Fetch.t()}
   def put_progress(%Fetch{uuid: uuid} = fetch, progress) do
     case repo().update_all(from(f in Fetch, where: f.uuid == ^uuid, select: f),
            set: [progress: progress, updated_at: now()]

@@ -102,7 +102,9 @@ defmodule PhoenixKitPhotos.Bulk do
           stack: FileStack.t() | nil,
           add: [String.t()],
           remove: [String.t()],
-          title: String.t() | nil
+          title: String.t() | nil,
+          date: {:set, Date.t() | NaiveDateTime.t()} | :reset | nil,
+          place: {:set, {float(), float()}, String.t() | nil} | :clear | nil
         }
 
   @doc "The most files one action takes."

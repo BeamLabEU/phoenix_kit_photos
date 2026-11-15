@@ -18,7 +18,7 @@ defmodule PhoenixKitPhotos.MixProject do
       package: package(),
       docs: docs(),
       source_url: @source_url,
-      dialyzer: [plt_add_apps: [:phoenix_kit, :mix]]
+      dialyzer: [plt_add_apps: [:phoenix_kit, :mix], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 

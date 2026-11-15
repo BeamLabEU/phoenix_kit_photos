@@ -294,8 +294,7 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   defp loop(%{ref: ref} = state) do
     receive do
       {^ref, {:line, line}} ->
-        state = if state.stop, do: state, else: line(state, line)
-        state |> write(false) |> loop()
+        state |> line_unless_stopped(line) |> write(false) |> loop()
 
       {^ref, {:exit, status}} ->
         Map.put(state, :exit, status)
@@ -308,6 +307,15 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
         loop(state)
     end
   end
+
+  # After a stop that ends the fetch for good (too big, no room, no right to add), the
+  # tool's remaining lines are ignored: nothing more could be stored. After the person's
+  # cancel they are still read, so a file the tool had already reported when the cancel
+  # came in is stored, as the moduledoc says.
+  defp line_unless_stopped(%{stop: stop} = state, text) when stop in [nil, "cancelled"],
+    do: line(state, text)
+
+  defp line_unless_stopped(state, _text), do: state
 
   # yt-dlp's lines
   defp line(%{tool: :yt_dlp} = state, text) do

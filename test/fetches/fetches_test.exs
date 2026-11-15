@@ -126,6 +126,16 @@ defmodule PhoenixKitPhotos.FetchesTest do
     TestRepo.get!(Fetch, fetch.uuid)
   end
 
+  defp wait_for_mailbox(pid, count, tries \\ 500) do
+    {:message_queue_len, len} = Process.info(pid, :message_queue_len)
+
+    cond do
+      len >= count -> :ok
+      tries == 0 -> flunk("#{len} of #{count} messages reached the job")
+      true -> Process.sleep(10) && wait_for_mailbox(pid, count, tries - 1)
+    end
+  end
+
   defp library_files(library) do
     TestRepo.all(
       from(f in StorageFile,
@@ -603,6 +613,28 @@ defmodule PhoenixKitPhotos.FetchesTest do
       assert %{status: "cancelled"} = TestRepo.get!(Fetch, fetch.uuid)
       stat = File.read("/proc/#{child}/stat")
       assert match?({:error, _}, stat) or elem(stat, 1) =~ ~r/\) Z/
+    end
+
+    test "a file the tool reported as the cancel came in is still stored", ctx do
+      mode("wait_go")
+      fetch = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true})
+      Fetches.subscribe(ctx.scope)
+
+      task = Task.async(fn -> FetchJob.perform(%Oban.Job{args: %{"fetch" => fetch.uuid}}) end)
+
+      assert_receive {:phoenix_kit_photos_fetch, %Fetch{progress: %{"saved" => 1}}}, 10_000
+
+      # Held, so the cancel and the second file's lines queue up in that order.
+      :erlang.suspend_process(task.pid)
+      assert {:ok, %{status: "cancelled"}} = Fetches.cancel(ctx.scope, fetch.uuid)
+      File.write!(Path.join([ctx.work, fetch.uuid, "go"]), "")
+      wait_for_mailbox(task.pid, 4)
+      :erlang.resume_process(task.pid)
+
+      assert :ok = Task.await(task, 15_000)
+      assert %{status: "cancelled", progress: %{"saved" => 2}} = TestRepo.get!(Fetch, fetch.uuid)
+      assert length(library_files(ctx.library)) == 2
     end
 
     test "cancelling during the look: the look ends with no row to write, and no crash", ctx do

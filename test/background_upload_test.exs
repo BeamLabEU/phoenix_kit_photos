@@ -331,10 +331,22 @@ defmodule PhoenixKitPhotos.BackgroundUploadTest do
 
     test "the sweep job runs against the jobs table, and one at most is waiting", _ctx do
       assert :ok = Oban.Testing.perform_job(StagingSweepJob, %{}, repo: TestRepo)
+      assert [_next] = Oban.Testing.all_enqueued(repo: TestRepo, worker: StagingSweepJob)
 
       StagingSweepJob.schedule()
       StagingSweepJob.schedule()
       assert [_one] = Oban.Testing.all_enqueued(repo: TestRepo, worker: StagingSweepJob)
+    end
+
+    test "fetch cleanup stays on the fetch queue without needing the upload queue", _ctx do
+      assert :ok =
+               Oban.Testing.perform_job(StagingSweepJob, %{},
+                 repo: TestRepo,
+                 queue: :photo_fetches
+               )
+
+      assert [%{queue: "photo_fetches"}] =
+               Oban.Testing.all_enqueued(repo: TestRepo, worker: StagingSweepJob)
     end
   end
 end

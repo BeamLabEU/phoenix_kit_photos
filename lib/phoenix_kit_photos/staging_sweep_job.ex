@@ -7,10 +7,11 @@ defmodule PhoenixKitPhotos.StagingSweepJob do
   It also tidies fetches from a link (`PhoenixKitPhotos.Fetches.sweep/0`): looks
   nobody confirmed, fetches whose job died, folders left behind.
 
-  It schedules itself (`schedule/0`, called whenever the uploader stages a file or a
-  fetch starts): at
-  most one is waiting at a time, an hour out. A host needs no cron entry for it, so a
-  host's config never names a module an older release of this package lacks.
+  It schedules itself (`schedule/1`, called whenever the uploader stages a file or a
+  fetch starts, and after each sweep): at
+  most one is waiting per queue, an hour out. Fetches use `photo_fetches`, so cleanup
+  also runs on hosts without the background uploader's queue. A host needs no cron entry
+  for it, so its config never names a module an older release of this package lacks.
   """
 
   use Oban.Worker,
@@ -27,19 +28,20 @@ defmodule PhoenixKitPhotos.StagingSweepJob do
   @waiting ~w(available scheduled executing retryable)
 
   @doc "Makes sure a sweep is due within the hour. Never fails the caller."
-  @spec schedule() :: :ok
-  def schedule do
-    _ = Oban.insert(new(%{}, schedule_in: 3600))
+  @spec schedule(atom() | String.t()) :: :ok
+  def schedule(queue \\ :photo_uploads) do
+    _ = Oban.insert(new(%{}, queue: queue, schedule_in: 3600))
     :ok
   rescue
     _ -> :ok
   end
 
   @impl Oban.Worker
-  def perform(_job) do
+  def perform(%Oban.Job{queue: queue}) do
     removed = UploadStaging.sweep(waiting())
     if removed > 0, do: Logger.info("[PhotoUploader] removed #{removed} stale staged upload(s)")
     PhoenixKitPhotos.Fetches.sweep()
+    schedule(queue)
     :ok
   end
 

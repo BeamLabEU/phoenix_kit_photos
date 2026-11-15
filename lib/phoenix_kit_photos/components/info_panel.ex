@@ -51,9 +51,10 @@ defmodule PhoenixKitPhotos.Components.InfoPanel do
 
   @impl true
   def update(%{file_uuid: uuid} = assigns, socket) do
+    changed? = context_changed?(socket, assigns)
     socket = assign_context(socket, assigns)
 
-    if uuid == socket.assigns.file_uuid and socket.assigns.details != nil do
+    if not changed? and uuid == socket.assigns.file_uuid and socket.assigns.details != nil do
       {:ok, socket}
     else
       {:ok, socket |> assign(:file_uuid, uuid) |> reset_editing() |> load()}
@@ -79,7 +80,17 @@ defmodule PhoenixKitPhotos.Components.InfoPanel do
       else: {:ok, socket}
   end
 
-  def update(assigns, socket), do: {:ok, assign_context(socket, assigns)}
+  def update(assigns, socket) do
+    changed? = context_changed?(socket, assigns)
+    socket = assign_context(socket, assigns)
+    {:ok, if(changed?, do: socket |> reset_editing() |> load(), else: socket)}
+  end
+
+  defp context_changed?(socket, assigns) do
+    Enum.any?([:scope, :auth], fn key ->
+      Map.has_key?(assigns, key) and assigns[key] != socket.assigns[key]
+    end)
+  end
 
   defp assign_context(socket, assigns) do
     socket
@@ -119,16 +130,19 @@ defmodule PhoenixKitPhotos.Components.InfoPanel do
   end
 
   # A place whose name is not known yet is named in the background.
-  defp look_up_name(socket, %{place: %{lookup: {lat, lon, lang, detail}}, file_uuid: uuid}) do
-    start_async(socket, :place_name, fn -> {uuid, Places.name(lat, lon, lang, detail)} end)
+  defp look_up_name(socket, %{
+         place: %{lookup: {lat, lon, lang, detail} = lookup},
+         file_uuid: uuid
+       }) do
+    start_async(socket, :place_name, fn -> {uuid, lookup, Places.name(lat, lon, lang, detail)} end)
   end
 
   defp look_up_name(socket, _details), do: socket
 
   @impl true
-  def handle_async(:place_name, {:ok, {uuid, name}}, socket) do
+  def handle_async(:place_name, {:ok, {uuid, lookup, name}}, socket) do
     case socket.assigns.details do
-      %{file_uuid: ^uuid, place: %{} = place} = details when is_binary(name) ->
+      %{file_uuid: ^uuid, place: %{lookup: ^lookup} = place} = details when is_binary(name) ->
         {:noreply,
          assign(socket, :details, %{details | place: %{place | name: name, lookup: nil}})}
 

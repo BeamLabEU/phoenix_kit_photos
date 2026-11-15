@@ -56,14 +56,18 @@ defmodule PhoenixKitPhotos.Components.FetchList do
 
   @impl true
   def update(%{fetch_event: {:fetch, %Fetch{} = fetch}}, socket) do
-    others = Enum.reject(socket.assigns.fetches, &(&1.uuid == fetch.uuid))
-    fetches = if is_nil(fetch.dismissed_at), do: [fetch | others], else: others
+    if fetch.user_uuid == Scope.user_uuid(socket.assigns.auth) do
+      others = Enum.reject(socket.assigns.fetches, &(&1.uuid == fetch.uuid))
+      fetches = if is_nil(fetch.dismissed_at), do: [fetch | others], else: others
 
-    {:ok,
-     socket
-     |> assign(:fetches, Enum.sort_by(fetches, & &1.inserted_at, {:desc, NaiveDateTime}))
-     |> label_libraries()
-     |> find_shown([fetch])}
+      {:ok,
+       socket
+       |> assign(:fetches, Enum.sort_by(fetches, & &1.inserted_at, {:desc, NaiveDateTime}))
+       |> label_libraries()
+       |> find_shown([fetch])}
+    else
+      {:ok, socket}
+    end
   end
 
   def update(%{fetch_event: {:removed, uuid}}, socket) do

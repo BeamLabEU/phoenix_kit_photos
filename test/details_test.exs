@@ -7,6 +7,7 @@ defmodule PhoenixKitPhotos.DetailsTest do
 
   use PhoenixKitPhotos.DataCase, async: false
 
+  alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.ManualLocation
   alias PhoenixKitPhotos.{Details, Sharing}
 
@@ -93,6 +94,31 @@ defmodule PhoenixKitPhotos.DetailsTest do
   end
 
   describe "what each person sees" do
+    test "the info panel uses only the stack pages its reader may see", ctx do
+      alias PhoenixKit.Modules.Storage.Stacks
+
+      hidden = file_fixture(ctx.owner, %{taken_at: ~U[1999-01-01 10:00:00Z]})
+      first = file_fixture(ctx.visitor, %{taken_at: ~U[2018-07-14 12:00:00Z]})
+      second = file_fixture(ctx.visitor, %{taken_at: ~U[2018-07-14 12:01:00Z]})
+      admin = scope_for(ctx.owner, ["Owner"])
+      {:ok, _} = Stacks.create([hidden.uuid, first.uuid, second.uuid], admin)
+
+      auth = scope_for(ctx.visitor)
+      {:ok, details} = Details.load({:library, media_uuid()}, second.uuid, auth, "en")
+      assert details.stack.files == [first.uuid, second.uuid]
+      assert details.stack.count == 2
+      assert details.stack.position == 1
+      assert details.stack.cover.uuid == first.uuid
+      assert details.date.local == ~N[2018-07-14 12:00:00]
+      refute details.stack.editable?
+
+      # A stack with only one readable page is a single photo, as in the timeline.
+      {:ok, _} = Storage.trash_file(first)
+      {:ok, details} = Details.load({:library, media_uuid()}, second.uuid, auth, "en")
+      assert details.stack == nil
+      assert details.date.local == ~N[2018-07-14 12:01:00]
+    end
+
     test "the owner: everything, to edit", ctx do
       details = load!(ctx, ctx.owner)
       assert details.editor?

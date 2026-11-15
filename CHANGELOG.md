@@ -6,6 +6,27 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
 
 ### Added
 
+- Stacks: one tile in the timeline, ordered pages in the viewer, a stack picker,
+  editing the cover/title/date, unstacking, and preserving stacks when copied or moved.
+- Multilingual chapters and sub-chapters, with dated banners and a New chapter action
+  in the timeline and uploader.
+- Calendar view addresses, a day's sheet with navigation between days, a viewer bounded
+  to that day, and copying links to a month or the place on screen.
+- A swipe viewer info panel for titles, dates, places and optional comments, with editing
+  for authorized users and per-library location/comment audiences. Optional place search
+  and reverse geocoding (`PhoenixKitPhotos.Places`) are off by default.
+- Clipboard pasting (including an iPad Paste button) and upload preview tiles that stay
+  visible through saving and preview generation.
+- `PhoenixKitPhotos.StoreUploadJob` (Oban queue `photo_uploads`): add
+  `photo_uploads: 4` to the host's Oban queues. Without it, or on a page without
+  `PhoenixKitPhotos.LiveUpdates`, the uploader stores inline as before.
+- `config :phoenix_kit_photos, :staging_dir` (default `phoenix_kit_photos_staging` in
+  the system temp directory; keep it on the same filesystem as Plug's temp files) and
+  `:store_in_background` (`true`/`false` to force the choice).
+- `PhoenixKitPhotos.StagingSweepJob`, scheduled by itself, removes staged files a
+  crash left behind.
+- `Uploads.precheck/4`: the cheap checks `store/4` starts with.
+- `oban` as a direct dependency (it already came with PhoenixKit).
 - **Fetching photos and videos from a link** (`PhoenixKitPhotos.Fetches`), off by
   default. A link pasted on a library page (or given to the uploader's new *From a
   link* field, or its Paste button on an iPad) is looked at on the server with
@@ -22,7 +43,7 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
   (`PhoenixKitPhotos.Fetches.SiteLogins`, `PhoenixKitPhotos.Components.FetchList`).
   ⚠️ Every request goes through an egress proxy that refuses internal addresses
   (`:proxy`, e.g. smokescreen); without it fetching does not run. To turn it on: run
-  `mix phoenix_kit.update` (this package's own migration chain, V1, three tables),
+  `mix phoenix_kit.update` (this package's own migration chain, currently V3),
   add `photo_fetches: 3` to Oban's queues, install yt-dlp, gallery-dl and the proxy,
   and set `config :phoenix_kit_photos, PhoenixKitPhotos.Fetches, enabled: true,
   proxy: …` (keys in `PhoenixKitPhotos.Fetches.Config`). Mount `LinkFetcher` on the
@@ -34,6 +55,17 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
   host uses it to build a calendar day address, since a stack is one tile there.
 
 ### Fixed
+
+- The info panel's stack pages, cover date and page count follow the reader's permissions,
+  including Media users who may see only their own uploads. A change of reader or library
+  rechecks cached details, and an old place-name lookup cannot overwrite a newer place.
+- Swiping away and quickly back cancels the info panel's pending change of photo. Stack
+  navigation keys leave text fields and the info panel's controls alone.
+- Fetch cards and lists ignore another person's updates after the page's reader changes.
+- Fetch size limits are checked on disk every second by the tool runner, including when
+  the tool prints no progress or the job is busy storing another file.
+- Cleanup schedules its next hourly run, even after the last upload or fetch. Fetch-only
+  hosts run cleanup on `photo_fetches` without needing the `photo_uploads` queue.
 
 - **A video picks up where it was when its storage link runs out.** A browser keeps
   reading the address it was redirected to, so when a storage's signed link expires
@@ -97,20 +129,8 @@ Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid
 - The test suite migrates its database to the resolved core's schema first
   (`PhoenixKit.Migration.ensure_current/2`). Dependencies are updated to core 3.6.0.
 
-See `dev_docs/reviews/2026-11-15-since-0.3.0.md`.
-
-### Added
-
-- `PhoenixKitPhotos.StoreUploadJob` (Oban queue `photo_uploads`): add
-  `photo_uploads: 4` to the host's Oban queues. Without it, or on a page without
-  `PhoenixKitPhotos.LiveUpdates`, the uploader stores inline as before.
-- `config :phoenix_kit_photos, :staging_dir` (default `phoenix_kit_photos_staging` in
-  the system temp directory; keep it on the same filesystem as Plug's temp files) and
-  `:store_in_background` (`true`/`false` to force the choice).
-- `PhoenixKitPhotos.StagingSweepJob`, scheduled by itself, removes staged files a
-  crash left behind.
-- `Uploads.precheck/4`: the cheap checks `store/4` starts with.
-- `oban` as a direct dependency (it already came with PhoenixKit).
+See `dev_docs/reviews/2026-11-15-since-0.3.0.md` and
+`dev_docs/reviews/2026-11-15-release-recheck.md`.
 
 ## 0.3.0 - 2026-11-10
 

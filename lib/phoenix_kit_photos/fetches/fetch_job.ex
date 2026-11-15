@@ -219,7 +219,11 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
     {tool, args} = command(fetch, files, cookies, picked, keys)
 
     {runner, ref} =
-      Runner.start(Config.executable(tool), args, dir: dir, stall_ms: Config.get(:stall_s) * 1000)
+      Runner.start(Config.executable(tool), args,
+        dir: dir,
+        stall_ms: Config.get(:stall_s) * 1000,
+        file_limit: {files, Config.get(:max_file_bytes)}
+      )
 
     state =
       fetch
@@ -677,6 +681,9 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
 
   defp ending(_fetch, %{stop: stop}, _kept, _missing, _stderr) when is_binary(stop),
     do: {"failed", stop, nil}
+
+  defp ending(_fetch, %{exit: :too_big}, _kept, _missing, _stderr),
+    do: {"failed", "too_big", nil}
 
   defp ending(_fetch, %{exit: exit}, kept, _missing, stderr) when exit in [:stalled, :too_much],
     do: {status_for(kept), "stalled", Errors.last_error_line(stderr)}

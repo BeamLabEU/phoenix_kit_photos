@@ -6,7 +6,8 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
   through a port and sends the owner each line of the tool's **stdout**:
   `{ref, {:line, line}}`, then `{ref, {:exit, status}}` once, where `status` is the exit
   code, `:stalled` (nothing said for `:stall_ms`), `:cancelled` (`cancel/1`) or
-  `:too_much` (a line or the whole output over its limit). The tool's **stderr** goes
+  `:too_much` (a line or the whole output over its limit), or `:too_big` (a file over
+  `:file_limit`). The tool's **stderr** goes
   to a file (`stderr_tail/1` reads its end), so stdout carries only what is meant for
   machines: the tools' JSON and the marker lines the fetch asks for.
 
@@ -34,11 +35,15 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
   @max_output_bytes 64 * 1024 * 1024
   @term_grace_ms 3_000
 
-  @type exit_status :: non_neg_integer() | :stalled | :cancelled | :too_much
+  @size_check_ms 1_000
+
+  @type exit_status :: non_neg_integer() | :stalled | :cancelled | :too_much | :too_big
 
   @doc """
   Starts `exe` with `args` in `dir` (created; stderr goes to `<dir>/stderr.log`).
-  `opts`: `:stall_ms` (default 10 minutes). Returns `{pid, ref}`.
+  `opts`: `:stall_ms` (default 10 minutes), `:file_limit` (`{directory, max_bytes}`:
+  stop with `:too_big` when a file grows over the cap, checked each second, even while
+  the owner is busy storing another file). Returns `{pid, ref}`.
   """
   @spec start(Path.t(), [String.t()], keyword()) :: {pid(), reference()}
   def start(exe, args, opts) do
@@ -48,7 +53,8 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
     ref = make_ref()
     File.mkdir_p!(dir)
 
-    pid = spawn_link(fn -> init(owner, ref, exe, args, dir, stall_ms) end)
+    file_limit = Keyword.get(opts, :file_limit)
+    pid = spawn_link(fn -> init(owner, ref, exe, args, dir, stall_ms, file_limit) end)
     {pid, ref}
   end
 
@@ -149,7 +155,7 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
 
   # ── The runner process ──────────────────────────────────────────────────
 
-  defp init(owner, ref, exe, args, dir, stall_ms) do
+  defp init(owner, ref, exe, args, dir, stall_ms, file_limit) do
     Process.flag(:trap_exit, true)
 
     port =
@@ -176,6 +182,9 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
       pgid: os_pid,
       dir: dir,
       stall_ms: stall_ms,
+      file_limit: file_limit,
+      last_output: System.monotonic_time(:millisecond),
+      next_check: System.monotonic_time(:millisecond) + @size_check_ms,
       partial: [],
       partial_bytes: 0,
       total: 0
@@ -184,12 +193,58 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
     loop(state)
   end
 
-  defp loop(%{port: port} = state) do
+  defp loop(state) do
+    now = System.monotonic_time(:millisecond)
+
+    cond do
+      now >= state.next_check and oversized?(state.file_limit) ->
+        stop(state, :too_big)
+
+      now - state.last_output >= state.stall_ms ->
+        stop(state, :stalled)
+
+      true ->
+        state =
+          if now >= state.next_check,
+            do: %{state | next_check: now + @size_check_ms},
+            else: state
+
+        wait = min(state.next_check - now, state.stall_ms - (now - state.last_output))
+        receive_output(state, wait)
+    end
+  end
+
+  defp oversized?(nil), do: false
+
+  defp oversized?({dir, max_bytes}) do
+    case File.ls(dir) do
+      {:ok, names} ->
+        Enum.any?(names, &oversized_file?(Path.join(dir, &1), max_bytes))
+
+      _ ->
+        false
+    end
+  end
+
+  defp oversized_file?(path, max_bytes) do
+    case File.stat(path) do
+      {:ok, %{type: :regular, size: size}} -> size > max_bytes
+      _ -> false
+    end
+  end
+
+  defp receive_output(%{port: port} = state, wait) do
     receive do
       {^port, {:data, {:eol, chunk}}} ->
         line = IO.iodata_to_binary(Enum.reverse([chunk | state.partial]))
         # The whole line counts, its earlier `:noeol` parts too.
-        state = %{state | partial: [], partial_bytes: 0, total: state.total + byte_size(line)}
+        state = %{
+          state
+          | partial: [],
+            partial_bytes: 0,
+            total: state.total + byte_size(line),
+            last_output: System.monotonic_time(:millisecond)
+        }
 
         if state.total > @max_output_bytes do
           stop(state, :too_much)
@@ -204,7 +259,12 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
         if bytes > @max_line_bytes do
           stop(state, :too_much)
         else
-          loop(%{state | partial: [chunk | state.partial], partial_bytes: bytes})
+          loop(%{
+            state
+            | partial: [chunk | state.partial],
+              partial_bytes: bytes,
+              last_output: System.monotonic_time(:millisecond)
+          })
         end
 
       {^port, {:exit_status, status}} ->
@@ -221,7 +281,7 @@ defmodule PhoenixKitPhotos.Fetches.Runner do
       {:EXIT, _other, _reason} ->
         loop(state)
     after
-      state.stall_ms -> stop(state, :stalled)
+      wait -> loop(state)
     end
   end
 

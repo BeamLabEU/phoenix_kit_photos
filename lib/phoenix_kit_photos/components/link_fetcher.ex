@@ -83,7 +83,8 @@ defmodule PhoenixKitPhotos.Components.LinkFetcher do
 
   @impl true
   def update(%{fetch_event: {:fetch, %Fetch{} = fetch}}, socket) do
-    if to_string(fetch.library_uuid) == socket.assigns.library_uuid do
+    if fetch.user_uuid == Scope.user_uuid(socket.assigns.auth) and
+         to_string(fetch.library_uuid) == socket.assigns.library_uuid do
       {:ok, socket |> put_fetch(fetch) |> follow_dialog(fetch)}
     else
       {:ok, socket}

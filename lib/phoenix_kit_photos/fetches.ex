@@ -127,7 +127,7 @@ defmodule PhoenixKitPhotos.Fetches do
       |> tap(fn
         {:ok, fetch} ->
           broadcast(fetch)
-          PhoenixKitPhotos.StagingSweepJob.schedule()
+          PhoenixKitPhotos.StagingSweepJob.schedule(:photo_fetches)
 
         _ ->
           :ok

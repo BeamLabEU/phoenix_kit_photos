@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { inPanel, typing } from "../js/info_panel.js"
+import { InfoPanelController, inPanel, typing } from "../js/info_panel.js"
 
 globalThis.document = globalThis.document || { body: {} }
 
@@ -31,4 +31,21 @@ test("a field or a button of the panel is in it", () => {
   assert.equal(inPanel(element([{ classes: ["btn"] }, panel])), true)
   assert.equal(inPanel(element([panel])), true)
   assert.equal(inPanel(null), false)
+})
+
+test("swiping back before the panel follows cancels the pending photo", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] })
+  const shown = []
+  const panel = Object.assign(Object.create(InfoPanelController.prototype), {
+    host: { show: (id) => shown.push(id) }, isOpen: true, shownId: "first", timer: null
+  })
+
+  panel.follow("second")
+  panel.follow("first")
+  t.mock.timers.tick(200)
+  assert.deepEqual(shown, [])
+
+  panel.follow("third")
+  t.mock.timers.tick(200)
+  assert.deepEqual(shown, ["third"])
 })

@@ -161,8 +161,8 @@ export class InfoPanelController {
 
   /** The viewer turned to photo `id`: the panel follows, after the swiping settles. */
   follow(id, now = false) {
-    if (!this.isOpen || !id || id === this.shownId) return
     clearTimeout(this.timer)
+    if (!this.isOpen || !id || id === this.shownId) return
     const go = () => {
       this.shownId = id
       this.host.show(id)

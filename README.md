@@ -25,11 +25,15 @@ If this were only the grid, it would belong in PhoenixKit core as a
 MediaBrowser view mode. It is a separate package because of everything after
 the first row.
 
-## Status: Stage 1, square grid
+## Status
 
 The timeline reads one storage library (`{:library, uuid}`), grouped by the
 local capture date `taken_on`. PhoenixKit 2.41.0 already stores that date and
 the library partition; this package does not add either.
+
+It also provides background uploads, stacks, multilingual chapters, a calendar with
+day addresses, a swipe viewer with an editable info panel, and optional fetching
+from links. See the setup below and each component's module documentation.
 
 The 10k gate from the plan — a square library of 10k photos, a jump to a
 random month, in Chrome and Safari, with a bounded DOM count — is measured in
@@ -55,9 +59,25 @@ def deps do
 end
 ```
 
-No configuration. `PhoenixKit.ModuleDiscovery` finds any dependency that
+`PhoenixKit.ModuleDiscovery` finds any dependency that
 depends on `:phoenix_kit` and uses `PhoenixKit.Module`, by scanning beam
 attributes.
+
+After upgrading, run `mix phoenix_kit.update` in the host application to apply
+this package's migrations (V1–V3: fetch history, site logins, and chapters).
+
+For background uploads, add `photo_uploads: 4` to the host's Oban queues and
+mount the `PhoenixKitPhotos.LiveUpdates` hook on the uploader's page. Staged
+files must remain accessible to the node running the job; keep `:staging_dir`
+on the same filesystem as Plug's upload temp directory. Without the queue or
+hook, uploads store inline.
+
+Fetching from links is off by default. Enable it with
+`config :phoenix_kit_photos, PhoenixKitPhotos.Fetches, enabled: true, proxy: "http://proxy:4750"`,
+install yt-dlp and gallery-dl, and add `photo_fetches: 3` to Oban's queues.
+The proxy must reject internal and private addresses on every request and redirect.
+`PhoenixKitPhotos.Fetches.Config` documents the limits and other settings;
+`PhoenixKitPhotos.Components.LinkFetcher` documents how to mount the dialog.
 
 During development, path-dep it instead:
 
@@ -103,7 +123,7 @@ read-only dialog. `?at=<uuid>` identifies the open file; closing patches the
 URL and keeps the timeline mounted at the same position. Custom `on_open`
 handlers must reauthorize the UUID with `Timeline.viewer_file/3`.
 
-The timeline reads one library. Albums, shares and the scrubber are later stages.
+The timeline reads one library; albums are planned.
 
 ## Architecture
 
@@ -141,8 +161,9 @@ follows `config :phoenix_kit_photos, default_viewer: "classic" | "photoswipe"` (
 unset). `Components.ViewerPicker` is the select for it: it shows nothing to someone who may not
 choose (a user library's owner and managers; for Media, the site's admins), and tells its page
 `{:viewer_changed, library_uuid}`. The page passes `Viewer.pager(Viewer.for_library(library))` as
-`PhotoTimeline`'s `pager`. In the swipe viewer, an **Info** button opens the classic viewer on the
-file on screen, so details, comments and annotations are one tap away.
+`PhotoTimeline`'s `pager`. In the swipe viewer, **Info** opens the photo's title,
+date, place and optional comments beside it. Editors can change its title, date
+and place there. `PhoenixKitPhotos.Sharing` controls who sees locations and comments.
 
 ## The swipe viewer's engines
 
@@ -268,8 +289,10 @@ cd assets && npm test
 `mix assets.build` after touching anything in `assets/js/`, and commit the
 output: it ships in the Hex package.
 
-The SQL suite does not create or migrate a database. Each case uses SQL
-Sandbox; never add fixtures that commit. `test/support/synthetic_library.ex`
+The SQL suite needs an existing test database. Its helper migrates core and this
+package before starting the cases. Point `PG*` / `DB_*` at a dedicated test database.
+Each case uses SQL Sandbox; never add fixtures that commit. The video fetch tests
+also need ffmpeg on `PATH`. `test/support/synthetic_library.ex`
 provides 10k/100k fixtures for a caller-owned sandbox transaction.
 
 The standalone DOM regression needs Playwright and its Chromium browser:

@@ -16,7 +16,7 @@ import { selection } from "./selection.js"
 import { SlideStore, wantWidth } from "./slides.js"
 import { StackedList } from "./stack_list.js"
 import { StackStrip } from "./stack_strip.js"
-import { InfoPanelController, typing } from "./info_panel.js"
+import { InfoPanelController, inPanel, typing } from "./info_panel.js"
 import { daysOf, dayAt, dayOn, monthOf, neighbour, placeOf } from "./days.js"
 import { DaySheet } from "./day_sheet.js"
 import { MonthMenu, monthMoreButton, moreLabel } from "./month_menu.js"
@@ -1442,6 +1442,7 @@ export const PhotoTimeline = {
   startStackKeys() {
     if (this.onStackKey) return
     this.onStackKey = (event) => {
+      if (event.defaultPrevented || typing(event.target) || inPanel(event.target)) return
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || dialogOpen()) return
       const direction = { ArrowDown: 1, PageDown: 1, ArrowUp: -1, PageUp: -1 }[event.key]
       if (!direction || !this.pager || this.pager === true || !this.stacked().pageInfo(this.pager.index)) return

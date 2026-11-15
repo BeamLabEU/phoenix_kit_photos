@@ -43,6 +43,13 @@ if "-J" in sys.argv:
 directory = arg_after("-D")
 flt = arg_after("--filter") or ""
 os.makedirs(directory, exist_ok=True)
+if mode == "silent_too_big":
+    # A chunked response can grow without gallery-dl printing another line.
+    with open(os.path.join(directory, "download.png.part"), "wb") as f:
+        f.write(b"x" * 2048)
+    time.sleep(60)
+    sys.exit(0)
+
 for n, (key, title, date) in enumerate(files, 1):
     if flt and json.dumps(key) not in flt:
         continue

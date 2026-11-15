@@ -159,6 +159,10 @@ defmodule PhoenixKitPhotos.FetchesTest do
       assert fetch.status == "probing"
       assert fetch.url == "https://site.example/album/1"
       assert fetch.site == "site.example"
+
+      assert [%{queue: "photo_fetches"}] =
+               Oban.Testing.all_enqueued(repo: TestRepo, worker: PhoenixKitPhotos.StagingSweepJob)
+
       assert_receive {:phoenix_kit_photos_fetch, %Fetch{uuid: uuid}} when uuid == fetch.uuid
 
       assert TestRepo.exists?(
@@ -497,6 +501,25 @@ defmodule PhoenixKitPhotos.FetchesTest do
       assert [] == Fetches.file_info(%{uuid: Ecto.UUID.generate()})
       assert_receive {:finished, uuid, "done"} when uuid == done.uuid
       refute File.exists?(Path.join(ctx.work, done.uuid))
+    end
+
+    test "the size cap stops a tool even while it prints no progress", ctx do
+      fetch = started!(ctx)
+      {:ok, _} = Fetches.confirm(ctx.scope, fetch.uuid, %{"rights" => true})
+      config = Application.get_env(:phoenix_kit_photos, Fetches)
+
+      Application.put_env(
+        :phoenix_kit_photos,
+        Fetches,
+        Keyword.put(config, :max_file_bytes, 1024)
+      )
+
+      mode("silent_too_big")
+
+      task = Task.async(fn -> run!(fetch) end)
+      result = Task.yield(task, 5_000) || Task.shutdown(task, :brutal_kill)
+      assert {:ok, %{status: "failed", error_code: "too_big"}} = result
+      assert library_files(ctx.library) == []
     end
 
     test "a video is joined, stored and named by when it was posted", ctx do

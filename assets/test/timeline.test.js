@@ -16,6 +16,29 @@ function hook() {
 const section = (count = 501) => ({ id: "2020-01", count,
   days_list: [{ id: "2020-01-01", count: Math.min(count, 500) },
     ...(count > 500 ? [{ id: "2020-01-01:500", count: count - 500 }] : [])] })
+
+test("stack shortcuts leave keys in the info panel and typed fields alone", (t) => {
+  const previous = globalThis.document
+  globalThis.document = { body: {}, querySelector: () => null, addEventListener() {}, removeEventListener() {} }
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document
+    else globalThis.document = previous
+  })
+  const { h } = hook()
+  const skipped = []
+  h.pager = { index: 1 }
+  h.stacked = () => ({ pageInfo: () => ({}) })
+  h.skipStack = (direction) => skipped.push(direction)
+  h.startStackKeys()
+  const event = (target, extra = {}) => ({ key: "ArrowDown", target, preventDefault() {}, stopPropagation() {}, ...extra })
+  h.onStackKey(event({ tagName: "TEXTAREA", closest: () => null }))
+  h.onStackKey(event({ tagName: "BUTTON", closest: () => ({}) }))
+  h.onStackKey(event(null, { defaultPrevented: true }))
+  assert.deepEqual(skipped, [])
+  h.onStackKey(event({ tagName: "BUTTON", closest: () => null }))
+  assert.deepEqual(skipped, [1])
+  h.stopStackKeys()
+})
 test("window requests target the component and include large-day tails", () => {
   const { h, sent } = hook()
   h.setIndex({ library: "a", revision: 1, sections: [section()] })

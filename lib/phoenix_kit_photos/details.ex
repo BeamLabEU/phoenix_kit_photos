@@ -22,6 +22,8 @@ defmodule PhoenixKitPhotos.Details do
 
   use Gettext, backend: PhoenixKitPhotos.Gettext
 
+  import Ecto.Query
+
   alias PhoenixKit.Modules.Languages.DialectMapper
   alias PhoenixKit.Modules.Storage
   alias PhoenixKit.Modules.Storage.File, as: StorageFile
@@ -159,7 +161,11 @@ defmodule PhoenixKitPhotos.Details do
   defp stack(%StorageFile{stack_uuid: nil}, _auth), do: nil
 
   defp stack(%StorageFile{stack_uuid: stack_uuid} = file, auth) do
-    files = stack_uuid |> Stacks.files() |> Enum.filter(&is_nil(&1.trashed_at))
+    all = stack_uuid |> Stacks.files() |> Enum.filter(&is_nil(&1.trashed_at))
+
+    # A system library can hold a stack of several people's uploads. As in the timeline,
+    # its cover, count and pages come only from the files this reader may see.
+    files = readable_stack_files(file, auth)
 
     case files do
       [_, _ | _] ->
@@ -171,13 +177,27 @@ defmodule PhoenixKitPhotos.Details do
           count: length(files),
           files: Enum.map(files, & &1.uuid),
           cover: hd(files),
-          editable?:
-            is_struct(auth, Scope) and Enum.all?(files, &Libraries.can?(auth, &1, :edit)),
+          manual?: Enum.any?(files, &(&1.taken_at_source == "manual")),
+          editable?: is_struct(auth, Scope) and Enum.all?(all, &Libraries.can?(auth, &1, :edit)),
           position: Enum.find_index(files, &(&1.uuid == file.uuid))
         }
 
       _ ->
         nil
+    end
+  end
+
+  defp readable_stack_files(file, auth) do
+    case Timeline.files_query({:library, file.library_uuid}, auth) do
+      {:ok, query} ->
+        query
+        |> where([f], f.stack_uuid == ^file.stack_uuid)
+        |> order_by([f], asc: f.stack_position, asc: f.uuid)
+        |> PhoenixKit.RepoHelper.repo().all()
+        |> Enum.filter(&Libraries.can?(auth, &1, :read))
+
+      _ ->
+        []
     end
   end
 
@@ -194,7 +214,7 @@ defmodule PhoenixKitPhotos.Details do
       source: anchor.taken_at_source,
       manual?:
         if(stack,
-          do: Enum.any?(Stacks.files(stack.uuid), &(&1.taken_at_source == "manual")),
+          do: stack.manual?,
           else: file.taken_at_source == "manual"
         ),
       label: format_date(local),
@@ -418,8 +438,6 @@ defmodule PhoenixKitPhotos.Details do
   """
   @spec suggest_place(Timeline.scope(), StorageFile.t(), Scope.t() | nil) :: map() | nil
   def suggest_place(scope, %StorageFile{taken_at: %DateTime{} = at, uuid: uuid}, auth) do
-    import Ecto.Query
-
     window = 3 * 86_400
 
     with {:ok, query} <- Timeline.files_query(scope, auth),

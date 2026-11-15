@@ -294,7 +294,8 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   defp loop(%{ref: ref} = state) do
     receive do
       {^ref, {:line, line}} ->
-        state |> line(line) |> write(false) |> loop()
+        state = if state.stop, do: state, else: line(state, line)
+        state |> write(false) |> loop()
 
       {^ref, {:exit, status}} ->
         Map.put(state, :exit, status)
@@ -315,13 +316,17 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
         next_item(state, index)
 
       {:progress, p} ->
-        put_progress(state, %{
-          "phase" => "downloading",
-          "bytes" => p.bytes,
-          "total_bytes" => p.total,
-          "speed" => p.speed,
-          "eta" => p.eta
-        })
+        if over_cap?(p.bytes) do
+          stop_too_big(state)
+        else
+          put_progress(state, %{
+            "phase" => "downloading",
+            "bytes" => p.bytes,
+            "total_bytes" => p.total,
+            "speed" => p.speed,
+            "eta" => p.eta
+          })
+        end
 
       {:postprocess, "started", "Merger"} ->
         state
@@ -338,6 +343,10 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
 
   # gallery-dl's lines
   defp line(%{tool: :gallery_dl} = state, text) do
+    if dir_over_cap?(state.files), do: stop_too_big(state), else: gallery_line(state, text)
+  end
+
+  defp gallery_line(state, text) do
     case GalleryDl.parse_line(text) do
       {:item, _category} ->
         state = %{state | started: state.started + 1}
@@ -399,37 +408,72 @@ defmodule PhoenixKitPhotos.Fetches.FetchJob do
   defp store(state, path, meta, position) do
     path = Path.expand(path, state.files)
 
-    if inside?(path, state.files) and File.regular?(path) do
-      state = state |> put_progress(%{"phase" => "saving"}) |> write(true)
-      posted_at = Meta.posted_at(meta) || posted_from_entry(state, position)
-      title = Meta.title(meta) || get_in(state.entries, [position, "title"])
-      name = file_name(title, posted_at, path)
-      entry = %{client_name: name, client_type: MIME.from_path(path)}
+    cond do
+      not (inside?(path, state.files) and File.regular?(path)) ->
+        Logger.warning(
+          "[Fetches] a tool reported a file outside its folder or not there: #{inspect(path)}"
+        )
 
-      result = Uploads.store(path, entry, state.scope, state.fetch.library_uuid)
-      after_store(result, path, title)
+        state
 
-      item = %{
-        fetch_uuid: state.fetch.uuid,
-        position: position,
-        source_url: source_url(meta, state.fetch),
-        title: title,
-        author:
-          Meta.author(meta) || get_in(state.entries, [position, "author"]) ||
-            state.fetch.info["author"],
-        posted_at: posted_at
-      }
+      over_cap?(file_bytes(path)) ->
+        File.rm(path)
+        stop_too_big(state)
 
-      File.rm(path)
-      File.rm(path <> ".json")
-      record(state, result, item)
-    else
-      Logger.warning(
-        "[Fetches] a tool reported a file outside its folder or not there: #{inspect(path)}"
-      )
-
-      state
+      true ->
+        store_file(state, path, meta, position)
     end
+  end
+
+  # `--max-filesize` only applies when the response carries a Content-Length and no
+  # Content-Encoding, and ffmpeg (HLS) ignores it. The cap is checked on the bytes the
+  # tool reports, on the files in the folder, and again before a file is hashed in.
+  defp over_cap?(bytes) when is_integer(bytes), do: bytes > Config.get(:max_file_bytes)
+  defp over_cap?(_bytes), do: false
+
+  defp file_bytes(path) do
+    case File.stat(path) do
+      {:ok, %{type: :regular, size: size}} -> size
+      _ -> nil
+    end
+  end
+
+  defp dir_over_cap?(dir) do
+    case File.ls(dir) do
+      {:ok, names} -> Enum.any?(names, &over_cap?(file_bytes(Path.join(dir, &1))))
+      _ -> false
+    end
+  end
+
+  defp stop_too_big(state) do
+    Runner.cancel(state.runner)
+    %{state | stop: state.stop || "too_big"}
+  end
+
+  defp store_file(state, path, meta, position) do
+    state = state |> put_progress(%{"phase" => "saving"}) |> write(true)
+    posted_at = Meta.posted_at(meta) || posted_from_entry(state, position)
+    title = Meta.title(meta) || get_in(state.entries, [position, "title"])
+    name = file_name(title, posted_at, path)
+    entry = %{client_name: name, client_type: MIME.from_path(path)}
+
+    result = Uploads.store(path, entry, state.scope, state.fetch.library_uuid)
+    after_store(result, path, title)
+
+    item = %{
+      fetch_uuid: state.fetch.uuid,
+      position: position,
+      source_url: source_url(meta, state.fetch),
+      title: title,
+      author:
+        Meta.author(meta) || get_in(state.entries, [position, "author"]) ||
+          state.fetch.info["author"],
+      posted_at: posted_at
+    }
+
+    File.rm(path)
+    File.rm(path <> ".json")
+    record(state, result, item)
   end
 
   defp inside?(path, dir), do: String.starts_with?(path, Path.expand(dir) <> "/")

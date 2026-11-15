@@ -156,7 +156,7 @@ defmodule PhoenixKitPhotos.ChapterSections do
       to =
         case next do
           {month, start} when month == section.month ->
-            max(from, Date.add(start, -1).day)
+            day_before(month, start, from)
 
           _ ->
             last_date.day
@@ -165,6 +165,15 @@ defmodule PhoenixKitPhotos.ChapterSections do
       span = if from == 1 and to == last_date.day, do: nil, else: [from, to]
       Map.put(section, :span, span)
     end)
+  end
+
+  # The day before `start`, as a day of `month`. Two chapters that both start on
+  # the 1st share that day: the day before it is in the previous month, and that
+  # month's length (30) is not a day of this one.
+  defp day_before(month, start, from) do
+    prev = Date.add(start, -1)
+
+    if month_of(prev) == month, do: max(from, prev.day), else: from
   end
 
   defp month_bounds(<<y::binary-size(4), "-", m::binary-size(2)>>) do

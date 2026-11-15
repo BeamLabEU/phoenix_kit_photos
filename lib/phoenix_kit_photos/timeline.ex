@@ -636,6 +636,28 @@ defmodule PhoenixKitPhotos.Timeline do
   def stack_page(_scope, _uuid, _auth), do: {:error, :not_found}
 
   @doc """
+  The day the timeline lists `uuid` on: its own `taken_on`, or, when it is a page of a stack,
+  the day of the cover this reader sees. The calendar's day address uses that day, because a
+  stack is one tile there. `{:ok, nil}` when the file has no day.
+  """
+  @spec shown_on(scope(), String.t(), Scope.t() | nil) ::
+          {:ok, Date.t() | nil} | {:error, error()}
+  def shown_on({:library, library_uuid}, uuid, auth) when is_binary(library_uuid) do
+    with :ok <- reader(auth, library_uuid),
+         {:ok, uuid} <- Ecto.UUID.cast(uuid),
+         %StorageFile{} = file <-
+           library_uuid |> visible(auth) |> where([f], f.uuid == ^uuid) |> repo().one(),
+         %StorageFile{} = cover <- cover_of(file, library_uuid, auth) do
+      {:ok, cover.taken_on}
+    else
+      {:error, _} = error -> error
+      _ -> {:error, :not_found}
+    end
+  end
+
+  def shown_on(_scope, _uuid, _auth), do: {:error, :not_found}
+
+  @doc """
   Every file of a stack that `auth` may see, in the stack's order, as slides for the
   viewer (at most `Stacks.max_files/0`), each with a small `thumb` for the viewer's strip
   of pages. `{:error, :not_found}` for a stack that is not in the library.

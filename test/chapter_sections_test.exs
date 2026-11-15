@@ -108,6 +108,21 @@ defmodule PhoenixKitPhotos.ChapterSectionsTest do
            ] = ChapterSections.build(rows, [moved])
   end
 
+  test "two chapters starting on the first of a month share that day" do
+    # June has 30 days and July has 31. The day before 1 July is 30 June, so
+    # taking that day's number covers 1–30 July and drops the 31st. The parent
+    # banner only shares the 1st with its sub-chapter; the rest is the sub-chapter's.
+    rows = days([{~D[2026-07-01], 1}, {~D[2026-07-20], 2}])
+    trip = chapter("t", ~D[2026-07-01], ~D[2026-07-31])
+    paris = chapter("p", ~D[2026-07-01], ~D[2026-07-10], %{parent_uuid: "t"})
+
+    assert shape(ChapterSections.build(rows, [trip, paris])) == [
+             {"c:t", [], [1, 1]},
+             {"c:p", [~D[2026-07-01]], [1, 10]},
+             {"2026-07", [~D[2026-07-20]], [11, 31]}
+           ]
+  end
+
   test "sub-chapters: the chapter's banner, then each sub-chapter's, chips name both" do
     rows =
       days([

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0 - Unreleased
+## 0.4.0 - 2026-11-15
 
 Needs `phoenix_kit` 3.6 or later: stacks are core 3.6's `Stacks` and `stack_uuid`.
 

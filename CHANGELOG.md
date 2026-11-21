@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-11-21
+
+### Added
+
+- Add a CDN tab for library settings. Owners can use the site default, select a personal connection or turn delivery off, and choose public renditions independently of the connection. Signed-in-only and private delivery require an adapter with the corresponding access checks.
 
 ### Fixed
 

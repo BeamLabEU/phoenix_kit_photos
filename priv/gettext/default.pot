@@ -754,6 +754,7 @@ msgstr ""
 msgid "Page %{page}"
 msgstr ""
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:83
 #: lib/phoenix_kit_photos/components/chapter_edit.ex:498
 #: lib/phoenix_kit_photos/components/info_panel.ex:431
 #: lib/phoenix_kit_photos/components/info_panel.ex:585
@@ -1880,6 +1881,7 @@ msgstr ""
 msgid "Save this place"
 msgstr ""
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:54
 #: lib/phoenix_kit_photos/components/info_panel.ex:950
 #: lib/phoenix_kit_photos/components/sharing_settings.ex:125
 #, elixir-autogen, elixir-format
@@ -2545,4 +2547,50 @@ msgstr ""
 #: lib/phoenix_kit_photos/components/link_fetcher.ex:421
 #, elixir-autogen, elixir-format
 msgid "The last run is still stopping. Try again in a moment."
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:66
+#, elixir-autogen, elixir-format
+msgid "CDN connection"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:77
+#, elixir-autogen, elixir-format
+msgid "Choose renditions"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:25
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:69
+#, elixir-autogen, elixir-format
+msgid "Off"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:70
+#, elixir-autogen, elixir-format
+msgid "Personal connection"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:74
+#, elixir-autogen, elixir-format
+msgid "Renditions"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:68
+#, elixir-autogen, elixir-format
+msgid "Site default (%{name})"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:76
+#, elixir-autogen, elixir-format
+msgid "Use site defaults"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:57
+#, elixir-autogen, elixir-format
+msgid "Could not save CDN preferences"
+msgstr ""
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:82
+#, elixir-autogen, elixir-format
+msgid "Delivery currently uses library storage."
 msgstr ""

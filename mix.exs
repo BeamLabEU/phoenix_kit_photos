@@ -1,7 +1,7 @@
 defmodule PhoenixKitPhotos.MixProject do
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.5.0"
   @source_url "https://github.com/BeamLabEU/phoenix_kit_photos"
 
   def project do
@@ -33,7 +33,7 @@ defmodule PhoenixKitPhotos.MixProject do
     [
       # PhoenixKit — Storage schemas, Module behaviour, settings, permissions.
       # PHOENIX_KIT_PATH points at a sibling checkout for local core work.
-      # Unset, it comes from Hex: 3.6 is the release this package is built against.
+      # Unset, it comes from Hex: the CDN settings component requires core 3.9.
       phoenix_kit_dep(),
 
       # Phoenix Framework
@@ -91,7 +91,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, "~> 3.6"}
+        {:phoenix_kit, "~> 3.9"}
     end
   end
 

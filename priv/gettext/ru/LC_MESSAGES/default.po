@@ -771,6 +771,7 @@ msgstr "Сделать обложкой"
 msgid "Page %{page}"
 msgstr "Страница %{page}"
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:83
 #: lib/phoenix_kit_photos/components/chapter_edit.ex:498
 #: lib/phoenix_kit_photos/components/info_panel.ex:431
 #: lib/phoenix_kit_photos/components/info_panel.ex:585
@@ -1920,6 +1921,7 @@ msgstr "Сохранить место"
 msgid "Save this place"
 msgstr "Сохранить это место"
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:54
 #: lib/phoenix_kit_photos/components/info_panel.ex:950
 #: lib/phoenix_kit_photos/components/sharing_settings.ex:125
 #, elixir-autogen, elixir-format
@@ -2591,3 +2593,49 @@ msgstr "Ещё: %{month}"
 #, elixir-autogen, elixir-format
 msgid "The last run is still stopping. Try again in a moment."
 msgstr "Прошлый запуск ещё останавливается. Попробуйте чуть позже."
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:66
+#, elixir-autogen, elixir-format
+msgid "CDN connection"
+msgstr "Подключение CDN"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:77
+#, elixir-autogen, elixir-format
+msgid "Choose renditions"
+msgstr "Выбрать варианты"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:25
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:69
+#, elixir-autogen, elixir-format
+msgid "Off"
+msgstr "Выкл."
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:70
+#, elixir-autogen, elixir-format
+msgid "Personal connection"
+msgstr "Личное подключение"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:74
+#, elixir-autogen, elixir-format
+msgid "Renditions"
+msgstr "Варианты файлов"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:68
+#, elixir-autogen, elixir-format
+msgid "Site default (%{name})"
+msgstr "По умолчанию для сайта (%{name})"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:76
+#, elixir-autogen, elixir-format
+msgid "Use site defaults"
+msgstr "Использовать настройки сайта"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:57
+#, elixir-autogen, elixir-format
+msgid "Could not save CDN preferences"
+msgstr "Не удалось сохранить настройки CDN"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:82
+#, elixir-autogen, elixir-format
+msgid "Delivery currently uses library storage."
+msgstr "Сейчас файлы передаются из хранилища библиотеки."

@@ -754,6 +754,7 @@ msgstr "Tee see kaanepildiks"
 msgid "Page %{page}"
 msgstr "Lehekülg %{page}"
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:83
 #: lib/phoenix_kit_photos/components/chapter_edit.ex:498
 #: lib/phoenix_kit_photos/components/info_panel.ex:431
 #: lib/phoenix_kit_photos/components/info_panel.ex:585
@@ -1880,6 +1881,7 @@ msgstr "Salvesta koht"
 msgid "Save this place"
 msgstr "Salvesta see koht"
 
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:54
 #: lib/phoenix_kit_photos/components/info_panel.ex:950
 #: lib/phoenix_kit_photos/components/sharing_settings.ex:125
 #, elixir-autogen, elixir-format
@@ -2546,3 +2548,49 @@ msgstr "Veel: %{month}"
 #, elixir-autogen, elixir-format
 msgid "The last run is still stopping. Try again in a moment."
 msgstr "Eelmine käivitus alles peatub. Proovige hetke pärast uuesti."
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:66
+#, elixir-autogen, elixir-format
+msgid "CDN connection"
+msgstr "CDN-i ühendus"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:77
+#, elixir-autogen, elixir-format
+msgid "Choose renditions"
+msgstr "Vali variandid"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:25
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:69
+#, elixir-autogen, elixir-format
+msgid "Off"
+msgstr "Väljas"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:70
+#, elixir-autogen, elixir-format
+msgid "Personal connection"
+msgstr "Isiklik ühendus"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:74
+#, elixir-autogen, elixir-format
+msgid "Renditions"
+msgstr "Failivariandid"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:68
+#, elixir-autogen, elixir-format
+msgid "Site default (%{name})"
+msgstr "Saidi vaikevalik (%{name})"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:76
+#, elixir-autogen, elixir-format
+msgid "Use site defaults"
+msgstr "Kasuta saidi vaikevalikuid"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:57
+#, elixir-autogen, elixir-format
+msgid "Could not save CDN preferences"
+msgstr "CDN-i eelistusi ei saanud salvestada"
+
+#: lib/phoenix_kit_photos/components/cdn_settings.ex:82
+#, elixir-autogen, elixir-format
+msgid "Delivery currently uses library storage."
+msgstr "Failid edastatakse praegu teegi salvestusruumist."

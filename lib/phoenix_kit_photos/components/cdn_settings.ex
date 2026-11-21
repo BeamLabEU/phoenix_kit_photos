@@ -14,15 +14,14 @@ defmodule PhoenixKitPhotos.Components.CDNSettings do
     editable = CDN.owner?(socket.assigns.auth, library)
     policy = CDN.preferences(library)
     set = VariantSets.set_uuid_for(library)
-    site = List.keyfind(CDN.connections(:system), CDN.site_connection(), 0)
+    site = CDN.site_connection()
 
     assign(socket,
       editable: editable,
-      connections: if(editable, do: CDN.personal_connections(library), else: []),
       policy: policy,
       rows: CDN.rows(set),
       defaults: CDN.site_renditions(set),
-      site: if(site, do: elem(site, 1), else: gettext("Off"))
+      site: if(site == "bucket", do: gettext("Use bucket mappings"), else: gettext("Off"))
     )
   end
 
@@ -63,12 +62,11 @@ defmodule PhoenixKitPhotos.Components.CDNSettings do
     ~H"""
     <form id={@id} phx-change="change" phx-submit="save" phx-target={@myself} class="space-y-4">
       <fieldset class="fieldset" disabled={!@editable}>
-        <label><span>{gettext("CDN connection")}</span>
+        <label><span>{gettext("CDN delivery")}</span>
           <select name="connection" class="select">
             <option value="inherit" selected={@policy["connection"] == "inherit"}>{gettext("Site default (%{name})", name: @site)}</option>
             <option value="off" selected={@policy["connection"] == "off"}>{gettext("Off")}</option>
-            <option :if={@policy["connection"] not in ["off", "inherit"] and not List.keymember?(@connections, @policy["connection"], 0)} value="" selected disabled>{gettext("Personal connection")}</option>
-            <option :for={{id, name} <- @connections} value={id} selected={@policy["connection"] == id}>{name}</option>
+            <option value="bucket" selected={@policy["connection"] == "bucket"}>{gettext("Use bucket mappings")}</option>
           </select>
         </label>
         <label><span>{gettext("Renditions")}</span>

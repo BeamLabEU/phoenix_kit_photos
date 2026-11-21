@@ -91,7 +91,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, "~> 3.9"}
+        {:phoenix_kit, "~> 3.8"}
     end
   end
 

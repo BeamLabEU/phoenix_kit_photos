@@ -2594,3 +2594,11 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Delivery currently uses library storage."
 msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "Use bucket mappings"
+msgstr ""
+
+#, elixir-autogen, elixir-format
+msgid "CDN delivery"
+msgstr ""

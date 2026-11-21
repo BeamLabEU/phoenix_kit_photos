@@ -2594,3 +2594,11 @@ msgstr "CDN-i eelistusi ei saanud salvestada"
 #, elixir-autogen, elixir-format
 msgid "Delivery currently uses library storage."
 msgstr "Failid edastatakse praegu teegi salvestusruumist."
+
+#, elixir-autogen, elixir-format
+msgid "Use bucket mappings"
+msgstr "Kasuta ämbrite CDN-seoseid"
+
+#, elixir-autogen, elixir-format
+msgid "CDN delivery"
+msgstr "Edastus CDN-i kaudu"

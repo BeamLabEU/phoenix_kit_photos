@@ -2639,3 +2639,11 @@ msgstr "Не удалось сохранить настройки CDN"
 #, elixir-autogen, elixir-format
 msgid "Delivery currently uses library storage."
 msgstr "Сейчас файлы передаются из хранилища библиотеки."
+
+#, elixir-autogen, elixir-format
+msgid "Use bucket mappings"
+msgstr "Использовать CDN каждого бакета"
+
+#, elixir-autogen, elixir-format
+msgid "CDN delivery"
+msgstr "Доставка через CDN"

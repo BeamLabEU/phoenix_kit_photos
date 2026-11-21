@@ -4,7 +4,7 @@
 
 ### Added
 
-- Add a CDN tab for library settings. Owners can use the site default, select a personal connection or turn delivery off, and choose public renditions independently of the connection. Signed-in-only and private delivery require an adapter with the corresponding access checks.
+- Add a CDN tab for library settings. Owners can inherit the site default, use the serving buckets’ CDN mappings or turn delivery off, and choose public renditions independently. Signed-in-only and private delivery require an adapter with the corresponding access checks.
 
 ### Fixed
 

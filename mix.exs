@@ -33,7 +33,7 @@ defmodule PhoenixKitPhotos.MixProject do
     [
       # PhoenixKit — Storage schemas, Module behaviour, settings, permissions.
       # PHOENIX_KIT_PATH points at a sibling checkout for local core work.
-      # Unset, it comes from Hex: the CDN settings component requires core 3.9.
+      # Without a checkout, the CDN settings component needs core 3.7 from Hex.
       phoenix_kit_dep(),
 
       # Phoenix Framework
@@ -91,7 +91,7 @@ defmodule PhoenixKitPhotos.MixProject do
         {:phoenix_kit, path: path, override: true}
 
       _ ->
-        {:phoenix_kit, "~> 3.8"}
+        {:phoenix_kit, "~> 3.7"}
     end
   end
 

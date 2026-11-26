@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Content-Security-Policy: the styles the bundle adds to the page (the swipe viewer, its info
+  panel, the stack strip, the place map, and the timeline's sheet in a browser without
+  constructable stylesheets) take the page's nonce before they are inserted, so a host policy
+  of `style-src 'self' 'nonce-…'` no longer drops them. The nonce comes from core's
+  `window.PhoenixKitInternals.adoptStyle`; on a core without it nothing changes. The package
+  has no inline `<script>`, `<style>` or event handler in its markup;
+  `test/csp_inline_tags_test.exs` and `assets/test/csp.test.js` keep it that way.
+
 ## 0.5.0 - 2026-11-21
 
 ### Added

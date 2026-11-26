@@ -13,6 +13,8 @@
 // Whether it is open is remembered in the browser (`phoenix_kit_photos:info`), so a person who
 // reads the details keeps seeing them on the next photo and the next visit.
 
+import { adoptStyle } from "./csp.js"
+
 const KEY = "phoenix_kit_photos:info"
 const WIDE = "(min-width: 768px)"
 const PANEL_WIDTH = 380
@@ -32,7 +34,7 @@ html.pk-info-open .pswp{width:calc(100% - var(--pk-info-right,0px))!important;he
 
 function addStyle() {
   if (document.getElementById("pk-info-panel-css")) return
-  const style = document.createElement("style")
+  const style = adoptStyle(document.createElement("style"))
   style.id = "pk-info-panel-css"
   style.textContent = CSS
   document.head.appendChild(style)

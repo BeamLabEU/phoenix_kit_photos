@@ -3,6 +3,7 @@
 // until it is played, picks the file that suits the screen, falls back to the
 // next listed file when one fails, and keeps the person's mute choice.
 
+import { adoptStyle } from "../csp.js"
 import { chooseSource } from "../slides.js"
 
 export function defaultEnv() {
@@ -121,7 +122,7 @@ export const SHARED_CSS = `
 
 export function addStyle(id, css) {
   if (document.getElementById(id)) return
-  const style = document.createElement("style")
+  const style = adoptStyle(document.createElement("style"))
   style.id = id
   style.textContent = css
   document.head.appendChild(style)

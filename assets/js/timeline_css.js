@@ -3,6 +3,8 @@
 // without the other. The sheet ships with the hook: the package has no stylesheet of its own,
 // and a host's Tailwind cannot see class names that are only ever set from here.
 
+import { adoptStyle } from "./csp.js"
+
 const CSS = `
 .pkt-sheet-backdrop{position:fixed;inset:0;z-index:60;background:#0006;opacity:0;transition:opacity .2s}
 .pkt-sheet-backdrop.pkt-sheet-open{opacity:1}
@@ -191,7 +193,7 @@ export function installTimelineCss() {
     sheet.replaceSync(CSS)
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
   } catch (_error) {
-    const style = document.createElement("style")
+    const style = adoptStyle(document.createElement("style"))
     style.textContent = CSS
     document.head.appendChild(style)
   }

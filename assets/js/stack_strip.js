@@ -7,6 +7,8 @@
 // (`onGo(viewIndex)`, `onSkip(direction)`, `onEdit(info)`); `strings` are translated
 // (`data-stack-strings` on the timeline's root).
 
+import { adoptStyle } from "./csp.js"
+
 const MAX_DOTS = 12
 
 const CSS = `
@@ -28,7 +30,7 @@ const CSS = `
 
 function addStyle() {
   if (document.getElementById("pk-stack-strip-css")) return
-  const style = document.createElement("style")
+  const style = adoptStyle(document.createElement("style"))
   style.id = "pk-stack-strip-css"
   style.textContent = CSS
   document.head.appendChild(style)

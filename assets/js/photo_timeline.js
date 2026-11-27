@@ -375,12 +375,14 @@ export const PhotoTimeline = {
     this.openFromAddress()
   },
 
-  // A quiet row-boundary marker follows the position saved for this tab.
+  // A quiet row-boundary marker follows the position saved for this tab. It starts hidden:
+  // until `renderBookmark` has a row to put it at (an empty library never has one) it would
+  // sit at the top-left corner, a stray diamond under the header.
   mountBookmark() {
     this.bookmarkMark = document.createElement("div")
     this.bookmarkMark.dataset.bookmarkMarker = ""
     this.bookmarkMark.setAttribute("aria-hidden", "true")
-    this.bookmarkMark.style.cssText = "position:absolute;left:8px;z-index:12;pointer-events:none;width:0;height:0"
+    this.bookmarkMark.style.cssText = "display:none;position:absolute;left:8px;z-index:12;pointer-events:none;width:0;height:0"
     const tab = document.createElement("span")
     tab.style.cssText = "position:absolute;left:0;top:0;width:10px;height:10px;background:#fbbf24;border:1px solid #18181bcc;border-radius:1px;transform:translateY(-50%) rotate(45deg);box-shadow:0 1px 2px #0005;opacity:0.85"
     this.bookmarkMark.append(tab)
@@ -416,6 +418,8 @@ export const PhotoTimeline = {
       this.renderBookmark()
       return
     }
+    // A library with no photos (left) has no row to mark: take the marker away.
+    if (!this.sections.length) this.renderBookmark()
     if (!this.library || !this.sections.length || this.pager) return
     // Geometry updates and browser scroll restoration must never become a new bookmark.
     if (this.bookmarkAnchor && !this.positionInput) {

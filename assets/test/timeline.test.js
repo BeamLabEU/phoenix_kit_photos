@@ -451,6 +451,33 @@ test("background and reconnect scrolls cannot replace the saved place with the b
   }
 })
 
+test("the bookmark's marker shows only where there is a row to mark, never in an empty library", () => {
+  const { h } = hook()
+  const realDocument = globalThis.document
+  globalThis.document = { createElement: () => ({ dataset: {}, style: {}, setAttribute() {}, append() {} }) }
+  h.el.append = () => {}
+  try { h.mountBookmark() } finally { globalThis.document = realDocument }
+  assert.match(h.bookmarkMark.style.cssText, /display:none/, "a new marker shows nothing until it is placed")
+
+  // An empty library: nothing ever places it, and it must not be shown by the attempt.
+  h.el.clientWidth = 997
+  h.readInset = () => 56
+  h.setIndex({ library: "a", revision: 1, sections: [] })
+  h.handleScroll()
+  assert.equal(h.bookmarkMark.style.display, "none")
+
+  h.setIndex({ library: "a", revision: 2, sections: [section(501)] })
+  h.beginPositionInput({ type: "wheel" })
+  h.el.scrollTop = 800
+  h.handleScroll()
+  assert.equal(h.bookmarkMark.style.display, "block", "with photos the marker is at its row")
+
+  // The last photo is removed: the marker goes with the rows.
+  h.setIndex({ library: "a", revision: 3, sections: [] })
+  h.handleScroll()
+  assert.equal(h.bookmarkMark.style.display, "none")
+})
+
 test("incidental scrolling and clicking back into Safari cannot move the bookmark", () => {
   const { h } = hook()
   h.el.clientWidth = 997
